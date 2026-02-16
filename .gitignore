@@ -31,3 +31,12 @@ yarn-error.log*
 
 # local .env files
 .env.local*
+.env
+
+# Firebase cache and temp files
+.firebase/
+pglite-debug.log
+
+# Temp and debug folders
+tempfolder/
+tasks/
