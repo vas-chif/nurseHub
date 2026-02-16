@@ -36,7 +36,13 @@
         </q-item-section>
 
         <q-item-section side>
-          <q-btn flat round color="primary" icon="arrow_forward" :to="'/requests'" />
+          <q-btn
+            flat
+            round
+            color="primary"
+            :icon="authStore.isAdmin ? 'visibility' : 'arrow_forward'"
+            :to="authStore.isAdmin ? '/admin/requests' : '/requests'"
+          />
         </q-item-section>
       </q-item>
     </q-list>
@@ -72,9 +78,19 @@ onMounted(async () => {
     snapshot.forEach((doc) => {
       const data = doc.data() as Omit<ShiftRequest, 'id'>;
       // Filter out own requests
-      if (data.creatorId !== authStore.currentUser?.uid) {
-        loaded.push({ id: doc.id, ...data });
+      if (data.creatorId === authStore.currentUser?.uid) return;
+
+      // Filter by candidateIds if present
+      // If candidateIds is defined and not empty, current user MUST be in it to see the request.
+      // We need currentOperator.id.
+      // If currentOperator is not loaded yet, we might miss it.
+
+      const myOpId = authStore.currentOperator?.id;
+      if (data.candidateIds && data.candidateIds.length > 0) {
+        if (!myOpId || !data.candidateIds.includes(myOpId)) return;
       }
+
+      loaded.push({ id: doc.id, ...data });
     });
 
     requests.value = loaded;

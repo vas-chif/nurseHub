@@ -24,11 +24,11 @@
         />
 
         <q-select
-          v-model="form.role"
-          :options="roleOptions"
-          label="Ruolo Richiesto"
+          v-model="form.profession"
+          :options="professionOptions"
+          label="Professione Richiesta"
           outlined
-          :rules="[(val) => !!val || 'Seleziona un ruolo']"
+          :rules="[(val) => !!val || 'Seleziona una professione']"
         />
 
         <q-select
@@ -65,12 +65,12 @@ const loading = ref(false);
 const form = reactive({
   date: '',
   shift: null as ShiftCode | null,
-  role: 'Infermiere',
+  profession: 'Infermiere',
   reason: 'SHORTAGE' as RequestReason,
 });
 
 const shiftOptions: ShiftCode[] = ['M', 'P', 'N', 'N11', 'N12'];
-const roleOptions = ['Infermiere', 'OSS'];
+const professionOptions = ['Infermiere', 'OSS'];
 const reasonOptions = [
   { label: 'Carenza Organico', value: 'SHORTAGE' },
   { label: 'Assenza Improvvisa', value: 'ABSENCE' },

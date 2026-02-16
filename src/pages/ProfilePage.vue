@@ -83,11 +83,20 @@
 
           <q-input
             :model-value="user?.role"
-            label="Ruolo"
+            label="Ruolo di Sistema"
             outlined
             dense
             readonly
             class="text-uppercase"
+          />
+
+          <q-input
+            v-if="user?.profession"
+            :model-value="user?.profession"
+            label="Professione"
+            outlined
+            dense
+            readonly
           />
 
           <div class="row justify-end q-mt-lg" v-if="isEditing">

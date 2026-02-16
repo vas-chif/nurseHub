@@ -39,6 +39,13 @@
         </q-list>
       </q-card-section>
 
+      <!-- Sync Operator Card -->
+      <q-card-section>
+        <SyncOperatorCard />
+      </q-card-section>
+
+      <q-separator />
+
       <q-card-actions align="center">
         <q-btn
           label="Aggiorna"
@@ -59,6 +66,7 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 import { useQuasar } from 'quasar';
+import SyncOperatorCard from '../components/user/SyncOperatorCard.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();

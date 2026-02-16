@@ -257,14 +257,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../boot/firebase';
-import type { ShiftCode, Operator } from '../../types/models';
 import { date as qDate, useQuasar, type QTableColumn } from 'quasar';
+import { useSecureLogger } from '../../utils/secureLogger';
+import { useConfigStore } from '../../stores/configStore';
+import { operatorsService } from '../../services/OperatorsService';
 import { GoogleSheetsService } from '../../services/GoogleSheetsService';
 import { SyncService } from '../../services/SyncService';
 import { smartEnv } from '../../config/smartEnvironment';
-import { useSecureLogger } from '../../utils/secureLogger';
+import type { Operator, ShiftCode } from '../../types/models';
 
 interface TableRow {
   id: string;
@@ -366,47 +366,36 @@ const columns = computed<QTableColumn[]>(() => [
 ]);
 
 const logger = useSecureLogger();
+const configStore = useConfigStore();
 
 onMounted(async () => {
   await fetchData();
 });
 
 async function fetchData() {
+  if (!configStore.activeConfigId) {
+    logger.warn('No active config - cannot load operators');
+    return;
+  }
+
   try {
-    // Try to load from localStorage first
-    const cached = localStorage.getItem('nurseHub_operators');
-    const cacheTimestamp = localStorage.getItem('nurseHub_operators_timestamp');
-    const cacheAge = cacheTimestamp ? Date.now() - parseInt(cacheTimestamp) : Infinity;
+    // Load operators from active config's sub-collection
+    const loadedOps = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
 
-    // Use cache if less than 5 minutes old
-    if (cached && cacheAge < 5 * 60 * 1000) {
-      const loadedOps = JSON.parse(cached) as Operator[];
-      rawOperators.value = loadedOps;
-      operatorOptions.value = loadedOps;
-      logger.info('Loaded operators from cache');
-      return;
-    }
-
-    const querySnapshot = await getDocs(collection(db, 'operators'));
-    const loadedOps: Operator[] = [];
-    querySnapshot.forEach((doc) => {
-      const op = doc.data() as Operator;
-      // Filter out validation rows from Google Sheets
-      if (op.name !== 'Mattina' && op.name !== 'Pomeriggio' && op.name !== 'Notte') {
-        loadedOps.push(op);
-      }
-    });
+    // Filter out validation rows from Google Sheets
+    const filteredOps = loadedOps.filter(
+      (op) => op.name !== 'Mattina' && op.name !== 'Pomeriggio' && op.name !== 'Notte',
+    );
 
     // Sort by ID number to preserve Google Sheets order
-    // IDs are in format "op-N" where N is the row index
-    loadedOps.sort((a, b) => {
+    filteredOps.sort((a, b) => {
       const numA = parseInt(a.id.replace('op-', '')) || 0;
       const numB = parseInt(b.id.replace('op-', '')) || 0;
       return numA - numB;
     });
 
-    if (loadedOps.length > 0) {
-      const sample = loadedOps[0];
+    if (filteredOps.length > 0) {
+      const sample = filteredOps[0];
       if (sample && sample.schedule) {
         const scheduleKeys = Object.keys(sample.schedule);
         const tableKeys = dateColumns.value.map((c) => c.name);
@@ -422,12 +411,8 @@ Sample Matches: ${overlapSample.join(', ')}`);
       }
     }
 
-    // Save to localStorage
-    localStorage.setItem('nurseHub_operators', JSON.stringify(loadedOps));
-    localStorage.setItem('nurseHub_operators_timestamp', Date.now().toString());
-
-    rawOperators.value = loadedOps;
-    operatorOptions.value = loadedOps;
+    operatorOptions.value = filteredOps;
+    rawOperators.value = filteredOps; // Keep rawOperators updated for filtering
   } catch (e) {
     logger.error('Error loading table data', e);
   }
@@ -436,6 +421,11 @@ Sample Matches: ${overlapSample.join(', ')}`);
 const syncing = ref(false);
 
 async function syncData() {
+  if (!configStore.activeConfigId) {
+    $q.notify({ type: 'warning', message: 'Nessuna configurazione attiva' });
+    return;
+  }
+
   syncing.value = true;
   try {
     const config = smartEnv.getFirebaseConfig();
@@ -452,14 +442,15 @@ async function syncData() {
       contactNameCol: 2,
       contactEmailCol: 3,
       contactPhoneCol: 4,
+      organizationUrl: '',
       gasWebUrl: '',
     };
 
-    logger.info('Starting sync with config');
+    logger.info('Starting sync with config', { configId: configStore.activeConfigId });
     const sheetsService = new GoogleSheetsService(appConfig);
     const syncService = new SyncService(sheetsService);
 
-    await syncService.syncOperatorsFromSheets();
+    await syncService.syncOperatorsFromSheets(configStore.activeConfigId);
 
     // Clear cache after sync
     localStorage.removeItem('nurseHub_operators');

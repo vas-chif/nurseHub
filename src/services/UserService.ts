@@ -42,70 +42,22 @@ export class UserService {
     lastName: string,
     dateOfBirth: string,
   ): Promise<{ operatorId: string | null; needsApproval: boolean }> {
-    // Search for operator with matching email
-    let snapshot;
-    try {
-      logger.debug('Searching for operator match', { email });
-      const operatorQuery = query(this.operatorsCollection, where('email', '==', email));
-      snapshot = await getDocs(operatorQuery);
-      logger.debug('Operator search successful', { count: snapshot.size });
-    } catch (err: unknown) {
-      logger.warn('Could not query operators for matching', { error: err });
-      // Continue without operator matching if read fails
-      snapshot = { empty: true, docs: [] };
-    }
+    // Create basic user document - NO operator search during registration
+    // User will manually sync later via "Sincronizza" button
+    logger.info('Creating basic user document', { email });
 
-    let operatorId: string | null = null;
-    let isVerified = false;
-    let pendingApproval = false;
-
-    if (!snapshot.empty) {
-      // Email match found
-      const operatorDoc = snapshot.docs[0];
-
-      if (!operatorDoc) {
-        // Document missing - needs admin verification
-        pendingApproval = true;
-      } else {
-        const operatorData = operatorDoc.data();
-
-        if (!operatorData) {
-          // Data missing - needs admin verification
-          pendingApproval = true;
-        } else {
-          // Verify date of birth if available in operator record
-          if (operatorData.dateOfBirth) {
-            if (operatorData.dateOfBirth === dateOfBirth) {
-              // Perfect match: email + DOB
-              operatorId = operatorDoc.id;
-              isVerified = true;
-            } else {
-              // Email matches but DOB doesn't - needs admin verification
-              pendingApproval = true;
-            }
-          } else {
-            // No DOB in operator record - trust email match
-            operatorId = operatorDoc.id;
-            isVerified = true;
-          }
-        }
-      }
-    } else {
-      // No email match - needs admin verification
-      pendingApproval = true;
-    }
-
-    // Create user document
     const userDoc: Partial<User> = {
       uid,
       email,
       firstName,
       lastName,
       dateOfBirth,
-      role: 'user',
-      operatorId,
-      isVerified,
-      pendingApproval,
+      role: 'user', // Default system role
+      // profession is undefined initially
+      operatorId: null, // No operator assigned yet
+      configId: null, // No configuration assigned yet
+      isVerified: false, // Must verify email first
+      pendingApproval: true, // Needs manual sync or admin approval
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -118,7 +70,8 @@ export class UserService {
       throw error;
     }
 
-    return { operatorId, needsApproval: pendingApproval };
+    logger.info('User document created', { uid });
+    return { operatorId: null, needsApproval: true };
   }
 
   /**
@@ -133,6 +86,143 @@ export class UserService {
   }
 
   /**
+   * Syncs a user to an operator by searching all configurations
+   * Called when user clicks "Sincronizza/Trova Operatore" button
+   */
+  async syncUserToOperator(uid: string): Promise<{
+    success: boolean;
+    operatorId: string | null;
+    configId: string | null;
+    profession: string | null;
+    message: string;
+  }> {
+    try {
+      // Get user document to retrieve registration data
+      const userDoc = await this.getUserDocument(uid);
+      if (!userDoc) {
+        return {
+          success: false,
+          operatorId: null,
+          configId: null,
+          profession: null,
+          message: 'Utente non trovato nel database',
+        };
+      }
+
+      logger.info('Starting user sync to operator', {
+        uid,
+        email: userDoc.email,
+        name: `${userDoc.firstName} ${userDoc.lastName}`,
+      });
+
+      const userEmail = userDoc.email.toLowerCase().trim();
+      const userFirst = userDoc.firstName.toUpperCase().trim();
+      const userLast = userDoc.lastName.toUpperCase().trim();
+      const userDOB = userDoc.dateOfBirth;
+
+      // Search all configurations for matching operator
+      const configsSnapshot = await getDocs(collection(db, 'systemConfigurations'));
+      logger.info(`Checking ${configsSnapshot.size} configurations...`);
+
+      for (const configDoc of configsSnapshot.docs) {
+        const configId = configDoc.id;
+        const configData = configDoc.data();
+        const configName = configData.name || 'Senza Nome';
+        const profession = configData.profession || configData.role || 'Infermiere';
+
+        logger.info(`Checking config: ${configName} (ID: ${configId})`);
+
+        const operatorsRef = collection(db, 'systemConfigurations', configId, 'operators');
+        const snapshot = await getDocs(operatorsRef);
+
+        for (const operatorDoc of snapshot.docs) {
+          const operatorData = operatorDoc.data();
+          const opId = operatorDoc.id;
+          const opName = String(operatorData.name || '').toUpperCase();
+          const opEmail = String(operatorData.email || '')
+            .toLowerCase()
+            .trim();
+          const opDOB = operatorData.dateOfBirth;
+
+          // 1. Check Email Match
+          const emailMatches = userEmail !== '' && opEmail === userEmail;
+
+          // 2. Check Name Match (Case-insensitive, checks if both first and last name appear in opName)
+          const namesMatch = opName.includes(userFirst) && opName.includes(userLast);
+
+          // If either matches, we have a candidate
+          if (emailMatches || namesMatch) {
+            // 3. Verify Date of Birth if both records have it
+            if (opDOB && userDOB && opDOB !== userDOB) {
+              logger.warn('Candidate found but Date of Birth mismatch', {
+                opId,
+                configId,
+                opDOB,
+                userDOB,
+              });
+              continue;
+            }
+
+            // Match confirmed!
+            logger.info('Match found!', {
+              opId,
+              configId,
+              method: emailMatches ? 'email' : 'name',
+              profession,
+            });
+
+            // Update user document
+            await updateDoc(doc(this.usersCollection, uid), {
+              operatorId: opId,
+              configId: configId,
+              profession,
+              isVerified: true,
+              pendingApproval: false,
+              updatedAt: Date.now(),
+            });
+
+            return {
+              success: true,
+              operatorId: opId,
+              configId: configId,
+              profession,
+              message: `Operatore "${operatorData.name}" trovato in "${configName}" e associato con successo!`,
+            };
+          }
+        }
+      }
+
+      // No operator found in any configuration
+      logger.info('Sync completed: no matching operator found', { uid, email: userDoc.email });
+
+      return {
+        success: false,
+        operatorId: null,
+        configId: null,
+        profession: null,
+        message:
+          "Nessun operatore corrispondente trovato nel sistema. Verifica che i dati (Email, Nome, Data di Nascita) siano identici a quelli nel foglio turni. In alternativa, attendi l'approvazione dell'amministratore.",
+      };
+    } catch (error: unknown) {
+      const err = error as Error;
+      logger.error('CRITICAL ERROR during syncUserToOperator', {
+        uid,
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+      });
+
+      return {
+        success: false,
+        operatorId: null,
+        configId: null,
+        profession: null,
+        message: `Errore tecnico durante la sincronizzazione: ${err.message || 'Errore sconosciuto'}. Riprova più tardi.`,
+      };
+    }
+  }
+
+  /**
    * Links a user to an operator (admin action)
    */
   async linkUserToOperator(uid: string, operatorId: string): Promise<void> {
@@ -142,6 +232,43 @@ export class UserService {
       pendingApproval: false,
       updatedAt: Date.now(),
     });
+  }
+
+  /**
+   * Approves a user with configuration and operator selection (admin action)
+   * Automatically assigns role from the selected configuration
+   */
+  async approveUserWithConfig(uid: string, configId: string, operatorId: string): Promise<void> {
+    try {
+      // Get configuration to retrieve role
+      const configDoc = await getDoc(doc(db, 'systemConfigurations', configId));
+      if (!configDoc.exists()) {
+        throw new Error('Configuration not found');
+      }
+
+      const configData = configDoc.data();
+      // NOTE: Mapping config.profession -> user.profession
+      const profession = configData?.profession || configData?.role || 'Infermiere';
+
+      logger.info('Approving user with config', { uid, configId, operatorId, profession });
+
+      // Update user document with config, operator, and profession
+      await updateDoc(doc(this.usersCollection, uid), {
+        configId,
+        operatorId,
+        profession, // Set profession
+        // role: DO NOT CHANGE ROLE
+        isVerified: true,
+        pendingApproval: false,
+        updatedAt: Date.now(),
+      });
+
+      logger.info('User approved successfully', { uid, configId, operatorId, profession });
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      logger.error('Error approving user with config', { uid, configId, operatorId, error: err });
+      throw error;
+    }
   }
 
   /**

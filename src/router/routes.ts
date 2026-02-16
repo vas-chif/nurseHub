@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
   // Always leave this as last one,
   // but you can also remove it
   {
+    path: '/admin/analytics',
+    component: () => import('layouts/MainLayout.vue'),
+    children: [{ path: '', component: () => import('pages/AdminAnalyticsPage.vue') }],
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/:catchAll(.*)*',
     component: () => import('pages/ErrorNotFound.vue'),
   },

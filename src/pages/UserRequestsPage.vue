@@ -8,6 +8,26 @@
       </q-card-section>
 
       <q-card-section class="q-gutter-md">
+        <!-- Admin: Operator Selector -->
+        <div v-if="authStore.isAdmin" class="q-mb-md">
+          <q-select
+            v-model="selectedOperatorId"
+            :options="operatorOptions"
+            option-label="name"
+            option-value="id"
+            label="Operatore (per conto di)"
+            outlined
+            dense
+            emit-value
+            map-options
+            :hint="'Seleziona l\'operatore per cui stai creando la richiesta'"
+          >
+            <template v-slot:prepend>
+              <q-icon name="person" />
+            </template>
+          </q-select>
+        </div>
+
         <div class="row q-col-gutter-md items-start q-ml-md">
           <!-- Date Input -->
           <div class="col-12 col-md-4">
@@ -127,15 +147,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
 import { collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
-import type { ShiftRequest, RequestReason, ShiftCode } from '../types/models';
+import { useConfigStore } from '../stores/configStore';
+import { operatorsService } from '../services/OperatorsService';
+import type { ShiftRequest, ShiftCode, RequestReason, Operator } from '../types/models';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const submitting = ref(false);
 
 const inputMode = ref<'SHIFT' | 'TIME'>('SHIFT');
@@ -159,7 +182,30 @@ const absenceOptions = [
 
 const requests = ref<ShiftRequest[]>([]);
 
+// Admin: Operator selection
+const selectedOperatorId = ref(authStore.currentOperator?.id || '');
+const operators = ref<Record<string, Operator>>({});
+
+const operatorOptions = computed(() => {
+  return Object.values(operators.value).map((op) => ({
+    id: op.id,
+    name: op.name,
+  }));
+});
+
 onMounted(async () => {
+  // Fetch operators if admin
+  if (authStore.isAdmin && configStore.activeConfigId) {
+    try {
+      const operatorsList = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
+      operatorsList.forEach((op) => {
+        operators.value[op.id] = op;
+      });
+    } catch (e) {
+      console.error('Error fetching operators', e);
+    }
+  }
+
   await fetchRequests();
 });
 
@@ -191,6 +237,16 @@ async function submitRequest() {
 
   submitting.value = true;
   try {
+    // Use selected operator ID (for admin) or current user's operator ID
+    const targetOperatorId = authStore.isAdmin
+      ? selectedOperatorId.value
+      : authStore.currentOperator?.id || '';
+
+    if (!targetOperatorId) {
+      $q.notify({ type: 'warning', message: 'Operatore non selezionato' });
+      return;
+    }
+
     const newReq: Omit<ShiftRequest, 'id'> = {
       date: formData.value.date,
       // If TIME mode, we might set originalShift to a dummy or keep it generic 'A'
@@ -199,9 +255,9 @@ async function submitRequest() {
       reason: formData.value.reason,
       status: 'OPEN',
       creatorId: authStore.currentUser!.uid,
+      absentOperatorId: targetOperatorId,
       createdAt: Date.now(),
       requestNote: formData.value.note,
-      ...(authStore.currentOperator?.id ? { absentOperatorId: authStore.currentOperator.id } : {}),
       ...(inputMode.value === 'TIME' && formData.value.startTime
         ? { startTime: formData.value.startTime }
         : {}),

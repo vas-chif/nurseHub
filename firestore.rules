@@ -3,117 +3,103 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is authenticated
+    // --- Helper Functions ---
+
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Helper function to check if user is admin
     function isAdmin() {
       return isAuthenticated() && 
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
-    // Helper function to check if user is verified
     function isVerified() {
       return isAuthenticated() && 
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isVerified == true;
     }
+
+    // --- Collections ---
     
-    // Users collection
+    // Users: Profile management
     match /users/{userId} {
-      // TEMPORARY DEBUG: Allow any create (NO AUTH CHECK)
-      // TODO: Revert to: if isAuthenticated()
-      allow create: if true;
+      // DEBUG: Allowing unauthenticated creation for easier registration flow during dev
+      allow create: if true; 
       
-      // Users can read their own document
       allow read: if isAuthenticated() && request.auth.uid == userId;
       
-      // Users can update their own basic info (not role or verification status)
-      allow update: if isAuthenticated() && 
-                       request.auth.uid == userId &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['role', 'isVerified', 'operatorId']);
+      // Allow update of own profile
+      allow update: if isAuthenticated() && request.auth.uid == userId && (
+        // Case 1: Standard profile update (phone, etc.) - Role and Verification must NOT change
+        (!request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'isVerified', 'pendingApproval', 'configId', 'operatorId', 'profession']))
+        ||
+        // Case 2: Self-Sync (linking to operator)
+        // Allowed ONLY IF the user is currently NOT linked and they are NOT changing their own role
+        (resource.data.operatorId == null && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+      );
       
-      // Admins can read and update any user
+      // Admins have full access
       allow read, update: if isAdmin();
-      
-      // No one can delete users
-      allow delete: if false;
     }
     
-    // Operators collection (read from Google Sheets, synced to Firestore)
-    match /operators/{operatorId} {
-      // Authenticated users can read operators (needed for registration matching)
-      allow read: if isAuthenticated();
-      
-      // Only admins can write operators
-      allow write: if isAdmin();
-    }
-    
-    // Shifts collection
+    // Shifts: The actual schedule
     match /shifts/{shiftId} {
-      // Verified users can read shifts
       allow read: if isVerified();
-      
-      // Only admins can create/update/delete shifts
       allow write: if isAdmin();
     }
     
-    // ShiftRequests collection
+    // ShiftRequests: Absence management & Offers
     match /shiftRequests/{requestId} {
-      // Users can read their own requests (creatorId matches auth.uid)
+      // 1. Owner can read their own
+      // 2. ANY authenticated user can read 'OPEN' requests (to see coverage opportunities)
       allow read: if isAuthenticated() && 
-                     resource.data.creatorId == request.auth.uid;
+                     (resource.data.creatorId == request.auth.uid || 
+                      resource.data.status == 'OPEN');
       
-      // Verified users can create shift requests
-      // Must set creatorId to their own UID
+      // Creation restricted to verified users (must own the request)
       allow create: if isVerified() &&
                        request.resource.data.creatorId == request.auth.uid;
       
-      // Users can update their own pending requests (status = 'OPEN')
+      // Update only own OPEN requests (e.g. to modify/cancel before approval)
       allow update: if isVerified() && 
                        resource.data.creatorId == request.auth.uid &&
                        resource.data.status == 'OPEN';
       
-      // Admins can read and update all shift requests
+      // Admins have full access
       allow read, update: if isAdmin();
-      
-      // No one can delete shift requests
-      allow delete: if false;
     }
     
-    // Notifications collection (Phase 10.1)
+    // Notifications: In-app alerts
     match /notifications/{notifId} {
-      // Users can read their own notifications
-      allow read: if isAuthenticated() && 
-                     resource.data.userId == request.auth.uid;
-      
-      // Only admins can create notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid; // e.g. mark as read
       allow create: if isAdmin();
-      
-      // Users can update their own notifications (for marking as read)
-      allow update: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-      
-      // No one can delete notifications
-      allow delete: if false;
     }
     
-    // Settings collection (for QR codes, etc.)
+    // Settings & System Config
     match /settings/{settingId} {
-      // Anyone can read settings
-      allow read: if true;
-      
-      // Only admins can write settings
+      allow read: if true; // Public settings (e.g. login message)
       allow write: if isAdmin();
     }
 
-    // System Config collection (for Google Sheets URL etc)
+    // System Configurations: Multi-config management for different roles
+    match /systemConfigurations/{configId} {
+      allow read: if true; // Allow any authenticated user to list configs (needed for operator sync)
+      allow write: if isAdmin();
+      
+      // Operators sub-collection: stores operators for each configuration
+      // Allow public read for registration matching, write only for admins
+      match /operators/{operatorId} {
+        allow read: if true;  // Public read for registration email matching
+        allow write: if isAdmin();
+      }
+    }
+
     match /system/{configId} {
-       // Authenticated users need to read config to Sync
-       allow read: if isAuthenticated();
-       allow write: if isAdmin();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }

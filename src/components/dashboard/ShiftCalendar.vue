@@ -63,12 +63,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
-import type { ShiftCode, Operator } from '../../types/models';
+import { useConfigStore } from '../../stores/configStore';
+import { operatorsService } from '../../services/OperatorsService';
+import type { Operator, ShiftCode } from '../../types/models';
+import { useSecureLogger } from '../../utils/secureLogger';
 
 const authStore = useAuthStore();
+const configStore = useConfigStore();
+const logger = useSecureLogger();
 
 interface DayShift {
   date: string;
@@ -90,12 +93,13 @@ const hasSearchModule = ref(true);
 
 // Fetch Operators on Mount
 onMounted(async () => {
+  if (!configStore.activeConfigId) {
+    logger.warn('No active config - cannot load operators for calendar');
+    return;
+  }
+
   try {
-    const querySnapshot = await getDocs(collection(db, 'operators'));
-    const loadedOps: Operator[] = [];
-    querySnapshot.forEach((doc) => {
-      loadedOps.push(doc.data() as Operator);
-    });
+    const loadedOps = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
     // Sort by name
     loadedOps.sort((a, b) => a.name.localeCompare(b.name));
 

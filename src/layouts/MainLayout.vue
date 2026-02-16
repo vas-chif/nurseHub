@@ -1,13 +1,27 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import { useAuthStore } from '../stores/authStore';
+import { useConfigStore } from '../stores/configStore';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
+
+// Load configurations on mount
+onMounted(async () => {
+  if (authStore.isAdmin) {
+    await configStore.loadConfigurations();
+  }
+});
 
 async function logout() {
   await authStore.logout();
   await router.push('/login');
+}
+
+async function handleConfigChange(configId: string) {
+  await configStore.setActiveConfig(configId);
 }
 </script>
 
@@ -21,6 +35,50 @@ async function logout() {
           </q-avatar>
         </q-toolbar-title>
         <q-toolbar-title> Nurse Hub </q-toolbar-title>
+
+        <!-- Global Config Selector (Admin Only) -->
+        <q-select
+          v-if="authStore.isAdmin && configStore.allConfigs.length > 0"
+          v-model="configStore.activeConfigId"
+          :options="configStore.allConfigs"
+          option-value="id"
+          option-label="name"
+          emit-value
+          map-options
+          dense
+          outlined
+          label="Configurazione"
+          class="q-mr-md"
+          style="min-width: 200px"
+          @update:model-value="handleConfigChange"
+        >
+          <template v-slot:prepend>
+            <q-icon name="settings" size="xs" />
+          </template>
+          <template v-slot:option="scope">
+            <q-item v-bind="scope.itemProps">
+              <q-item-section avatar>
+                <q-icon
+                  :name="
+                    scope.opt.profession === 'Medico'
+                      ? 'medical_services'
+                      : scope.opt.profession === 'OSS'
+                        ? 'health_and_safety'
+                        : 'local_hospital'
+                  "
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>{{ scope.opt.name }}</q-item-label>
+                <q-item-label caption>{{ scope.opt.profession }}</q-item-label>
+              </q-item-section>
+              <q-item-section side v-if="scope.opt.isActive">
+                <q-badge color="green" label="●" />
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
+
         <q-btn-dropdown
           class="q-mr-md"
           flat
@@ -79,13 +137,32 @@ async function logout() {
         <q-route-tab to="/" icon="dashboard" label="Home" />
         <q-route-tab to="/calendar" icon="calendar_month" label="Turni" />
         <q-route-tab v-if="!authStore.isAdmin" to="/requests" icon="event_note" label="Richieste" />
+
+        <q-route-tab
+          v-if="authStore.isAdmin"
+          to="/requests"
+          icon="add_circle"
+          label="Nuova Richiesta"
+        />
+        <q-route-tab
+          v-if="authStore.isAdmin"
+          to="/admin/requests"
+          icon="event_note"
+          label="Richieste"
+        />
+        <q-route-tab v-if="authStore.isAdmin" to="/admin/users" icon="people" label="Utenti" />
+        <q-route-tab
+          v-if="authStore.isAdmin"
+          to="/admin/analytics"
+          icon="analytics"
+          label="Stats"
+        />
         <q-route-tab
           v-if="authStore.isAdmin"
           to="/admin"
           icon="admin_panel_settings"
           label="Admin"
         />
-        <q-route-tab v-if="authStore.isAdmin" to="/admin/users" icon="people" label="Utenti" />
       </q-tabs>
       <div class="row justify-center q-mx-md">
         <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>

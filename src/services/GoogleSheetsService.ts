@@ -15,8 +15,6 @@ interface GvizRow {
   c?: (GvizCell | null)[];
 }
 
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../boot/firebase';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
@@ -119,7 +117,7 @@ export class GoogleSheetsService {
    */
   public async fetchOperators(): Promise<Operator[]> {
     // Try to load dynamic config first
-    await this.loadConfig();
+    this.loadConfig();
 
     if (!this.config.spreadsheetUrl) throw new Error('Spreadsheet URL configuration missing');
 
@@ -197,7 +195,6 @@ export class GoogleSheetsService {
             parsedOps.push({
               id: `op-${i}`, // Temporary ID based on row index, stable enough for static sheets
               name,
-              role: 'Operatore',
               schedule,
               email: cMap[name.toUpperCase()]?.email || '',
               phone: cMap[name.toUpperCase()]?.phone || '',
@@ -214,36 +211,22 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Loads configuration from Firestore (system/config)
+   * Loads configuration - now a no-op since config is managed via systemConfigurations
+   * @deprecated Configuration is now managed in systemConfigurations collection
    */
-  public async loadConfig(): Promise<void> {
-    try {
-      const docRef = doc(db, 'system', 'config');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.spreadsheetUrl) {
-          this.config.spreadsheetUrl = data.spreadsheetUrl;
-        }
-        // Can add other config overrides here
-      }
-    } catch (error) {
-      logger.warn('Failed to load dynamic config, utilizing defaults', error);
-    }
+  public loadConfig(): void {
+    // Configuration is now set directly via updateSpreadsheetUrl from SystemConfig component
+    // This method is kept for backward compatibility but does nothing
+    logger.info('loadConfig called - configuration managed via systemConfigurations');
   }
 
   /**
-   * Updates the spreadsheet URL in Firestore and memory
+   * Updates the spreadsheet URL in memory only
+   * Firestore updates are handled by SystemConfig component in systemConfigurations collection
    */
-  public async updateSpreadsheetUrl(url: string): Promise<void> {
-    try {
-      const docRef = doc(db, 'system', 'config');
-      await setDoc(docRef, { spreadsheetUrl: url }, { merge: true });
-      this.config.spreadsheetUrl = url;
-    } catch (error) {
-      logger.error('Failed to update config', error);
-      throw error;
-    }
+  public updateSpreadsheetUrl(url: string): void {
+    this.config.spreadsheetUrl = url;
+    logger.info('Spreadsheet URL updated in memory', { url });
   }
 
   public getCurrentUrl(): string {

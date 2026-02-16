@@ -8,17 +8,16 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { User, Operator } from '../types/models';
 import { userService } from '../services/UserService';
+import { operatorsService } from '../services/OperatorsService';
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
   onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  createUserWithEmailAndPassword,
   sendEmailVerification,
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../boot/firebase';
-import { doc, getDoc, collection } from 'firebase/firestore';
-import { db } from '../boot/firebase';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
@@ -143,10 +142,10 @@ export const useAuthStore = defineStore('auth', () => {
         currentUser.value = user;
 
         // If user is verified and linked to an operator, load operator data
-        if (user.isVerified && user.operatorId) {
-          const operatorDoc = await getDoc(doc(collection(db, 'operators'), user.operatorId));
-          if (operatorDoc.exists()) {
-            currentOperator.value = operatorDoc.data() as Operator;
+        if (user.isVerified && user.operatorId && user.configId) {
+          const operator = await operatorsService.getOperatorById(user.configId, user.operatorId);
+          if (operator) {
+            currentOperator.value = operator;
           }
         }
       }

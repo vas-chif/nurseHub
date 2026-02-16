@@ -27,8 +27,10 @@ export type RequestStatus = 'OPEN' | 'PARTIAL' | 'CLOSED' | 'EXPIRED';
 export interface User {
   uid: string; // Firebase Auth UID
   email: string;
-  role: 'user' | 'admin';
-  operatorId: string | null; // Link to operators collection
+  role: 'admin' | 'user'; // System access level
+  profession?: string; // e.g. 'Infermiere', 'OSS', 'Medico' (from SystemConfiguration)
+  operatorId: string | null; // Link to operator in the active config's sub-collection
+  configId: string | null; // Link to which systemConfiguration this user belongs to
   isVerified: boolean; // True if linked to an operator
   pendingApproval: boolean; // True if awaiting admin verification
   firstName: string; // First name from registration
@@ -47,7 +49,6 @@ export interface Operator {
   email?: string;
   dateOfBirth?: string; // YYYY-MM-DD format for user matching
   phone?: string;
-  role: string; // e.g. "Infermiere", "OSS"
   schedule: Record<string, ShiftCode>; // YYYY-MM-DD -> Code
   lastSync?: number; // Timestamp ultima sincronizzazione
 }
@@ -77,6 +78,15 @@ export interface ShiftRequest {
   rejectionTimestamp?: number; // Timestamp when rejected
   approvalTimestamp?: number; // Timestamp when approved
   adminId?: string; // UID of admin who approved/rejected
+  candidateIds?: string[]; // IDs degli operatori a cui è stata proposta la sostituzione
+  offerType?: 'ABSENCE' | 'COVERAGE_OFFER'; // Nuova feature: Offerta copertura volontaria
+  offers?: Array<{
+    id: string;
+    operatorId: string;
+    operatorName?: string;
+    scenarioLabel?: string;
+    timestamp?: number;
+  }>; // Offerte ricevute dagli operatori
 }
 
 export interface ShiftOffer {
@@ -150,6 +160,26 @@ export type NotificationType =
   | 'NEW_REQUEST'
   | 'OFFER_ACCEPTED'
   | 'OFFER_REJECTED';
+
+export interface Suggestion {
+  operatorId: string;
+  name: string;
+  currentShift: ShiftCode;
+  proposal: string; // e.g. "Doppio Turno (M+P)"
+  priority?: number; // Optional for compatibility, strict in logic
+}
+
+// --- Phase 10.2: Multi-Configuration System ---
+
+export interface SystemConfiguration {
+  id: string;
+  name: string; // User-defined name (e.g., "Turni Infermieri Reparto A")
+  profession: 'Infermiere' | 'Medico' | 'OSS'; // Target profession
+  spreadsheetUrl: string; // Google Sheets URL for this config
+  createdAt: number;
+  createdBy: string; // Admin UID
+  isActive?: boolean; // Currently selected configuration
+}
 
 export interface Notification {
   id: string;

@@ -6,13 +6,14 @@
 
 import { computed } from 'vue';
 import { useAuthStore } from '../stores/authStore';
+import { useConfigStore } from '../stores/configStore';
+import { operatorsService } from '../services/OperatorsService';
 import { useShiftLogic } from './useShiftLogic';
 import type { Operator, ShiftRequest } from '../types/models';
-import { collection, doc, getDoc } from 'firebase/firestore';
-import { db } from '../boot/firebase';
 
 export function useUserContext() {
   const authStore = useAuthStore();
+  const configStore = useConfigStore();
   const { getCompatibleScenarios } = useShiftLogic();
 
   /**
@@ -92,13 +93,15 @@ export function useUserContext() {
       return authStore.currentOperator ? [authStore.currentOperator] : [];
     }
 
-    const operators: Operator[] = [];
-    const operatorsCol = collection(db, 'operators');
+    if (!configStore.activeConfigId) {
+      return authStore.currentOperator ? [authStore.currentOperator] : [];
+    }
 
+    const operators: Operator[] = [];
     for (const opId of authStore.selectedOperatorIds) {
-      const operatorDoc = await getDoc(doc(operatorsCol, opId));
-      if (operatorDoc.exists()) {
-        operators.push(operatorDoc.data() as Operator);
+      const operator = await operatorsService.getOperatorById(configStore.activeConfigId, opId);
+      if (operator) {
+        operators.push(operator);
       }
     }
 
