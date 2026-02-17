@@ -1,18 +1,69 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
+import { useNotificationStore } from '../stores/notificationStore';
 import { useRouter } from 'vue-router';
+import { onMounted, onUnmounted } from 'vue';
+import { useQuasar } from 'quasar';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const notificationStore = useNotificationStore();
+const $q = useQuasar();
 
 // Load configurations on mount
 onMounted(async () => {
   if (authStore.isAdmin) {
     await configStore.loadConfigurations();
+    // Admin notification listener
+    notificationStore.initAdminListener(() => {
+      if (router.currentRoute.value.path !== '/admin/requests') {
+        $q.notify({
+          message: `Nuova richiesta ricevuta`,
+          caption: `Da un operatore`,
+          color: 'primary',
+          icon: 'notifications',
+          position: 'top-right',
+          actions: [
+            {
+              label: 'Vedi',
+              color: 'white',
+              handler: () => {
+                void router.push('/admin/requests');
+              },
+            },
+          ],
+        });
+      }
+    });
+  } else if (authStore.currentUser?.uid) {
+    // User notification listener (for status updates)
+    notificationStore.initUserListener(authStore.currentUser.uid, (req) => {
+      if (router.currentRoute.value.path !== '/requests') {
+        $q.notify({
+          message: `Aggiornamento richiesta`,
+          caption: `La tua richiesta del ${req.date} è ora ${req.status}`,
+          color: req.status === 'CLOSED' ? 'positive' : 'warning',
+          icon: 'update',
+          position: 'bottom-right',
+          actions: [
+            {
+              label: 'Vedi',
+              color: 'white',
+              handler: () => {
+                void router.push('/requests');
+              },
+            },
+          ],
+        });
+      }
+    });
   }
+});
+
+onUnmounted(() => {
+  notificationStore.stopListeners();
 });
 
 async function logout() {
@@ -149,7 +200,11 @@ async function handleConfigChange(configId: string) {
           to="/admin/requests"
           icon="event_note"
           label="Richieste"
-        />
+        >
+          <q-badge v-if="notificationStore.pendingRequestsCount > 0" color="red" floating>
+            {{ notificationStore.pendingRequestsCount }}
+          </q-badge>
+        </q-route-tab>
         <q-route-tab v-if="authStore.isAdmin" to="/admin/users" icon="people" label="Utenti" />
         <q-route-tab
           v-if="authStore.isAdmin"

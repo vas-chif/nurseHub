@@ -103,13 +103,13 @@
 
               <q-item-section avatar>
                 <q-avatar color="primary" text-color="white">
-                  {{ getOperatorInitials(req.absentOperatorId) }}
+                  {{ getOperatorInitials(req.absentOperatorId, req) }}
                 </q-avatar>
               </q-item-section>
 
               <q-item-section>
                 <q-item-label class="text-subtitle1 text-weight-bold">
-                  {{ getOperatorName(req.absentOperatorId) }}
+                  {{ getOperatorName(req.absentOperatorId, req) }}
                 </q-item-label>
                 <q-item-label caption>
                   Assenza: {{ formatDate(req.date) }} -
@@ -158,10 +158,7 @@
                   <div class="col-12">
                     <div class="text-h6 q-mb-sm">Monitoraggio Offerte</div>
                     <q-list separator bordered class="bg-grey-1 rounded-borders">
-                      <div
-                        v-if="!req.offers || req.offers.length === 0"
-                        class="q-pa-md text-grey text-center"
-                      >
+                      <div v-if="!req.offers?.length" class="q-pa-md text-grey text-center">
                         Nessuna offerta recente.
                       </div>
                       <q-item v-for="offer in req.offers || []" :key="offer.id">
@@ -240,28 +237,81 @@
                         v-if="getSuggestions(req.id).length === 0"
                         class="text-grey text-caption"
                       >
-                        Nessun sostituto trovato.
+                        Nessun sostituto trovato per i criteri attuali.
                       </div>
-                      <q-list dense v-else separator>
-                        <q-item v-for="sub in getSuggestions(req.id)" :key="sub.operatorId">
-                          <q-item-section avatar>
-                            <q-checkbox
-                              v-model="selectedSuggestions[req.id]"
-                              :val="sub.operatorId"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label>{{ sub.name }}</q-item-label>
-                            <q-item-label caption>
-                              Turno Attuale:
-                              <q-badge :color="getShiftColor(sub.currentShift)">{{
-                                sub.currentShift
-                              }}</q-badge>
-                              → {{ sub.proposal }}
-                            </q-item-label>
-                          </q-item-section>
-                        </q-item>
-                      </q-list>
+                      <div v-else>
+                        <div
+                          v-for="scenario in getSuggestions(req.id)"
+                          :key="scenario.id"
+                          class="q-mb-md bg-white border-radius-sm shadow-1 overflow-hidden"
+                        >
+                          <div class="bg-primary text-white q-pa-sm text-weight-bold">
+                            {{ scenario.label }}
+                          </div>
+                          <div
+                            v-for="(pos, pIdx) in scenario.positions"
+                            :key="pIdx"
+                            class="q-pa-sm"
+                          >
+                            <div class="row items-center justify-between q-mb-xs">
+                              <div class="text-subtitle2 text-primary">
+                                Posizione {{ pIdx + 1 }}
+                              </div>
+                              <q-checkbox
+                                :model-value="isAllSelected(req.id, pos.candidates)"
+                                :indeterminate="isSomeSelected(req.id, pos.candidates)"
+                                @update:model-value="
+                                  (val) => toggleAllInPosition(req.id, pos.candidates, val)
+                                "
+                                label="Seleziona Tutti"
+                                dense
+                                size="xs"
+                                color="secondary"
+                                :disable="pos.candidates.length === 0"
+                              />
+                            </div>
+                            <div class="text-caption text-grey-8 q-mb-sm">
+                              {{ pos.roleLabel }}
+                            </div>
+
+                            <q-list dense separator padding class="bg-grey-1 rounded-borders">
+                              <q-item
+                                v-for="cand in pos.candidates"
+                                :key="cand.operatorId"
+                                class="q-py-xs"
+                              >
+                                <q-item-section avatar>
+                                  <q-checkbox
+                                    v-model="selectedSuggestions[req.id]"
+                                    :val="cand.operatorId"
+                                  />
+                                </q-item-section>
+                                <q-item-section>
+                                  <q-item-label class="text-weight-bold">{{
+                                    cand.name
+                                  }}</q-item-label>
+                                  <q-item-label caption v-if="cand.phone">
+                                    <q-icon name="phone" size="xs" />
+                                    {{ cand.phone }}
+                                  </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                  <q-badge :color="getShiftColor(cand.currentShift)" size="sm">
+                                    {{ cand.currentShift }}
+                                  </q-badge>
+                                </q-item-section>
+                              </q-item>
+                              <div
+                                v-if="pos.candidates.length === 0"
+                                class="q-pa-sm text-caption text-grey italic"
+                              >
+                                Nessun candidato idoneo per questa posizione.
+                              </div>
+                            </q-list>
+                          </div>
+                        </div>
+                      </div>
+
                       <div class="q-mt-sm">
                         <q-btn
                           size="sm"
@@ -293,20 +343,113 @@
           Nessuna richiesta nello storico.
         </div>
         <q-list v-else separator bordered class="rounded-borders">
-          <q-item v-for="req in filteredHistoryRequests" :key="req.id">
-            <q-item-section>
-              <q-item-label>{{ getOperatorName(req.creatorId) }}</q-item-label>
-              <q-item-label caption
-                >{{ formatDate(req.date) }} - {{ req.originalShift }}</q-item-label
-              >
-            </q-item-section>
-            <q-item-section side>
-              <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
-                {{ req.status }}
-              </q-chip>
-              <q-tooltip v-if="req.rejectionReason"> Motivo: {{ req.rejectionReason }} </q-tooltip>
-            </q-item-section>
-          </q-item>
+          <q-expansion-item
+            v-for="req in filteredHistoryRequests"
+            :key="req.id"
+            group="history"
+            header-class="q-pa-sm"
+          >
+            <template v-slot:header>
+              <q-item-section avatar>
+                <q-avatar icon="person" color="grey-2" text-color="primary" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">
+                  {{ getOperatorName(req.absentOperatorId || req.creatorId, req) }}
+                </q-item-label>
+                <q-item-label caption>
+                  {{ formatDate(req.date) }} -
+                  <q-badge :color="getShiftColor(req.originalShift)" size="xs">{{
+                    req.originalShift
+                  }}</q-badge>
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
+                  {{ req.status }}
+                </q-chip>
+              </q-item-section>
+            </template>
+
+            <q-card class="bg-grey-1">
+              <q-card-section class="q-py-md">
+                <div class="row q-col-gutter-md">
+                  <!-- Info Richiesta -->
+                  <div class="col-12 col-md-6">
+                    <div class="text-subtitle2 q-mb-xs">Dettagli Richiesta</div>
+                    <div class="q-mb-xs">
+                      <span class="text-grey-7">Data Turno:</span>
+                      {{ formatDate(req.date) }} ({{ req.originalShift }})
+                    </div>
+                    <div class="q-mb-xs">
+                      <span class="text-grey-7">Aperta il:</span>
+                      {{ formatFullDate(req.createdAt) }}
+                    </div>
+                    <div class="q-mb-xs">
+                      <span class="text-grey-7">Richiesto da:</span>
+                      {{ getOperatorName(req.creatorId, req) }}
+                    </div>
+                    <div class="q-mb-xs">
+                      <span class="text-grey-7">Motivo:</span>
+                      <q-badge outline color="secondary">{{ req.reason }}</q-badge>
+                    </div>
+                    <div v-if="req.requestNote" class="q-mt-sm">
+                      <div class="text-caption text-grey-7">Note Operatore:</div>
+                      <div class="italic">"{{ req.requestNote }}"</div>
+                    </div>
+                  </div>
+
+                  <!-- Info Chiusura -->
+                  <div class="col-12 col-md-6 border-left">
+                    <div class="text-subtitle2 q-mb-xs">Stato & Chiusura</div>
+                    <div class="q-mb-xs">
+                      <span class="text-grey-7">Stato Attuale:</span>
+                      <q-chip
+                        :color="getStatusColor(req.status)"
+                        text-color="white"
+                        dense
+                        size="sm"
+                      >
+                        {{ req.status }}
+                      </q-chip>
+                    </div>
+
+                    <div v-if="req.approvalTimestamp" class="q-mb-xs">
+                      <span class="text-grey-7">Gestita il:</span>
+                      {{ formatFullDate(req.approvalTimestamp) }}
+                    </div>
+
+                    <div v-if="req.adminId" class="q-mb-xs text-caption">
+                      <span class="text-grey-7">Gestita da:</span> Admin ({{ req.adminId }})
+                    </div>
+
+                    <q-separator class="q-my-sm" />
+
+                    <!-- Esito Sostituzione -->
+                    <div v-if="req.status === 'CLOSED'" class="text-positive">
+                      <div class="text-weight-bold">Sostituzione Completata</div>
+                      <div v-if="req.offers?.some((o) => o.timestamp === req.approvalTimestamp)">
+                        <q-icon name="check_circle" />
+                        Coperto da:
+                        {{
+                          req.offers.find((o) => o.timestamp === req.approvalTimestamp)
+                            ?.operatorName
+                        }}
+                      </div>
+                      <div v-else>Copertura manuale confermata dall'admin.</div>
+                    </div>
+
+                    <div v-if="req.rejectionReason" class="text-negative">
+                      <div class="text-weight-bold">Rifiutata / Cancellata</div>
+                      <div class="bg-red-1 q-pa-sm rounded-borders q-mt-xs">
+                        <strong>Motivo Admin:</strong> {{ req.rejectionReason }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </q-card-section>
+            </q-card>
+          </q-expansion-item>
         </q-list>
       </q-tab-panel>
     </q-tab-panels>
@@ -343,25 +486,102 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Phase 13: Approval Sync Mode Dialog -->
+    <q-dialog v-model="showApprovalDialog" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="row items-center">
+          <q-avatar icon="check_circle" color="positive" text-color="white" />
+          <span class="q-ml-sm text-h6">Conferma Copertura</span>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <div v-if="approvalContext?.offer" class="q-mb-md">
+            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong
+            >.
+          </div>
+          <div v-else-if="approvalContext?.req" class="q-mb-md">
+            Stai confermando la copertura per
+            <strong>{{
+              getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req)
+            }}</strong
+            >.
+          </div>
+
+          <div class="bg-grey-2 q-pa-md rounded-borders">
+            <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
+            <q-btn-toggle
+              v-model="syncMode"
+              spread
+              no-caps
+              rounded
+              unelevated
+              toggle-color="primary"
+              color="white"
+              text-color="primary"
+              :options="[
+                { label: 'Automatica', value: 'auto' },
+                { label: 'Manuale', value: 'manual' },
+              ]"
+            />
+            <div class="text-caption text-grey-7 q-mt-sm">
+              <span v-if="syncMode === 'auto'">
+                Il turno verrà aggiornato automaticamente sul file Excel Master.
+              </span>
+              <span v-else>
+                Dovrai aggiornare il file Excel Master manualmente in un secondo momento.
+              </span>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="text-primary">
+          <q-btn flat label="Annulla" v-close-popup />
+          <q-btn
+            unelevated
+            color="positive"
+            label="Conferma & Chiudi"
+            @click="processApproval"
+            :loading="loading"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useQuasar } from 'quasar';
-import { collection, query, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import type { Unsubscribe } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  doc,
+  updateDoc,
+  writeBatch,
+  onSnapshot,
+  orderBy,
+} from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
+import { useNotificationStore } from '../stores/notificationStore';
 import { operatorsService } from '../services/OperatorsService';
-import type { ShiftRequest, ShiftCode, Operator, Suggestion } from '../types/models';
+import type { ShiftRequest, ShiftCode, Operator, ScenarioGroup, Suggestion } from '../types/models';
 import { notifyUser } from '../services/NotificationService';
 import { useAuthStore } from '../stores/authStore';
 import { useShiftLogic } from '../composables/useShiftLogic';
+import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { SyncService } from '../services/SyncService';
+import { DEFAULT_SHEETS_CONFIG, REPLACEMENT_SCENARIOS } from '../config/sheets';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
-const { getCompatibleScenarios } = useShiftLogic();
+const notificationStore = useNotificationStore();
+const { checkCompliance } = useShiftLogic();
+
+let unsubscribe: Unsubscribe | null = null;
 
 const activeTab = ref('pending');
 const loading = ref(false);
@@ -375,6 +595,14 @@ import { storeToRefs } from 'pinia';
 const adminStore = useAdminStore();
 const { suggestions, selectedSuggestions, calculating } = storeToRefs(adminStore);
 // interface Suggestion is now imported/inferred or can be kept if needed for type assertion
+
+// Approval Dialog Logic
+const showApprovalDialog = ref(false);
+const syncMode = ref<'auto' | 'manual'>('auto');
+const approvalContext = ref<{
+  req: ShiftRequest;
+  offer?: { id: string; operatorId?: string; operatorName?: string };
+} | null>(null);
 
 // Phase 10.1: Filters, Sorting, Bulk Actions
 const filters = ref({
@@ -460,7 +688,11 @@ const filteredHistoryRequests = computed(() => {
 
 onMounted(async () => {
   await fetchOperators();
-  await fetchRequests();
+  initRealtimeRequests();
+});
+
+onUnmounted(() => {
+  if (unsubscribe) unsubscribe();
 });
 
 async function fetchOperators() {
@@ -479,40 +711,70 @@ async function fetchOperators() {
   }
 }
 
-async function fetchRequests() {
+function initRealtimeRequests() {
   loading.value = true;
-  try {
-    const q = query(collection(db, 'shiftRequests')); // Get all for admin
-    const snap = await getDocs(q);
-    const loaded: ShiftRequest[] = [];
-    snap.forEach((doc) => {
-      loaded.push({ id: doc.id, ...doc.data() } as ShiftRequest);
-    });
-    requests.value = loaded;
-  } catch (e) {
-    console.error('Error fetching requests', e);
-    $q.notify({ type: 'negative', message: 'Errore caricamento richieste' });
-  } finally {
-    loading.value = false;
-  }
+  const q = query(collection(db, 'shiftRequests'), orderBy('createdAt', 'desc'));
+
+  unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const loaded: ShiftRequest[] = [];
+      let pendingCount = 0;
+
+      snapshot.docs.forEach((doc) => {
+        const data = { id: doc.id, ...doc.data() } as ShiftRequest;
+        loaded.push(data);
+        if (data.status === 'OPEN') pendingCount++;
+      });
+
+      // Notify of new requests (only if not initial load)
+      if (!loading.value) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const newData = change.doc.data() as ShiftRequest;
+            if (newData.status === 'OPEN') {
+              $q.notify({
+                message: `Nuova richiesta da ${getOperatorName(newData.absentOperatorId || newData.creatorId, newData)}`,
+                color: 'primary',
+                icon: 'notifications',
+                position: 'top-right',
+              });
+              notificationStore.incrementUnread();
+            }
+          }
+        });
+      }
+
+      requests.value = loaded;
+      notificationStore.setPendingRequestsCount(pendingCount);
+      loading.value = false;
+    },
+    (error) => {
+      console.error('Snapshot error:', error);
+      loading.value = false;
+      $q.notify({ type: 'negative', message: 'Errore real-time: ricarica la pagina' });
+    },
+  );
 }
 
-function getOperatorName(id?: string) {
+function getOperatorName(id?: string, req?: ShiftRequest) {
   if (!id) return 'Utente Sconosciuto';
+
+  // If we have the name stored in the request (new fields), use it
+  if (req) {
+    if (id === req.absentOperatorId && req.absentOperatorName) return req.absentOperatorName;
+    if (id === req.creatorId && req.creatorName) return req.creatorName;
+  }
+
   // Try direct match in operators (if id is op-X)
   const op = operators.value[id];
   if (op) return op.name;
 
-  // Attempt to find by creatorId or user link?
-  // In Phase 10, we don't have direct User->Operator link in frontend list easily without joining.
-  // We'll rely on absentOperatorId which IS the operator ID properly.
-  // If id is a UID (creatorId), we might not find it in operators map unless we fetched users.
-  // Fallback:
   return id;
 }
 
-function getOperatorInitials(id?: string) {
-  const name = getOperatorName(id);
+function getOperatorInitials(id?: string, req?: ShiftRequest) {
+  const name = getOperatorName(id, req);
   return name.slice(0, 2).toUpperCase();
 }
 
@@ -524,6 +786,18 @@ function formatDate(ts: number | string) {
   return new Date(ts).toLocaleDateString('it-IT', {
     day: '2-digit',
     month: '2-digit',
+  });
+}
+
+function formatFullDate(ts: number | string | undefined) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -545,13 +819,38 @@ function getShiftColor(code: ShiftCode): string {
 function getStatusColor(status: string) {
   switch (status) {
     case 'CLOSED':
-      return 'positive'; // Approata/Chiusa
+      return 'positive'; // Approvata/Chiusa
     case 'EXPIRED':
       return 'grey'; // Rifiutata/Scaduta
     case 'PARTIAL':
       return 'warning';
     default:
       return 'grey';
+  }
+}
+
+/**
+ * Syncs a shift update back to Google Sheets
+ */
+async function syncToSheets(operatorName: string, date: string, newShift: string) {
+  if (!configStore.activeConfigId) return;
+
+  const appConfig = {
+    ...DEFAULT_SHEETS_CONFIG,
+    spreadsheetUrl:
+      configStore.activeConfig?.spreadsheetUrl || DEFAULT_SHEETS_CONFIG.spreadsheetUrl,
+  };
+
+  const sheetsService = new GoogleSheetsService(appConfig);
+  const syncService = new SyncService(sheetsService);
+
+  try {
+    const success = await syncService.syncShiftUpdate(operatorName, date, newShift);
+    if (success) {
+      console.log(`Synced ${operatorName} shift update to Sheets: ${date} -> ${newShift}`);
+    }
+  } catch (e) {
+    console.error('Failed to sync to sheets:', e);
   }
 }
 
@@ -612,48 +911,95 @@ async function findSubstitutes(req: ShiftRequest) {
   // Simulate calculation delay for UX
   await new Promise((r) => setTimeout(r, 800));
 
-  const results: Suggestion[] = [];
   const targetShift = req.originalShift;
+  const groups: ScenarioGroup[] = [];
 
-  // Iterate all operators
-  Object.values(operators.value).forEach((op) => {
-    // Skip the absentee
-    if (op.id === req.absentOperatorId || op.id === req.creatorId) return;
+  // 1. Get scenarios for this targetShift
+  const scenarios = REPLACEMENT_SCENARIOS.filter((s) => s.targetShift === targetShift);
 
-    // Check Exclusions
-    if (isExcluded(op)) return;
+  scenarios.forEach((scen) => {
+    const group: ScenarioGroup = {
+      id: scen.id,
+      label: scen.label,
+      positions: scen.roles.map((role) => ({
+        roleLabel: role.roleLabel,
+        originalShift: role.originalShift,
+        newShift: role.newShift,
+        candidates: [],
+      })),
+    };
 
-    // Check schedule for date
-    const currentShift = (op.schedule && op.schedule[req.date]) || 'R'; // Default to R if not set?
+    // 2. Find candidates for each position in this scenario
+    group.positions.forEach((pos) => {
+      Object.values(operators.value).forEach((op) => {
+        // Skip absentee or creator
+        if (op.id === req.absentOperatorId || op.id === req.creatorId) return;
+        if (isExcluded(op)) return;
 
-    const scenarios = getCompatibleScenarios(targetShift, currentShift);
-    if (scenarios.length > 0) {
-      const bestScenario = scenarios[0]; // Usually just one valid or first is fine
-      if (!bestScenario) return;
+        const currentShift = (op.schedule && op.schedule[req.date]) || 'R';
 
-      // Calculate Priority Score
-      const priority = calculatePriority(op, currentShift, targetShift, req.date);
-
-      results.push({
-        operatorId: op.id,
-        name: op.name,
-        currentShift: currentShift,
-        proposal: bestScenario.scenarioLabel,
-        priority: priority, // Internal use for sorting
+        // Check if operator matches the required original shift for this role
+        if (currentShift === pos.originalShift) {
+          // Verify compliance (simplified for now as per useShiftLogic)
+          const compliance = checkCompliance(currentShift, pos.newShift);
+          if (compliance.allowed) {
+            pos.candidates.push({
+              operatorId: op.id,
+              name: op.name,
+              ...(op.phone ? { phone: op.phone } : {}),
+              currentShift: currentShift,
+              proposal: pos.roleLabel,
+              priority: calculatePriority(op, currentShift, targetShift, req.date),
+            });
+          }
+        }
       });
-    }
+
+      // Sort candidates by priority within each position
+      pos.candidates.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    });
+
+    // Only add group if it has some potential candidates (optional, but cleaner)
+    // Actually, user wants to see the positions even if empty or at least the scenario structure.
+    groups.push(group);
   });
 
-  // Sort Results
-  // Higher priority first
-  results.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
-  suggestions.value[req.id] = results;
-  selectedSuggestions.value[req.id] = []; // Reset selection
+  adminStore.setSuggestions(req.id, groups);
+  selectedSuggestions.value[req.id] = [];
   calculating.value[req.id] = false;
 }
 
-function getSuggestions(id: string) {
+function isAllSelected(reqId: string, candidates: Suggestion[]) {
+  if (candidates.length === 0) return false;
+  const selected = selectedSuggestions.value[reqId] || [];
+  return candidates.every((c) => selected.includes(c.operatorId));
+}
+
+function isSomeSelected(reqId: string, candidates: Suggestion[]) {
+  const selected = selectedSuggestions.value[reqId] || [];
+  const count = candidates.filter((c) => selected.includes(c.operatorId)).length;
+  return count > 0 && count < candidates.length;
+}
+
+function toggleAllInPosition(reqId: string, candidates: Suggestion[], val: boolean | null) {
+  if (!selectedSuggestions.value[reqId]) {
+    selectedSuggestions.value[reqId] = [];
+  }
+
+  const currentSelected = new Set(selectedSuggestions.value[reqId]);
+
+  candidates.forEach((c) => {
+    if (val) {
+      currentSelected.add(c.operatorId);
+    } else {
+      currentSelected.delete(c.operatorId);
+    }
+  });
+
+  selectedSuggestions.value[reqId] = Array.from(currentSelected);
+}
+
+function getSuggestions(id: string): ScenarioGroup[] {
   return suggestions.value[id] || [];
 }
 
@@ -729,7 +1075,7 @@ async function confirmReject() {
     }
 
     showRejectDialog.value = false;
-    await fetchRequests();
+
     $q.notify({ type: 'warning', message: 'Richiesta Rifiutata' });
   } catch (e) {
     console.error('Error rejecting', e);
@@ -747,68 +1093,92 @@ function acceptOffer(requestId: string, offerId: string) {
   const offer = req.offers?.find((o) => o.id === offerId);
   if (!offer) return;
 
-  $q.dialog({
-    title: 'Conferma Accettazione',
-    message: `Accettare l'offerta di ${offer.operatorName || 'Operatore'} e chiudere la richiesta?`,
-    cancel: true,
-  }).onOk(() => {
-    void (async () => {
-      loading.value = true;
-      try {
-        const batch = writeBatch(db);
-        const reqRef = doc(db, 'shiftRequests', requestId);
+  approvalContext.value = { req, offer };
+  syncMode.value = 'auto';
+  showApprovalDialog.value = true;
+}
+async function processApproval() {
+  if (!approvalContext.value) return;
 
-        // 1. Close Request
-        batch.update(reqRef, {
-          status: 'CLOSED',
-          approvalTimestamp: Date.now(),
-          adminId: authStore.currentUser?.uid,
-        });
+  const { req, offer } = approvalContext.value;
+  loading.value = true;
 
-        // 2. Update Absentee Schedule -> 'A'
-        if (req.absentOperatorId && configStore.activeConfigId) {
-          const absRef = doc(
-            db,
-            'systemConfigurations',
-            configStore.activeConfigId,
-            'operators',
-            req.absentOperatorId,
-          );
-          batch.update(absRef, { [`schedule.${req.date}`]: 'A' });
+  try {
+    const batch = writeBatch(db);
+    const reqRef = doc(db, 'shiftRequests', req.id);
+
+    // 1. Close Request
+    batch.update(reqRef, {
+      status: 'CLOSED',
+      approvalTimestamp: Date.now(),
+      adminId: authStore.currentUser?.uid,
+    });
+
+    // 2. Update Absentee Schedule -> 'A'
+    if (req.absentOperatorId && configStore.activeConfigId) {
+      const absRef = doc(
+        db,
+        'systemConfigurations',
+        configStore.activeConfigId,
+        'operators',
+        req.absentOperatorId,
+      );
+      batch.update(absRef, { [`schedule.${req.date}`]: 'A' });
+    }
+
+    // 3. Update Substitute Schedule (if offer exists)
+    if (offer && offer.operatorId && configStore.activeConfigId) {
+      const subRef = doc(
+        db,
+        'systemConfigurations',
+        configStore.activeConfigId,
+        'operators',
+        offer.operatorId,
+      );
+      batch.update(subRef, { [`schedule.${req.date}`]: req.originalShift });
+    }
+
+    await batch.commit();
+
+    // 4. Notification to requester
+    const notificationMsg = offer
+      ? `La tua richiesta per il ${req.date} è stata coperta da ${offer.operatorName}`
+      : `La tua richiesta per il ${req.date} è stata approvata.`;
+
+    await notifyUser(
+      req.creatorId,
+      offer ? 'OFFER_ACCEPTED' : 'REQUEST_APPROVED',
+      notificationMsg,
+      req.id,
+    );
+
+    // 5. Sync back to Sheets (Only if syncMode is 'auto')
+    if (syncMode.value === 'auto') {
+      if (req.absentOperatorId) {
+        const absOpName = operators.value[req.absentOperatorId]?.name || req.absentOperatorName;
+        if (absOpName) {
+          void syncToSheets(absOpName, req.date, 'A');
         }
-
-        // 3. Update Substitute Schedule -> Target Shift
-        if (offer.operatorId && configStore.activeConfigId) {
-          const subRef = doc(
-            db,
-            'systemConfigurations',
-            configStore.activeConfigId,
-            'operators',
-            offer.operatorId,
-          );
-          batch.update(subRef, { [`schedule.${req.date}`]: req.originalShift });
-        }
-
-        await batch.commit();
-
-        // 4. Notification to requester
-        await notifyUser(
-          req.creatorId,
-          'OFFER_ACCEPTED',
-          `La tua richiesta per il ${req.date} è stata coperta da ${offer.operatorName}`,
-          requestId,
-        );
-
-        $q.notify({ type: 'positive', message: 'Offerta accettata e turni aggiornati' });
-        await fetchRequests();
-      } catch (e) {
-        console.error(e);
-        $q.notify({ type: 'negative', message: "Errore durante l'accettazione" });
-      } finally {
-        loading.value = false;
       }
-    })();
-  });
+      if (offer && offer.operatorName) {
+        void syncToSheets(offer.operatorName, req.date, req.originalShift);
+      }
+    }
+
+    showApprovalDialog.value = false;
+    $q.notify({
+      type: 'positive',
+      message:
+        syncMode.value === 'auto'
+          ? 'Approvata e sincronizzata con Excel'
+          : 'Approvata (Sincronizzazione manuale richiesta)',
+    });
+  } catch (e) {
+    console.error('Approval Error:', e);
+    $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
+  } finally {
+    loading.value = false;
+  }
 }
 
 function rejectOffer(requestId: string, offerId: string) {
@@ -827,7 +1197,6 @@ function rejectOffer(requestId: string, offerId: string) {
         await updateDoc(reqRef, { offers: updatedOffers });
 
         $q.notify({ type: 'info', message: 'Offerta rifiutata' });
-        await fetchRequests();
       } catch (e) {
         console.error(e);
         $q.notify({ type: 'negative', message: 'Errore durante il rifiuto' });
@@ -837,48 +1206,9 @@ function rejectOffer(requestId: string, offerId: string) {
 }
 
 function approveRequest(req: ShiftRequest) {
-  $q.dialog({
-    title: 'Conferma Copertura',
-    message: `Confermi che il turno è coperto? La richiesta verrà chiusa.`,
-    cancel: true,
-  }).onOk(() => {
-    void (async () => {
-      // ... existing approve logic
-      loading.value = true;
-      try {
-        const reqRef = doc(db, 'shiftRequests', req.id);
-        const batch = writeBatch(db);
-
-        batch.update(reqRef, {
-          status: 'CLOSED',
-          approvalTimestamp: Date.now(),
-          adminId: authStore.currentUser?.uid,
-        });
-
-        // Update absentee schedule to 'A' in sub-collection
-        if (req.absentOperatorId && configStore.activeConfigId) {
-          const opRef = doc(
-            db,
-            'systemConfigurations',
-            configStore.activeConfigId,
-            'operators',
-            req.absentOperatorId,
-          );
-          batch.update(opRef, { [`schedule.${req.date}`]: 'A' });
-        }
-
-        await batch.commit();
-
-        await notifyUser(req.creatorId, 'REQUEST_APPROVED', 'Approvata', req.id);
-        await fetchRequests();
-        $q.notify({ type: 'positive', message: 'Richiesta approvata' });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        loading.value = false;
-      }
-    })();
-  });
+  approvalContext.value = { req };
+  syncMode.value = 'auto';
+  showApprovalDialog.value = true;
 }
 
 function bulkApprove() {
@@ -924,7 +1254,7 @@ function bulkApprove() {
 
         await batch.commit();
         selectedRequests.value = [];
-        await fetchRequests();
+
         $q.notify({ type: 'positive', message: 'Richieste approvate!' });
       } catch (e) {
         console.error('Error bulk approving', e);

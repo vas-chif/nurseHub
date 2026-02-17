@@ -232,4 +232,44 @@ export class GoogleSheetsService {
   public getCurrentUrl(): string {
     return this.config.spreadsheetUrl;
   }
+
+  /**
+   * Updates a shift cell in the Google Sheet via GAS Web App
+   * @param operatorName Name of the operator
+   * @param date Date in YYYY-MM-DD format
+   * @param newShift New shift code to set
+   */
+  public async updateShiftOnSheets(
+    operatorName: string,
+    date: string,
+    newShift: string,
+  ): Promise<boolean> {
+    if (!this.config.gasWebUrl) {
+      logger.warn('GAS Web URL configuration missing - cannot sync to Sheets');
+      return false;
+    }
+
+    try {
+      await fetch(this.config.gasWebUrl, {
+        method: 'POST',
+        mode: 'no-cors', // Common for GAS redirections which cause CORS issues in browser
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'updateShift',
+          operatorName,
+          date,
+          newShift,
+        }),
+      });
+
+      // With no-cors, we can't read the response properly, but successful send returns opaque type
+      logger.info('Update shift request sent to GAS', { operatorName, date, newShift });
+      return true;
+    } catch (error) {
+      logger.error('Error updating shift on Sheets:', error);
+      return false;
+    }
+  }
 }

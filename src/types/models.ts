@@ -60,10 +60,12 @@ export interface ShiftRequest {
   reason: RequestReason;
   status: RequestStatus;
   creatorId: string;
+  creatorName?: string;
   createdAt: number;
 
   // Optional: tracking chi manca
   absentOperatorId?: string;
+  absentOperatorName?: string;
   requestNote?: string; // Note for the absence request (e.g. "Malattia", "Congedo")
 
   // Custom Time Range fields
@@ -164,9 +166,23 @@ export type NotificationType =
 export interface Suggestion {
   operatorId: string;
   name: string;
+  phone?: string;
   currentShift: ShiftCode;
   proposal: string; // e.g. "Doppio Turno (M+P)"
   priority?: number; // Optional for compatibility, strict in logic
+}
+
+export interface ScenarioPosition {
+  roleLabel: string;
+  originalShift: ShiftCode;
+  newShift: ShiftCode;
+  candidates: Suggestion[];
+}
+
+export interface ScenarioGroup {
+  id: string;
+  label: string;
+  positions: ScenarioPosition[];
 }
 
 // --- Phase 10.2: Multi-Configuration System ---

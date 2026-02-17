@@ -72,4 +72,17 @@ export class SyncService {
     const data = docSnap.data() as ShiftRequest;
     return data.status === 'OPEN';
   }
+
+  /**
+   * Pushes a single shift update to Google Sheets
+   * Used when an offer is accepted or a request is approved.
+   */
+  async syncShiftUpdate(operatorName: string, date: string, newShift: string): Promise<boolean> {
+    try {
+      return await this.sheetsService.updateShiftOnSheets(operatorName, date, newShift);
+    } catch (error) {
+      console.error('Failed to sync shift update to Sheets:', error);
+      return false;
+    }
+  }
 }

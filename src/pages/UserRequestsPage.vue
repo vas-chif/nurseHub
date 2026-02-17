@@ -131,32 +131,83 @@
     </div>
 
     <q-list separator bordered class="bg-white rounded-borders" v-else>
-      <q-item v-for="req in requests" :key="req.id">
-        <q-item-section>
-          <q-item-label class="text-weight-bold">
-            {{ formatDate(req.date) }}
-            <span v-if="req.startTime && req.endTime" class="text-weight-regular text-grey-8">
-              ({{ req.startTime }} - {{ req.endTime }})
-            </span>
-            <q-badge v-else color="primary" class="q-ml-sm">{{ req.originalShift }}</q-badge>
-          </q-item-label>
-          <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
-          <q-item-label caption v-if="req.requestNote">Note: {{ req.requestNote }}</q-item-label>
-        </q-item-section>
-        <q-item-section side>
-          <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
-            {{ req.status }}
-          </q-chip>
-        </q-item-section>
-      </q-item>
+      <q-expansion-item
+        v-for="req in requests"
+        :key="req.id"
+        group="requests"
+        header-class="q-pa-sm"
+      >
+        <template v-slot:header>
+          <q-item-section>
+            <q-item-label class="text-weight-bold">
+              {{ formatDate(req.date) }}
+              <span v-if="req.startTime && req.endTime" class="text-weight-regular text-grey-8">
+                ({{ req.startTime }} - {{ req.endTime }})
+              </span>
+              <q-badge v-else color="primary" class="q-ml-sm">{{ req.originalShift }}</q-badge>
+            </q-item-label>
+            <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
+              {{ req.status }}
+            </q-chip>
+          </q-item-section>
+        </template>
+
+        <q-card class="bg-grey-1">
+          <q-card-section class="q-py-sm">
+            <div v-if="req.requestNote" class="q-mb-sm">
+              <div class="text-caption text-grey-7">Le tue note:</div>
+              <div>{{ req.requestNote }}</div>
+            </div>
+
+            <q-separator
+              v-if="req.requestNote && (req.status === 'CLOSED' || req.rejectionReason)"
+              class="q-my-sm"
+            />
+
+            <div v-if="req.status === 'CLOSED'" class="text-positive">
+              <div class="row items-center">
+                <q-icon name="check_circle" class="q-mr-xs" />
+                <span class="text-weight-bold">Approvata</span>
+                <span v-if="req.approvalTimestamp" class="q-ml-xs text-caption">
+                  il {{ formatFullDate(req.approvalTimestamp) }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="req.status === 'EXPIRED'" class="text-negative">
+              <div class="row items-center">
+                <q-icon name="cancel" class="q-mr-xs" />
+                <span class="text-weight-bold">Mancata Approvazione / Scaduta</span>
+                <span v-if="req.rejectionTimestamp" class="q-ml-xs text-caption">
+                  il {{ formatFullDate(req.rejectionTimestamp) }}
+                </span>
+              </div>
+              <div v-if="req.rejectionReason" class="q-mt-xs bg-red-1 q-pa-sm rounded-borders">
+                <strong>Motivo Admin:</strong> {{ req.rejectionReason }}
+              </div>
+            </div>
+
+            <div v-if="req.status === 'PARTIAL'" class="text-warning">
+              <div class="row items-center">
+                <q-icon name="hourglass_empty" class="q-mr-xs" />
+                <span class="text-weight-bold">Parzialmente Coperta</span>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-expansion-item>
     </q-list>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
-import { collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import type { Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -167,6 +218,8 @@ const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const submitting = ref(false);
+const loading = ref(false);
+let unsubscribe: Unsubscribe | null = null;
 
 const inputMode = ref<'SHIFT' | 'TIME'>('SHIFT');
 
@@ -225,22 +278,52 @@ onMounted(async () => {
     }
   }
 
-  await fetchRequests();
+  initRealtimeRequests();
 });
 
-async function fetchRequests() {
+onUnmounted(() => {
+  if (unsubscribe) unsubscribe();
+});
+
+function initRealtimeRequests() {
   if (!authStore.currentUser?.uid) return;
-  try {
-    const q = query(
-      collection(db, 'shiftRequests'),
-      where('creatorId', '==', authStore.currentUser.uid),
-      orderBy('createdAt', 'desc'),
-    );
-    const snapshot = await getDocs(q);
-    requests.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftRequest);
-  } catch (e) {
-    console.error('Error fetching requests', e);
-  }
+  loading.value = true;
+  const q = query(
+    collection(db, 'shiftRequests'),
+    where('creatorId', '==', authStore.currentUser.uid),
+    orderBy('createdAt', 'desc'),
+  );
+
+  unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      // Logic to detect changes for notifications
+      if (!loading.value) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'modified') {
+            const newData = change.doc.data() as ShiftRequest;
+            const oldData = requests.value.find((r) => r.id === change.doc.id);
+
+            if (oldData && oldData.status !== newData.status) {
+              $q.notify({
+                message: `Stato richiesta del ${formatDate(newData.date)} aggiornato a: ${newData.status}`,
+                color: newData.status === 'CLOSED' ? 'positive' : 'warning',
+                icon: 'update',
+                position: 'bottom-right',
+              });
+            }
+          }
+        });
+      }
+
+      requests.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftRequest);
+      loading.value = false;
+    },
+    (error) => {
+      console.error('Snapshot error:', error);
+      loading.value = false;
+    },
+  );
 }
 
 async function submitRequest() {
@@ -274,7 +357,11 @@ async function submitRequest() {
       reason: formData.value.reason,
       status: 'OPEN',
       creatorId: authStore.currentUser!.uid,
+      creatorName:
+        `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
+        'Utente',
       absentOperatorId: targetOperatorId,
+      absentOperatorName: operators.value[targetOperatorId]?.name || 'Operatore',
       createdAt: Date.now(),
       requestNote: formData.value.note,
       ...(inputMode.value === 'TIME' && formData.value.startTime
@@ -292,7 +379,7 @@ async function submitRequest() {
     formData.value.note = '';
     formData.value.startTime = '';
     formData.value.endTime = '';
-    await fetchRequests();
+    // await fetchRequests(); // Handled by onSnapshot
   } catch (e) {
     console.error(e);
     $q.notify({ type: 'negative', message: "Errore durante l'invio" });
@@ -311,9 +398,23 @@ function getReasonLabel(reason: string) {
   return reason;
 }
 
+function formatFullDate(dt: number | undefined) {
+  if (!dt) return '';
+  return qDate.formatDate(dt, 'DD/MM/YYYY HH:mm');
+}
+
 function getStatusColor(status: string) {
-  if (status === 'OPEN') return 'green';
-  if (status === 'CLOSED') return 'grey';
-  return 'orange';
+  switch (status) {
+    case 'OPEN':
+      return 'primary';
+    case 'CLOSED':
+      return 'positive';
+    case 'PARTIAL':
+      return 'warning';
+    case 'EXPIRED':
+      return 'negative';
+    default:
+      return 'grey';
+  }
 }
 </script>

@@ -1,17 +1,17 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { Suggestion } from '../types/models';
+import type { ScenarioGroup } from '../types/models';
 
 export const useAdminStore = defineStore('admin', () => {
   // State for substitute suggestions (persists across navigation)
-  const suggestions = ref<Record<string, Suggestion[]>>({});
+  const suggestions = ref<Record<string, ScenarioGroup[]>>({});
   const selectedSuggestions = ref<Record<string, string[]>>({});
   const calculating = ref<Record<string, boolean>>({});
 
   // Additional admin state can go here
   // e.g., cached filters, pagination, etc.
 
-  function setSuggestions(reqId: string, results: Suggestion[]) {
+  function setSuggestions(reqId: string, results: ScenarioGroup[]) {
     suggestions.value[reqId] = results;
   }
 
