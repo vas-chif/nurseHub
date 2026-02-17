@@ -25,7 +25,7 @@
       <q-btn
         unelevated
         color="primary"
-        label="Trova il mio Operatore"
+        label="Trova associazione operatore"
         icon="search"
         :loading="loading"
         :disable="loading || (syncResult?.success ?? false)"

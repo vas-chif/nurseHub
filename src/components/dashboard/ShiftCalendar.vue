@@ -93,12 +93,17 @@ const hasSearchModule = ref(true);
 
 // Fetch Operators on Mount
 onMounted(async () => {
-  if (!configStore.activeConfigId) {
-    logger.warn('No active config - cannot load operators for calendar');
-    return;
-  }
-
   try {
+    // If config is missing, load it (crucial for non-admins)
+    if (!configStore.activeConfigId) {
+      await configStore.loadConfigurations();
+    }
+
+    if (!configStore.activeConfigId) {
+      logger.warn('No active config - cannot load operators for calendar');
+      return;
+    }
+
     const loadedOps = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
     // Sort by name
     loadedOps.sort((a, b) => a.name.localeCompare(b.name));
@@ -106,10 +111,17 @@ onMounted(async () => {
     operatorOptions.value = loadedOps;
     filteredOptions.value = loadedOps;
 
-    // Default Selection Logic
+    // Default Selection Logic:
+    // 1. If we have a currentOperator, select them
+    // 2. Otherwise, if we have a default "active" operator for this user (future)
     if (authStore.currentOperator) {
-      // If logged in user is an operator, select them
       const found = loadedOps.find((op) => op.id === authStore.currentOperator?.id);
+      if (found) {
+        selectedOperator.value = [found];
+      }
+    } else if (authStore.currentUser?.operatorId) {
+      // Fallback for when operator object is not yet in store but ID is
+      const found = loadedOps.find((op) => op.id === authStore.currentUser?.operatorId);
       if (found) {
         selectedOperator.value = [found];
       }

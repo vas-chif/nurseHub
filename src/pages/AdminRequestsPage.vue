@@ -739,25 +739,73 @@ async function confirmReject() {
 }
 
 // Offer Management
+// Offer Management
 function acceptOffer(requestId: string, offerId: string) {
+  const req = requests.value.find((r) => r.id === requestId);
+  if (!req) return;
+
+  const offer = req.offers?.find((o) => o.id === offerId);
+  if (!offer) return;
+
   $q.dialog({
     title: 'Conferma Accettazione',
-    message: 'Accettare questa offerta e chiudere la richiesta?',
+    message: `Accettare l'offerta di ${offer.operatorName || 'Operatore'} e chiudere la richiesta?`,
     cancel: true,
   }).onOk(() => {
     void (async () => {
+      loading.value = true;
       try {
-        // In a real implementation, this would:
-        // 1. Update the request status to CLOSED
-        // 2. Update operator schedules
-        // 3. Notify the operator
-        // 4. Remove other offers
-        console.log('Accepting offer', offerId, 'for request', requestId);
-        $q.notify({ type: 'positive', message: 'Offerta accettata' });
+        const batch = writeBatch(db);
+        const reqRef = doc(db, 'shiftRequests', requestId);
+
+        // 1. Close Request
+        batch.update(reqRef, {
+          status: 'CLOSED',
+          approvalTimestamp: Date.now(),
+          adminId: authStore.currentUser?.uid,
+        });
+
+        // 2. Update Absentee Schedule -> 'A'
+        if (req.absentOperatorId && configStore.activeConfigId) {
+          const absRef = doc(
+            db,
+            'systemConfigurations',
+            configStore.activeConfigId,
+            'operators',
+            req.absentOperatorId,
+          );
+          batch.update(absRef, { [`schedule.${req.date}`]: 'A' });
+        }
+
+        // 3. Update Substitute Schedule -> Target Shift
+        if (offer.operatorId && configStore.activeConfigId) {
+          const subRef = doc(
+            db,
+            'systemConfigurations',
+            configStore.activeConfigId,
+            'operators',
+            offer.operatorId,
+          );
+          batch.update(subRef, { [`schedule.${req.date}`]: req.originalShift });
+        }
+
+        await batch.commit();
+
+        // 4. Notification to requester
+        await notifyUser(
+          req.creatorId,
+          'OFFER_ACCEPTED',
+          `La tua richiesta per il ${req.date} è stata coperta da ${offer.operatorName}`,
+          requestId,
+        );
+
+        $q.notify({ type: 'positive', message: 'Offerta accettata e turni aggiornati' });
         await fetchRequests();
       } catch (e) {
         console.error(e);
         $q.notify({ type: 'negative', message: "Errore durante l'accettazione" });
+      } finally {
+        loading.value = false;
       }
     })();
   });
@@ -771,10 +819,13 @@ function rejectOffer(requestId: string, offerId: string) {
   }).onOk(() => {
     void (async () => {
       try {
-        // In a real implementation, this would:
-        // 1. Remove the offer from the request
-        // 2. Notify the operator
-        console.log('Rejecting offer', offerId, 'for request', requestId);
+        const reqRef = doc(db, 'shiftRequests', requestId);
+        const req = requests.value.find((r) => r.id === requestId);
+        if (!req || !req.offers) return;
+
+        const updatedOffers = req.offers.filter((o) => o.id !== offerId);
+        await updateDoc(reqRef, { offers: updatedOffers });
+
         $q.notify({ type: 'info', message: 'Offerta rifiutata' });
         await fetchRequests();
       } catch (e) {

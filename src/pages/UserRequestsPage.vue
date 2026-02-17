@@ -12,7 +12,7 @@
         <div v-if="authStore.isAdmin" class="q-mb-md">
           <q-select
             v-model="selectedOperatorId"
-            :options="operatorOptions"
+            :options="filteredOperatorOptions"
             option-label="name"
             option-value="id"
             label="Operatore (per conto di)"
@@ -20,8 +20,15 @@
             dense
             emit-value
             map-options
+            use-input
+            @filter="filterOperators"
             :hint="'Seleziona l\'operatore per cui stai creando la richiesta'"
           >
+            <template v-slot:no-option>
+              <q-item>
+                <q-item-section class="text-grey"> Nessun risultato </q-item-section>
+              </q-item>
+            </template>
             <template v-slot:prepend>
               <q-icon name="person" />
             </template>
@@ -185,13 +192,25 @@ const requests = ref<ShiftRequest[]>([]);
 // Admin: Operator selection
 const selectedOperatorId = ref(authStore.currentOperator?.id || '');
 const operators = ref<Record<string, Operator>>({});
+const filterText = ref('');
 
-const operatorOptions = computed(() => {
-  return Object.values(operators.value).map((op) => ({
+const filteredOperatorOptions = computed(() => {
+  const list = Object.values(operators.value).map((op) => ({
     id: op.id,
     name: op.name,
   }));
+
+  if (!filterText.value) return list;
+
+  const needle = filterText.value.toLowerCase();
+  return list.filter((v) => v.name.toLowerCase().includes(needle));
 });
+
+function filterOperators(val: string, update: (callback: () => void) => void) {
+  update(() => {
+    filterText.value = val;
+  });
+}
 
 onMounted(async () => {
   // Fetch operators if admin

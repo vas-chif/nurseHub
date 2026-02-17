@@ -62,10 +62,13 @@ service cloud.firestore {
       allow create: if isVerified() &&
                        request.resource.data.creatorId == request.auth.uid;
       
-      // Update only own OPEN requests (e.g. to modify/cancel before approval)
-      allow update: if isVerified() && 
-                       resource.data.creatorId == request.auth.uid &&
-                       resource.data.status == 'OPEN';
+      // Update:
+      // 1. Owner can modify/cancel their own OPEN request
+      // 2. ANY verified user can add an offer to an OPEN request
+      allow update: if isVerified() && (
+        (resource.data.creatorId == request.auth.uid && resource.data.status == 'OPEN') ||
+        (resource.data.status == 'OPEN' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers']))
+      );
       
       // Admins have full access
       allow read, update: if isAdmin();
