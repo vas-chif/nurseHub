@@ -2,18 +2,23 @@
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useScheduleStore } from '../stores/scheduleStore';
 import { useRouter } from 'vue-router';
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
+import type { SystemConfiguration } from '../types/models';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notificationStore = useNotificationStore();
+const scheduleStore = useScheduleStore();
 const $q = useQuasar();
 
 // Load configurations on mount
 onMounted(async () => {
+  scheduleStore.init();
+  // Check for existing notification permission and refresh token if granted
   if (authStore.isAdmin) {
     await configStore.loadConfigurations();
     // Admin notification listener
@@ -61,6 +66,30 @@ onMounted(async () => {
     });
   }
 });
+
+// Watch for user configId to initialize configStore for regular users
+watch(
+  () => authStore.currentUser?.configId,
+  (newConfigId) => {
+    if (newConfigId && !authStore.isAdmin && !configStore.activeConfigId) {
+      configStore.activeConfigId = newConfigId;
+      // Also set a basic activeConfig object if not present
+      if (!configStore.activeConfig) {
+        configStore.activeConfig = {
+          id: newConfigId,
+          name: authStore.currentUser?.profession || 'Configurazione',
+          profession:
+            (authStore.currentUser?.profession as 'Infermiere' | 'Medico' | 'OSS') || 'Infermiere',
+          isActive: true,
+          spreadsheetUrl: '',
+          createdAt: Date.now(),
+          createdBy: 'system',
+        } as SystemConfiguration;
+      }
+    }
+  },
+  { immediate: true },
+);
 
 onUnmounted(() => {
   notificationStore.stopListeners();
@@ -254,3 +283,7 @@ async function handleConfigChange(configId: string) {
     </q-footer>
   </q-layout>
 </template>
+
+<style scoped>
+/* No additional styles needed */
+</style>

@@ -62,15 +62,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch, watchEffect } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
-import { operatorsService } from '../../services/OperatorsService';
-import type { Operator, ShiftCode } from '../../types/models';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { useSecureLogger } from '../../utils/secureLogger';
+import type { Operator, ShiftCode } from '../../types/models';
 
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
 const logger = useSecureLogger();
 
 interface DayShift {
@@ -88,46 +89,87 @@ interface OperatorCalendar {
 
 const operatorOptions = ref<Operator[]>([]);
 const filteredOptions = ref<Operator[]>([]);
-const selectedOperator = ref<Operator[]>([]); // Multi-select, now correctly Operator[]
+const selectedOperator = ref<Operator[]>([]);
 const hasSearchModule = ref(true);
 
-// Fetch Operators on Mount
-onMounted(async () => {
+// Fetch Operators
+async function loadData(force = false) {
+  // Use configStore.activeConfigId OR fallback to user's configId
+  const configId = configStore.activeConfigId || authStore.currentUser?.configId;
+
+  if (!configId) {
+    logger.warn('No active config or user configId - cannot load operators for calendar');
+    return;
+  }
+
   try {
-    // If config is missing, load it (crucial for non-admins)
-    if (!configStore.activeConfigId) {
-      await configStore.loadConfigurations();
-    }
-
-    if (!configStore.activeConfigId) {
-      logger.warn('No active config - cannot load operators for calendar');
-      return;
-    }
-
-    const loadedOps = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
+    const loadedOps = await scheduleStore.loadOperators(configId, force);
     // Sort by name
-    loadedOps.sort((a, b) => a.name.localeCompare(b.name));
+    const sortedOps = [...loadedOps].sort((a, b) => a.name.localeCompare(b.name));
 
-    operatorOptions.value = loadedOps;
-    filteredOptions.value = loadedOps;
-
-    // Default Selection Logic:
-    // 1. If we have a currentOperator, select them
-    // 2. Otherwise, if we have a default "active" operator for this user (future)
-    if (authStore.currentOperator) {
-      const found = loadedOps.find((op) => op.id === authStore.currentOperator?.id);
-      if (found) {
-        selectedOperator.value = [found];
-      }
-    } else if (authStore.currentUser?.operatorId) {
-      // Fallback for when operator object is not yet in store but ID is
-      const found = loadedOps.find((op) => op.id === authStore.currentUser?.operatorId);
-      if (found) {
-        selectedOperator.value = [found];
-      }
-    }
+    operatorOptions.value = sortedOps;
+    filteredOptions.value = sortedOps;
   } catch (e) {
     console.error('Error loading operators for calendar', e);
+  }
+}
+
+onMounted(async () => {
+  await loadData();
+});
+
+// Re-load when config becomes ready
+watch(
+  () => [configStore.activeConfigId, authStore.currentUser?.configId],
+  async ([newId, userConfigId]) => {
+    if (newId || userConfigId) {
+      await loadData();
+    }
+  },
+  { deep: true },
+);
+
+// If cache is cleared externally (e.g. by SyncService), re-fetch
+watch(
+  () => scheduleStore.operators.length,
+  (newLen) => {
+    if (newLen === 0 && (configStore.activeConfigId || authStore.currentUser?.configId)) {
+      logger.info('Schedule cache cleared, re-fetching data force-refresh...');
+      void loadData(true);
+    }
+  },
+);
+
+// Unified auto-selection & data-refresh logic
+watchEffect(() => {
+  const options = operatorOptions.value;
+  if (options.length === 0) return;
+
+  const currentOp = authStore.currentOperator;
+  const userOpId = authStore.currentUser?.operatorId;
+
+  // Case 1: Initial auto-selection (Skip if admin)
+  if (selectedOperator.value.length === 0 && !authStore.isAdmin) {
+    const targetId = currentOp?.id || userOpId;
+    if (targetId) {
+      const match = options.find((o) => o.id === targetId);
+      if (match) {
+        logger.info('Auto-selected operator in calendar', { name: match.name });
+        selectedOperator.value = [match];
+      }
+    }
+  } else if (selectedOperator.value.length > 0) {
+    // Case 2: Data refresh (Sync happened)
+    const freshSelection = selectedOperator.value.map((sel) => {
+      const match = options.find((o) => o.id === sel.id);
+      return match || sel;
+    });
+
+    const needsUpdate = freshSelection.some((item, idx) => item !== selectedOperator.value[idx]);
+    if (needsUpdate) {
+      logger.info('Refreshing selected operator references after data update');
+      selectedOperator.value = freshSelection;
+    }
   }
 });
 
@@ -150,7 +192,6 @@ function filterOperators(val: string, update: (fn: () => void) => void) {
 // Compute Calendars based on Selected Operators
 const calendars = computed<OperatorCalendar[]>(() => {
   return selectedOperator.value.map((op) => {
-    // op is now the Operator object directly
     const today = new Date();
     const days: DayShift[] = [];
     const schedule = op.schedule || {};
@@ -158,9 +199,7 @@ const calendars = computed<OperatorCalendar[]>(() => {
     for (let i = 0; i < 14; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      // Format YYYY-MM-DD
       const dateKey = d.toISOString().split('T')[0];
-      // Fix index access safely
       const code = schedule[dateKey as string];
       const shiftCode = (code as ShiftCode) || '';
 
@@ -199,7 +238,7 @@ function getShiftColor(code: ShiftCode): string {
     case 'S':
       return 'green-6';
     case '':
-      return 'grey-2 text-grey-6'; // Empty shift
+      return 'grey-2 text-grey-6';
     default:
       return 'primary';
   }

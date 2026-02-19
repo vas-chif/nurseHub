@@ -52,6 +52,7 @@ export function useShiftLogic() {
               scenarioId: scenario.id,
               scenarioLabel: scenario.label,
               roleIndex: index,
+              roleLabel: role.roleLabel,
               newShift: role.newShift,
               incentive: role.incentive,
             });

@@ -41,6 +41,7 @@ export interface User {
   avatarUrl?: string;
   phoneNumber?: string;
   isBlocked?: boolean;
+  fcmTokens?: string[]; // Multiple devices support
 }
 
 export interface Operator {
@@ -50,7 +51,7 @@ export interface Operator {
   dateOfBirth?: string; // YYYY-MM-DD format for user matching
   phone?: string;
   schedule: Record<string, ShiftCode>; // YYYY-MM-DD -> Code
-  lastSync?: number; // Timestamp ultima sincronizzazione
+  lastSync?: number | object; // Timestamp ultima sincronizzazione (number or FieldValue)
 }
 
 export interface ShiftRequest {
@@ -150,6 +151,7 @@ export interface CompatibleScenario {
   scenarioId: string;
   scenarioLabel: string;
   roleIndex: number;
+  roleLabel: string;
   newShift: ShiftCode;
   incentive: string;
 }

@@ -69,7 +69,7 @@
         >
           <q-tooltip>Sincronizza da Google Sheets</q-tooltip>
         </q-btn>
-        <q-btn icon="refresh" round flat dense color="primary" @click="fetchData">
+        <q-btn icon="refresh" round flat dense color="primary" @click="() => fetchData(true)">
           <q-tooltip>Ricarica Dati</q-tooltip>
         </q-btn>
         <q-btn icon="info" round flat dense color="info" @click="showLegend = true">
@@ -256,13 +256,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { date as qDate, useQuasar, type QTableColumn } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { useConfigStore } from '../../stores/configStore';
-import { operatorsService } from '../../services/OperatorsService';
 import { GoogleSheetsService } from '../../services/GoogleSheetsService';
 import { SyncService } from '../../services/SyncService';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { smartEnv } from '../../config/smartEnvironment';
 import type { Operator, ShiftCode } from '../../types/models';
 
@@ -285,7 +285,7 @@ interface DateColumn {
 }
 
 const $q = useQuasar();
-const rawOperators = ref<Operator[]>([]);
+const scheduleStore = useScheduleStore();
 const operatorOptions = ref<Operator[]>([]);
 const selectedOperators = ref<string[]>([]); // Array of IDs
 
@@ -369,21 +369,32 @@ const logger = useSecureLogger();
 const configStore = useConfigStore();
 
 onMounted(async () => {
-  await fetchData();
+  if (configStore.activeConfigId) {
+    await fetchData();
+  }
 });
 
-async function fetchData() {
+watch(
+  () => configStore.activeConfigId,
+  async (newId: string | null) => {
+    if (newId) {
+      await fetchData();
+    }
+  },
+);
+
+async function fetchData(forceRefresh = false) {
   if (!configStore.activeConfigId) {
     logger.warn('No active config - cannot load operators');
     return;
   }
 
   try {
-    // Load operators from active config's sub-collection
-    const loadedOps = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
+    // Use the Pinia store for loading/caching
+    await scheduleStore.loadOperators(configStore.activeConfigId, forceRefresh);
 
-    // Filter out validation rows from Google Sheets
-    const filteredOps = loadedOps.filter(
+    // Filter out validation rows (if any survived in raw storage)
+    const filteredOps = scheduleStore.operators.filter(
       (op) => op.name !== 'Mattina' && op.name !== 'Pomeriggio' && op.name !== 'Notte',
     );
 
@@ -394,25 +405,7 @@ async function fetchData() {
       return numA - numB;
     });
 
-    if (filteredOps.length > 0) {
-      const sample = filteredOps[0];
-      if (sample && sample.schedule) {
-        const scheduleKeys = Object.keys(sample.schedule);
-        const tableKeys = dateColumns.value.map((c) => c.name);
-
-        const overlap = tableKeys.filter((k) => scheduleKeys.includes(k));
-        const overlapSample = overlap.slice(0, 5).map((k) => `${k}=${sample.schedule[k]}`);
-
-        logger.info(`DATA OVERLAP CHECK:
-Table Range: ${tableKeys[0]} to ${tableKeys[tableKeys.length - 1]}
-Total Schedule Entries: ${scheduleKeys.length}
-Matching Dates found: ${overlap.length}
-Sample Matches: ${overlapSample.join(', ')}`);
-      }
-    }
-
     operatorOptions.value = filteredOps;
-    rawOperators.value = filteredOps; // Keep rawOperators updated for filtering
   } catch (e) {
     logger.error('Error loading table data', e);
   }
@@ -452,12 +445,8 @@ async function syncData() {
 
     await syncService.syncOperatorsFromSheets(configStore.activeConfigId);
 
-    // Clear cache after sync
-    localStorage.removeItem('nurseHub_operators');
-    localStorage.removeItem('nurseHub_operators_timestamp');
-
     $q.notify({ type: 'positive', message: 'Sincronizzazione completata!' });
-    await fetchData(); // Refresh table
+    await fetchData(true); // Refresh table with force refresh
   } catch (e) {
     logger.error('Sync error', e);
     $q.notify({ type: 'negative', message: 'Errore durante la sincronizzazione' });
@@ -469,14 +458,20 @@ async function syncData() {
 function filterOperators(val: string, update: (fn: () => void) => void) {
   if (val === '') {
     update(() => {
-      operatorOptions.value = rawOperators.value;
+      operatorOptions.value = scheduleStore.operators.filter(
+        (op) => op.name !== 'Mattina' && op.name !== 'Pomeriggio' && op.name !== 'Notte',
+      );
     });
     return;
   }
   update(() => {
     const needle = val.toLowerCase();
-    operatorOptions.value = rawOperators.value.filter(
-      (v) => v.name.toLowerCase().indexOf(needle) > -1,
+    operatorOptions.value = scheduleStore.operators.filter(
+      (v) =>
+        v.name.toLowerCase().indexOf(needle) > -1 &&
+        v.name !== 'Mattina' &&
+        v.name !== 'Pomeriggio' &&
+        v.name !== 'Notte',
     );
   });
 }
@@ -489,7 +484,7 @@ const shiftCounts = computed(() => {
     counts[col.name] = { M: 0, P: 0, N: 0 };
   });
 
-  rawOperators.value.forEach((op) => {
+  scheduleStore.operators.forEach((op) => {
     const schedule = op.schedule || {};
     Object.entries(schedule).forEach(([date, code]) => {
       const dateCount = counts[date];
@@ -506,7 +501,7 @@ const shiftCounts = computed(() => {
 });
 
 const filteredRows = computed(() => {
-  let ops = rawOperators.value; // Start with all operators
+  let ops = operatorOptions.value; // Use filtered options (names + search)
 
   // Filter by Selected Personnel ONLY if selection is not empty
   if (selectedOperators.value && selectedOperators.value.length > 0) {

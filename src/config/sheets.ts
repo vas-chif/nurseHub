@@ -32,10 +32,10 @@ export const REPLACEMENT_SCENARIOS: ReplacementScenario[] = [
   {
     id: 'M1',
     targetShift: 'M',
-    label: '1-Copertura Singola (R ➔ M)',
+    label: 'Copertura da Riposo (R ➔ M)',
     roles: [
       {
-        roleLabel: 'Personale a riposo (R) che copre la mattina',
+        roleLabel: 'Copertura Mattina (07:00-14:00)',
         originalShift: 'R',
         newShift: 'M',
         incentive: 'Straordinario incentivato M (07:00-14:00)',
@@ -43,72 +43,34 @@ export const REPLACEMENT_SCENARIOS: ReplacementScenario[] = [
     ],
   },
   {
-    id: 'M2',
+    id: 'M_DA_P',
     targetShift: 'M',
-    label: '2-Copertura Combinata 2 Operatori (MP + N12)',
+    label: 'Copertura da Personale di Pomeriggio',
     roles: [
       {
-        roleLabel: 'Personale di pomeriggio (P) che anticipa (MP)',
+        roleLabel: 'Copertura solo mattina (07:00-14:00)',
+        originalShift: 'P',
+        newShift: 'M',
+        incentive: 'Copertura Turno Mattina',
+      },
+      {
+        roleLabel: 'Copertura totale M+P (07:00-20:00 con pausa)',
         originalShift: 'P',
         newShift: 'MP',
         incentive: 'Straordinario incentivato M (07:00-14:00)',
       },
-      {
-        roleLabel: 'Personale di notte (N) che prolunga (N12)',
-        originalShift: 'N',
-        newShift: 'N12',
-        incentive: 'Straordinario incentivato 19:00-21:00',
-      },
     ],
   },
   {
-    id: 'M3',
+    id: 'M_DA_N',
     targetShift: 'M',
-    label: '3-Copertura Combinata 3 Operatori (MP + P➔M + N12)',
+    label: 'Copertura da Personale di Notte (Prolungo)',
     roles: [
       {
-        roleLabel: 'Personale di mattina (M) che prolunga (MP)',
-        originalShift: 'M',
-        newShift: 'MP',
-        incentive: 'Straordinario incentivato P (14:00-19:00)',
-      },
-      {
-        roleLabel: 'Personale di pomeriggio (P) che anticipa (M)',
-        originalShift: 'M',
-        newShift: 'M',
-        incentive: 'Copertura Turno Mattina',
-      },
-      {
-        roleLabel: 'Personale di notte (N) che prolunga (N12)',
+        roleLabel: 'Prolungo Notte (N12)',
         originalShift: 'N',
         newShift: 'N12',
-        incentive: 'Straordinario incentivato 19:00-21:00',
-      },
-    ],
-  },
-  {
-    id: 'M4',
-    targetShift: 'M',
-    label: '4-Copertura Combinata 3 Operatori (P➔M + N➔P + S➔N)',
-    roles: [
-      {
-        roleLabel: 'Personale di pomeriggio (P) che anticipa (M)',
-        originalShift: 'P',
-        newShift: 'M',
-        incentive: 'Copertura Turno Mattina',
-      },
-      {
-        roleLabel: 'Personale di notte (N) che anticipa (P)',
-        originalShift: 'N',
-        newShift: 'P',
-        incentive: 'Copertura Turno Pomeriggio',
-      },
-      {
-        roleLabel: 'Personale di smonto (S) che copre la notte (N)',
-        originalShift: 'S',
-        newShift: 'N',
-        incentive: 'Straordinario incentivato N (21:00-07:00)',
-        requiredNextShift: 'R',
+        incentive: 'Straordinario incentivato 07:00-09:00',
       },
     ],
   },
@@ -117,58 +79,45 @@ export const REPLACEMENT_SCENARIOS: ReplacementScenario[] = [
   {
     id: 'P1',
     targetShift: 'P',
-    label: '1-Copertura Combinata 2 Operatori (R ➔ P+N11)',
+    label: 'Copertura da Riposo (R ➔ P)',
     roles: [
       {
-        roleLabel: 'Personale a riposo (R) che copre il pomeriggio',
+        roleLabel: 'Copertura Pomeriggio (14:00-21:00)',
         originalShift: 'R',
         newShift: 'P',
-        incentive: 'Straordinario incentivato P (19:00-20:00)',
-      },
-      {
-        roleLabel: 'Personale in turno notte (N) che anticipa (N11)',
-        originalShift: 'N',
-        newShift: 'N11',
-        incentive: 'Straordinario incentivato 20:00-21:00',
+        incentive: 'Straordinario incentivato P (14:00-21:00)',
       },
     ],
   },
   {
-    id: 'P2',
+    id: 'P_DA_M',
     targetShift: 'P',
-    label: '2-Copertura Combinata 2 Operatori (MP+N12)',
+    label: 'Copertura da Personale di Mattina',
     roles: [
       {
-        roleLabel: 'Personale di mattina (M) che prolunga (MP)',
+        roleLabel: 'Copertura totale M+P (07:00-20:00 con 1h pausa)',
         originalShift: 'M',
         newShift: 'MP',
-        incentive: 'Straordinario incentivato P (19:00-20:00)',
+        incentive: 'Straordinario incentivato P (14:00-20:00)',
       },
       {
-        roleLabel: 'Personale di notte (N) che prolunga (N12)',
-        originalShift: 'N',
-        newShift: 'N12',
-        incentive: 'Straordinario incentivato 19:00-21:00',
-      },
-    ],
-  },
-  {
-    id: 'P3',
-    targetShift: 'P',
-    label: '3-Copertura Combinata 2 Operatori (N ➔ P + S ➔ N)',
-    roles: [
-      {
-        roleLabel: 'Personale di notte (N) che anticipa il pomeriggio',
-        originalShift: 'N',
+        roleLabel: 'Copertura solo pomeriggio (14:00-21:00)',
+        originalShift: 'M',
         newShift: 'P',
         incentive: 'Copertura Turno Pomeriggio',
       },
+    ],
+  },
+  {
+    id: 'P_DA_N',
+    targetShift: 'P',
+    label: 'Anticipo Turno Notte (N11)',
+    roles: [
       {
-        roleLabel: 'Personale di smonto (S) che copre la notte (N)',
-        originalShift: 'S',
-        newShift: 'N',
-        incentive: 'Straordinario incentivato N (21:00-07:00)',
-        requiredNextShift: 'R',
+        roleLabel: 'Anticipo Notte (N11)',
+        originalShift: 'N',
+        newShift: 'N11',
+        incentive: 'Straordinario incentivato 20:00-21:00',
       },
     ],
   },
@@ -180,7 +129,7 @@ export const REPLACEMENT_SCENARIOS: ReplacementScenario[] = [
     label: 'Sostituzione da Turno S (S ➔ N)',
     roles: [
       {
-        roleLabel: 'Personale di smonto che può fare la notte',
+        roleLabel: 'Copertura Notte da Smonto',
         originalShift: 'S',
         newShift: 'N',
         incentive: 'Straordinario incentivato N (21:00-07:00)',
@@ -191,20 +140,13 @@ export const REPLACEMENT_SCENARIOS: ReplacementScenario[] = [
   {
     id: 'N2',
     targetShift: 'N',
-    label: 'Sostituzione Combinata R + R+1',
+    label: 'Sostituzione da Riposo (R ➔ N)',
     roles: [
       {
-        roleLabel: 'Personale a riposo (R) che copre la notte',
+        roleLabel: 'Copertura Notte (21:00-07:00)',
         originalShift: 'R',
         newShift: 'N',
         incentive: 'Copertura Turno Notte',
-      },
-      {
-        roleLabel: 'Personale a riposo domani che anticipa la mattina',
-        originalShift: 'R',
-        newShift: 'M',
-        incentive: 'Straordinario incentivato M (07:00-14:00)',
-        isNextDay: true,
       },
     ],
   },

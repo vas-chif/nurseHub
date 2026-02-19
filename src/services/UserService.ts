@@ -181,6 +181,11 @@ export class UserService {
               updatedAt: Date.now(),
             });
 
+            // ALSO: Update operator document with userId for security rules
+            await updateDoc(doc(db, 'systemConfigurations', configId, 'operators', opId), {
+              userId: uid,
+            });
+
             return {
               success: true,
               operatorId: opId,
@@ -261,6 +266,11 @@ export class UserService {
         isVerified: true,
         pendingApproval: false,
         updatedAt: Date.now(),
+      });
+
+      // ALSO: Update operator document with userId for security rules
+      await updateDoc(doc(db, 'systemConfigurations', configId, 'operators', operatorId), {
+        userId: uid,
       });
 
       logger.info('User approved successfully', { uid, configId, operatorId, profession });

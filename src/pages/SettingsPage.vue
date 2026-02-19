@@ -20,7 +20,11 @@
           <q-item-label caption>Gestisci le preferenze di notifica</q-item-label>
         </q-item-section>
         <q-item-section side>
-          <q-toggle v-model="notificationsEnabled" @update:model-value="toggleNotifications" />
+          <q-toggle
+            v-model="notificationsEnabled"
+            @update:model-value="toggleNotifications"
+            :disable="loading"
+          />
         </q-item-section>
       </q-item>
 
@@ -55,20 +59,111 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
+import { messaging, db } from '../boot/firebase';
+import { getToken, deleteToken } from 'firebase/messaging';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { useAuthStore } from '../stores/authStore';
+import { useSecureLogger } from '../utils/secureLogger';
 
 const $q = useQuasar();
+const authStore = useAuthStore();
+const logger = useSecureLogger();
 
-const notificationsEnabled = ref(true);
+const notificationsEnabled = ref(false);
 const currentLanguage = ref('Italiano');
+const loading = ref(false);
 
-const toggleNotifications = () => {
-  $q.notify({
-    type: notificationsEnabled.value ? 'positive' : 'warning',
-    message: `Notifiche ${notificationsEnabled.value ? 'abilitate' : 'disabilitate'}`,
-  });
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+
+const enableNotifications = async () => {
+  if (!messaging) {
+    $q.notify({ type: 'warning', message: 'Notifiche non supportate su questo dispositivo.' });
+    notificationsEnabled.value = false;
+    return;
+  }
+
+  if (!VAPID_KEY) {
+    $q.notify({ type: 'warning', message: 'VAPID Key non configurata nel file .env' });
+    logger.warn('Missing VITE_FIREBASE_VAPID_KEY');
+    notificationsEnabled.value = false;
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+      if (token && authStore.currentUser) {
+        // Save token to user profile
+        const userRef = doc(db, 'users', authStore.currentUser.uid);
+        await updateDoc(userRef, {
+          fcmTokens: arrayUnion(token),
+        });
+
+        $q.notify({ type: 'positive', message: 'Notifiche attivate con successo!' });
+        logger.info('FCM Token saved for user', { uid: authStore.currentUser.uid });
+        notificationsEnabled.value = true;
+      } else {
+        throw new Error('Impossibile recuperare il token FCM');
+      }
+    } else {
+      notificationsEnabled.value = false;
+      $q.notify({ type: 'warning', message: 'Permesso notifiche negato.' });
+    }
+  } catch (error) {
+    logger.error('Error enabling notifications', error);
+    $q.notify({ type: 'negative', message: "Errore durante l'attivazione delle notifiche." });
+    notificationsEnabled.value = false;
+  } finally {
+    loading.value = false;
+  }
 };
+
+const disableNotifications = async () => {
+  if (!messaging || !authStore.currentUser) return;
+
+  loading.value = true;
+  try {
+    if (VAPID_KEY) {
+      try {
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+        if (token) {
+          const userRef = doc(db, 'users', authStore.currentUser.uid);
+          await updateDoc(userRef, {
+            fcmTokens: arrayRemove(token),
+          });
+          await deleteToken(messaging);
+        }
+      } catch (e) {
+        logger.warn('Could not retrieve token for deletion', e);
+      }
+    }
+
+    $q.notify({ type: 'info', message: 'Notifiche disattivate.' });
+    notificationsEnabled.value = false;
+  } catch (error) {
+    logger.error('Error disabling notifications', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const toggleNotifications = async () => {
+  if (notificationsEnabled.value) {
+    await enableNotifications();
+  } else {
+    await disableNotifications();
+  }
+};
+
+onMounted(() => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    notificationsEnabled.value = true;
+  }
+});
 
 const changeLanguage = () => {
   $q.bottomSheet({

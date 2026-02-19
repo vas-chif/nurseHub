@@ -38,7 +38,40 @@
         <div class="row q-col-gutter-md items-start q-ml-md">
           <!-- Date Input -->
           <div class="col-12 col-md-4">
-            <q-input v-model="formData.date" type="date" label="Data Assenza" outlined dense />
+            <q-input
+              v-model="formData.date"
+              type="date"
+              label="Data Assenza"
+              outlined
+              dense
+              :hint="formData.isRecurring ? 'Data inizio' : ''"
+            />
+          </div>
+
+          <!-- Recurrence Toggle -->
+          <div class="col-12 col-md-4">
+            <q-toggle
+              v-model="formData.isRecurring"
+              label="Ripeti richiesta"
+              color="secondary"
+              dense
+              class="q-mt-sm"
+            />
+          </div>
+
+          <!-- End Date Input (if recurring) -->
+          <div v-if="formData.isRecurring" class="col-12 col-md-4">
+            <q-input
+              v-model="formData.endDate"
+              type="date"
+              label="Data Fine"
+              outlined
+              dense
+              :rules="[
+                (val) => !!val || 'Obbligatorio',
+                (val) => val >= formData.date || 'Deve essere dopo la data inizio',
+              ]"
+            />
           </div>
 
           <!-- Mode Toggle -->
@@ -225,6 +258,8 @@ const inputMode = ref<'SHIFT' | 'TIME'>('SHIFT');
 
 const formData = ref({
   date: qDate.formatDate(new Date(), 'YYYY-MM-DD'),
+  isRecurring: false,
+  endDate: qDate.formatDate(new Date(), 'YYYY-MM-DD'),
   shift: 'M' as ShiftCode,
   startTime: '',
   endTime: '',
@@ -243,7 +278,7 @@ const absenceOptions = [
 const requests = ref<ShiftRequest[]>([]);
 
 // Admin: Operator selection
-const selectedOperatorId = ref(authStore.currentOperator?.id || '');
+const selectedOperatorId = ref(authStore.isAdmin ? '' : authStore.currentOperator?.id || '');
 const operators = ref<Record<string, Operator>>({});
 const filterText = ref('');
 
@@ -349,37 +384,70 @@ async function submitRequest() {
       return;
     }
 
-    const newReq: Omit<ShiftRequest, 'id'> = {
-      date: formData.value.date,
-      // If TIME mode, we might set originalShift to a dummy or keep it generic 'A'
-      // But let's set M/P/N only if SHIFT mode
-      originalShift: inputMode.value === 'SHIFT' ? formData.value.shift : 'A',
-      reason: formData.value.reason,
-      status: 'OPEN',
-      creatorId: authStore.currentUser!.uid,
-      creatorName:
-        `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
-        'Utente',
-      absentOperatorId: targetOperatorId,
-      absentOperatorName: operators.value[targetOperatorId]?.name || 'Operatore',
-      createdAt: Date.now(),
-      requestNote: formData.value.note,
-      ...(inputMode.value === 'TIME' && formData.value.startTime
-        ? { startTime: formData.value.startTime }
-        : {}),
-      ...(inputMode.value === 'TIME' && formData.value.endTime
-        ? { endTime: formData.value.endTime }
-        : {}),
-    };
+    const absentOperatorName = operators.value[targetOperatorId]?.name || 'Operatore';
+    const creatorName =
+      `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
+      'Utente';
 
-    await addDoc(collection(db, 'shiftRequests'), newReq);
-    $q.notify({ type: 'positive', message: 'Richiesta inviata con successo' });
+    // Calculate dates to process
+    const datesToProcess: string[] = [];
+    if (formData.value.isRecurring && formData.value.endDate) {
+      let current = new Date(formData.value.date);
+      const end = new Date(formData.value.endDate);
+      while (current <= end) {
+        datesToProcess.push(qDate.formatDate(current, 'YYYY-MM-DD'));
+        current = qDate.addToDate(current, { days: 1 });
+      }
+    } else {
+      datesToProcess.push(formData.value.date);
+    }
+
+    if (datesToProcess.length > 31) {
+      $q.notify({
+        type: 'negative',
+        message: 'Massimo 31 giorni per volta per le richieste ricorrenti',
+      });
+      return;
+    }
+
+    const batch = [];
+    for (const date of datesToProcess) {
+      const newReq: Omit<ShiftRequest, 'id'> = {
+        date: date,
+        originalShift: inputMode.value === 'SHIFT' ? formData.value.shift : 'A',
+        reason: formData.value.reason,
+        status: 'OPEN',
+        creatorId: authStore.currentUser!.uid,
+        creatorName,
+        absentOperatorId: targetOperatorId,
+        absentOperatorName,
+        createdAt: Date.now(),
+        requestNote: formData.value.note,
+        ...(inputMode.value === 'TIME' && formData.value.startTime
+          ? { startTime: formData.value.startTime }
+          : {}),
+        ...(inputMode.value === 'TIME' && formData.value.endTime
+          ? { endTime: formData.value.endTime }
+          : {}),
+      };
+      batch.push(addDoc(collection(db, 'shiftRequests'), newReq));
+    }
+
+    await Promise.all(batch);
+
+    $q.notify({
+      type: 'positive',
+      message:
+        datesToProcess.length > 1
+          ? `${datesToProcess.length} richieste inviate con successo`
+          : 'Richiesta inviata con successo',
+    });
 
     // Reset form
     formData.value.note = '';
     formData.value.startTime = '';
     formData.value.endTime = '';
-    // await fetchRequests(); // Handled by onSnapshot
+    formData.value.isRecurring = false;
   } catch (e) {
     console.error(e);
     $q.notify({ type: 'negative', message: "Errore durante l'invio" });

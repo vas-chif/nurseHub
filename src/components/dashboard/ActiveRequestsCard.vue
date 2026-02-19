@@ -25,6 +25,9 @@
             <q-item-label caption lines="1">
               {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
             </q-item-label>
+            <q-item-label v-if="req.requestNote" caption class="text-italic">
+              "{{ req.requestNote }}"
+            </q-item-label>
           </q-item-section>
           <q-item-section side>
             <q-btn
@@ -45,12 +48,25 @@
       <q-card-section class="q-pb-none">
         <div class="row items-center justify-between">
           <div class="text-h6 text-primary">🤝 Altre Proposte Copertura</div>
-          <q-badge
-            v-if="otherRequests.length > 0"
-            color="primary"
-            text-color="white"
-            :label="otherRequests.length"
-          />
+          <div class="row items-center q-gutter-x-sm">
+            <q-btn
+              flat
+              round
+              dense
+              color="primary"
+              icon="refresh"
+              :loading="loading"
+              @click="fetchRequests"
+            >
+              <q-tooltip>Aggiorna proposte</q-tooltip>
+            </q-btn>
+            <q-badge
+              v-if="otherRequests.length > 0"
+              color="primary"
+              text-color="white"
+              :label="otherRequests.length"
+            />
+          </div>
         </div>
         <div class="text-caption text-grey-7 q-mb-sm">
           Turni ancora scoperti nel reparto. Puoi offrirti volontariamente.
@@ -81,6 +97,9 @@
             <q-item-label caption lines="1">
               {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
             </q-item-label>
+            <q-item-label v-if="req.requestNote" caption class="text-italic">
+              "{{ req.requestNote }}"
+            </q-item-label>
           </q-item-section>
           <q-item-section side>
             <q-btn
@@ -102,7 +121,6 @@
 
     <!-- Offer Compatibility Dialog -->
     <q-dialog v-model="offerDialog.show" persistent>
-      <!-- ... (Dialog remains the same) ... -->
       <q-card style="min-width: 350px">
         <q-card-section class="bg-primary text-white">
           <div class="text-h6">Candidatura Copertura</div>
@@ -127,6 +145,23 @@
             </q-banner>
           </div>
           <div v-else>
+            <!-- Shift Preview Section -->
+            <div class="q-mb-md">
+              <div class="text-subtitle2 q-mb-xs">Il tuo turno attuale:</div>
+              <div class="row q-gutter-xs justify-center no-wrap">
+                <div
+                  v-for="day in surroundingShifts"
+                  :key="day.date"
+                  class="flex column items-center q-pa-xs rounded-borders"
+                  :class="day.isTarget ? 'bg-primary-1 border-primary' : 'bg-grey-2'"
+                  style="min-width: 60px; border: 1px solid transparent"
+                >
+                  <div class="text-caption text-weight-bold">{{ day.label }}</div>
+                  <q-badge :color="getShiftColor(day.shift)" size="md">{{ day.shift }}</q-badge>
+                </div>
+              </div>
+            </div>
+
             <div class="text-subtitle2 q-mb-sm">Come vuoi coprire questo turno?</div>
             <q-list bordered separator>
               <q-item
@@ -141,8 +176,8 @@
                   <q-radio v-model="selectedScenario" :val="scenario" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label>{{ scenario.scenarioLabel }}</q-item-label>
-                  <q-item-label caption>Incentivo: {{ scenario.incentive }}</q-item-label>
+                  <q-item-label>{{ scenario.roleLabel }}</q-item-label>
+                  <q-item-label caption>{{ scenario.incentive }}</q-item-label>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -171,7 +206,7 @@ import { collection, query, where, getDocs, updateDoc, doc, arrayUnion } from 'f
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useShiftLogic } from '../../composables/useShiftLogic';
-import type { ShiftRequest, ShiftCode, CompatibleScenario } from '../../types/models';
+import type { ShiftRequest, ShiftCode, CompatibleScenario, Operator } from '../../types/models';
 import { useQuasar, date as qDate } from 'quasar';
 
 const authStore = useAuthStore();
@@ -190,6 +225,25 @@ const loadingCompatibility = ref(false);
 const compatibleScenarios = ref<CompatibleScenario[]>([]);
 const selectedScenario = ref<CompatibleScenario | null>(null);
 const isSubmitting = ref(false);
+const surroundingShifts = computed(() => {
+  if (!offerDialog.value.req || !authStore.currentOperator) return [];
+  const targetDateStr = offerDialog.value.req.date;
+  const targetDate = new Date(targetDateStr);
+  const result = [];
+
+  for (let i = -2; i <= 2; i++) {
+    const d = qDate.addToDate(targetDate, { days: i });
+    const dStr = qDate.formatDate(d, 'YYYY-MM-DD');
+    const label = i === 0 ? 'OGGI' : qDate.formatDate(d, 'DD/MM');
+    result.push({
+      date: dStr,
+      label,
+      shift: authStore.currentOperator.schedule?.[dStr] || 'R',
+      isTarget: i === 0,
+    });
+  }
+  return result;
+});
 
 const urgentRequests = computed(() => {
   const myOpId = authStore.currentOperator?.id;
@@ -207,7 +261,7 @@ const otherRequests = computed(() => {
 
 watch(
   () => authStore.currentOperator,
-  (newOp) => {
+  (newOp: Operator | null) => {
     if (newOp) {
       void fetchRequests();
     }
@@ -273,7 +327,7 @@ async function submitOffer() {
       id: `offer-${Date.now()}`,
       operatorId: authStore.currentOperator.id,
       operatorName: authStore.currentOperator.name,
-      scenarioLabel: selectedScenario.value.scenarioLabel,
+      scenarioLabel: `${selectedScenario.value.scenarioLabel} - ${selectedScenario.value.roleLabel}`,
       timestamp: Date.now(),
     };
 

@@ -132,6 +132,8 @@ export function useAnalytics() {
 
   return {
     setRequests,
+    rawRequests: requests,
+    rawOperators: operatorsMap,
     metrics: {
       total: totalRequests,
       pending: pendingRequests,

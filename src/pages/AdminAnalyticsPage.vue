@@ -24,6 +24,14 @@
           @update:model-value="refreshData"
         />
         <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
+        <q-btn
+          icon="download"
+          label="Esporta CSV"
+          color="secondary"
+          outline
+          @click="exportCSV"
+          :disable="metrics.total.value === 0"
+        />
       </div>
     </div>
 
@@ -129,10 +137,13 @@ import { db } from 'src/boot/firebase';
 import { useConfigStore } from 'src/stores/configStore';
 import { operatorsService } from 'src/services/OperatorsService';
 import type { ShiftRequest, Operator } from 'src/types/models';
+import { exportFile, useQuasar } from 'quasar';
+
+const $q = useQuasar();
 
 const configStore = useConfigStore();
 
-const { setRequests, metrics, charts } = useAnalytics();
+const { setRequests, metrics, charts, rawRequests } = useAnalytics();
 const loading = ref(false);
 
 const filters = ref({
@@ -147,18 +158,65 @@ const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 filters.value.dateFrom = firstDay.toISOString().split('T')[0] as string;
 filters.value.dateTo = lastDay.toISOString().split('T')[0] as string;
 
+function wrapCsvValue(val: string | number | boolean | null | undefined) {
+  let formatted = val === void 0 || val === null ? '' : String(val);
+  formatted = formatted.split('"').join('""');
+  return `"${formatted}"`;
+}
+
+function exportCSV() {
+  if (rawRequests.value.length === 0) return;
+
+  const columns = [
+    { label: 'Data', field: 'date' },
+    { label: 'Operatore', field: 'absentOperatorName' },
+    { label: 'Turno', field: 'originalShift' },
+    { label: 'Motivo', field: 'reason' },
+    { label: 'Stato', field: 'status' },
+    { label: 'Creato il', field: 'createdAt' },
+  ];
+
+  const header = columns.map((col) => wrapCsvValue(col.label)).join(',');
+  const lines = rawRequests.value.map((row) => {
+    return columns
+      .map((col) => {
+        const field = col.field as keyof ShiftRequest;
+        const rawVal = (row as unknown as Record<string, unknown>)[field];
+        let val: string | number | boolean | null | undefined;
+
+        if (field === 'createdAt' && typeof rawVal === 'number') {
+          val = new Date(rawVal).toLocaleString();
+        } else {
+          val = rawVal as string | number | boolean | null | undefined;
+        }
+        return wrapCsvValue(val);
+      })
+      .join(',');
+  });
+
+  const content = [header, ...lines].join('\r\n');
+
+  const status = exportFile(
+    `analytics_export_${filters.value.dateFrom}_${filters.value.dateTo}.csv`,
+    content,
+    'text/csv',
+  );
+
+  if (status !== true) {
+    $q.notify({
+      message: 'Browser denied file download...',
+      color: 'negative',
+      icon: 'warning',
+    });
+  }
+}
+
 async function refreshData() {
   loading.value = true;
   try {
     // 1. Fetch Requests
-    // Note: Better to do compounding queries or filter client side for flexibility if data set is small (<1000)
-    // For now assuming we can fetch collection and filter client side for Phase 10.2 simplicity
     const reqRef = collection(db, 'shiftRequests');
     const q = query(reqRef);
-
-    // Apply basic date range filter at DB level if possible, but string dates make it tricky.
-    // Let's fetch all (or recent limit) and filter in JS for maximum flexibility on the formatted string dates
-    // If dataset grows, we need to index 'date' field or 'createdAt'
 
     const snapshot = await getDocs(q);
     let requests = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftRequest);
@@ -179,7 +237,7 @@ async function refreshData() {
 
     const operatorsList = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
     const operators: Record<string, Operator> = {};
-    operatorsList.forEach((op) => {
+    operatorsList.forEach((op: Operator) => {
       operators[op.id] = op;
     });
 

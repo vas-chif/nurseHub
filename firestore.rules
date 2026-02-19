@@ -1,102 +1,62 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- Helper Functions ---
-
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
     function isAdmin() {
       return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    function isVerified() {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isVerified == true;
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // --- Collections ---
-    
-    // Users: Profile management
+    function isOperatorOwner(operatorId) {
+      return isAuthenticated() && (
+        // Case 1: Direct UID link on the operator document
+        (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        // Case 2: User profile links to this operatorId
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.operatorId == operatorId
+      );
+    }
+
+    // User profiles
     match /users/{userId} {
-      // DEBUG: Allowing unauthenticated creation for easier registration flow during dev
-      allow create: if true; 
-      
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      
-      // Allow update of own profile
-      allow update: if isAuthenticated() && request.auth.uid == userId && (
-        // Case 1: Standard profile update (phone, etc.) - Role and Verification must NOT change
-        (!request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['role', 'isVerified', 'pendingApproval', 'configId', 'operatorId', 'profession']))
-        ||
-        // Case 2: Self-Sync (linking to operator)
-        // Allowed ONLY IF the user is currently NOT linked and they are NOT changing their own role
-        (resource.data.operatorId == null && 
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
-      );
-      
-      // Admins have full access
-      allow read, update: if isAdmin();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
-    
-    // Shifts: The actual schedule
-    match /shifts/{shiftId} {
-      allow read: if isVerified();
-      allow write: if isAdmin();
-    }
-    
-    // ShiftRequests: Absence management & Offers
+
+    // Shift Requests
     match /shiftRequests/{requestId} {
-      // 1. Owner can read their own
-      // 2. ANY authenticated user can read 'OPEN' requests (to see coverage opportunities)
-      allow read: if isAuthenticated() && 
-                     (resource.data.creatorId == request.auth.uid || 
-                      resource.data.status == 'OPEN');
-      
-      // Creation restricted to verified users (must own the request)
-      allow create: if isVerified() &&
-                       request.resource.data.creatorId == request.auth.uid;
-      
-      // Update:
-      // 1. Owner can modify/cancel their own OPEN request
-      // 2. ANY verified user can add an offer to an OPEN request
-      allow update: if isVerified() && (
-        (resource.data.creatorId == request.auth.uid && resource.data.status == 'OPEN') ||
-        (resource.data.status == 'OPEN' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers']))
-      );
-      
-      // Admins have full access
-      allow read, update: if isAdmin();
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
     
-    // Notifications: In-app alerts
-    match /notifications/{notifId} {
+    // Notifications
+    match /notifications/{notificationId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid; // e.g. mark as read
-      allow create: if isAdmin();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
     }
     
     // Settings & System Config
     match /settings/{settingId} {
-      allow read: if true; // Public settings (e.g. login message)
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // System Configurations: Multi-config management for different roles
+    // System Configurations
     match /systemConfigurations/{configId} {
-      allow read: if true; // Allow any authenticated user to list configs (needed for operator sync)
+      allow read: if true;
       allow write: if isAdmin();
       
-      // Operators sub-collection: stores operators for each configuration
-      // Allow public read for registration matching, write only for admins
       match /operators/{operatorId} {
-        allow read: if true;  // Public read for registration email matching
-        allow write: if isAdmin();
+        allow read: if true;
+        // Allow update if admin OR if the authenticated user is the legitimate owner
+        allow update: if isAdmin() || isOperatorOwner(operatorId);
+        allow create: if isAdmin();
       }
     }
 
