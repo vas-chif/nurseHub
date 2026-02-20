@@ -95,7 +95,23 @@ const enableNotifications = async () => {
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+      const registration = await navigator.serviceWorker.getRegistration();
+
+      // If no registration is found and we are in dev/browser, this might still fail,
+      // but passing the active registration fixes the PWA mismatch issue.
+      const tokenOptions: {
+        vapidKey: string;
+        serviceWorkerRegistration?: ServiceWorkerRegistration;
+      } = {
+        vapidKey: VAPID_KEY,
+      };
+
+      if (registration) {
+        tokenOptions.serviceWorkerRegistration = registration;
+      }
+
+      const token = await getToken(messaging, tokenOptions);
+
       if (token && authStore.currentUser) {
         // Save token to user profile
         const userRef = doc(db, 'users', authStore.currentUser.uid);
@@ -129,7 +145,19 @@ const disableNotifications = async () => {
   try {
     if (VAPID_KEY) {
       try {
-        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+        const registration = await navigator.serviceWorker.getRegistration();
+        const tokenOptions: {
+          vapidKey: string;
+          serviceWorkerRegistration?: ServiceWorkerRegistration;
+        } = {
+          vapidKey: VAPID_KEY,
+        };
+
+        if (registration) {
+          tokenOptions.serviceWorkerRegistration = registration;
+        }
+
+        const token = await getToken(messaging, tokenOptions);
         if (token) {
           const userRef = doc(db, 'users', authStore.currentUser.uid);
           await updateDoc(userRef, {

@@ -100,8 +100,8 @@
             <q-th
               key="operatorName"
               :props="props"
-              class="sticky-column"
-              style="z-index: 4; background: white"
+              class="sticky-column-z5"
+              style="background: white"
             >
               Personale
             </q-th>
@@ -114,7 +114,7 @@
               class="text-center q-pa-xs"
               :class="{ 'bg-red-1': col.isHoliday, 'bg-grey-1': !col.isHoliday }"
             >
-              <div class="column items-center" style="line-height: 1.1">
+              <div class="column items-center justify-center" style="line-height: 1.1">
                 <div class="text-bold text-subtitle2">{{ col.dayNum }}</div>
                 <div class="text-uppercase text-caption" style="font-size: 0.65rem">
                   {{ col.month }}
@@ -125,28 +125,78 @@
               </div>
             </q-th>
           </q-tr>
+
+          <!-- Validation Mattina -->
+          <q-tr class="bg-amber-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-amber-1 text-left text-black text-weight-bold">
+              Mattina
+            </q-th>
+            <q-th
+              v-for="col in dateColumns"
+              :key="'m-' + col.name"
+              class="text-center q-pa-none"
+              style="padding: 1px !important"
+            >
+              <span
+                :class="{
+                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.M !== 6,
+                  'text-amber-9': shiftCounts[col.name]?.M === 6,
+                }"
+              >
+                {{ shiftCounts[col.name]?.M || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
+
+          <!-- Validation Pomeriggio -->
+          <q-tr class="bg-deep-orange-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-deep-orange-1 text-left text-white text-weight-bold">
+              Pomeriggio
+            </q-th>
+            <q-th
+              v-for="col in dateColumns"
+              :key="'p-' + col.name"
+              class="text-center q-pa-none"
+              style="padding: 1px !important"
+            >
+              <span
+                :class="{
+                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.P !== 6,
+                  'text-deep-orange-6 text-weight-bold': shiftCounts[col.name]?.P === 6,
+                }"
+              >
+                {{ shiftCounts[col.name]?.P || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
+
+          <!-- Validation Notte -->
+          <q-tr class="bg-blue-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-blue-1 text-left text-white text-weight-bold">
+              Notte
+            </q-th>
+            <q-th
+              v-for="col in dateColumns"
+              :key="'n-' + col.name"
+              class="text-center q-pa-none"
+              style="padding: 1px !important"
+            >
+              <span
+                :class="{
+                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.N !== 6,
+                  'text-blue-10 text-weight-bold': shiftCounts[col.name]?.N === 6,
+                }"
+              >
+                {{ shiftCounts[col.name]?.N || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
         </template>
 
         <!-- Custom Body -->
         <template v-slot:body="props">
-          <q-tr
-            :props="props"
-            :class="{
-              'bg-amber-1': props.row.id === 'validation-M',
-              'bg-deep-orange-1': props.row.id === 'validation-P',
-              'bg-blue-1': props.row.id === 'validation-N',
-            }"
-          >
-            <q-td
-              key="operatorName"
-              :props="props"
-              class="sticky-column text-weight-bold"
-              :class="{
-                'bg-amber-1': props.row.id === 'validation-M',
-                'bg-deep-orange-1': props.row.id === 'validation-P',
-                'bg-blue-1': props.row.id === 'validation-N',
-              }"
-            >
+          <q-tr :props="props">
+            <q-td key="operatorName" :props="props" class="sticky-column text-weight-bold">
               <div
                 class="text-weight-bold ellipsis"
                 style="max-width: 190px"
@@ -162,43 +212,21 @@
               :props="props"
               class="text-center q-pa-none"
               :class="{
-                'bg-red-1': col.isHoliday && !props.row.id.startsWith('validation-'),
-                'bg-amber-1': props.row.id === 'validation-M',
-                'bg-deep-orange-1': props.row.id === 'validation-P',
-                'bg-blue-1': props.row.id === 'validation-N',
+                'bg-red-1': col.isHoliday,
               }"
               style="padding: 1px !important"
             >
-              <!-- Validation Row Cell -->
-              <span
-                v-if="props.row.id.startsWith('validation-')"
-                :class="{
-                  'text-red-8 text-weight-bold': Number(props.row[col.name]) !== 6,
-                  'text-amber-9':
-                    props.row.id === 'validation-M' && Number(props.row[col.name]) === 6,
-                  'text-deep-orange-6':
-                    props.row.id === 'validation-P' && Number(props.row[col.name]) === 6,
-                  'text-blue-10':
-                    props.row.id === 'validation-N' && Number(props.row[col.name]) === 6,
-                }"
+              <!-- Highlight badge only if it matches filter or no filter set -->
+              <q-badge
+                v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
+                :color="getShiftColor(props.row[col.name])"
+                class="cursor-pointer shadow-1 full-width flex flex-center"
+                style="height: 24px; font-size: 0.75rem; border-radius: 4px"
               >
-                {{ props.row[col.name] || 0 }}
-              </span>
-
-              <!-- Regular Operator Cell -->
-              <template v-else>
-                <!-- Highlight badge only if it matches filter or no filter set -->
-                <q-badge
-                  v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
-                  :color="getShiftColor(props.row[col.name])"
-                  class="cursor-pointer shadow-1 full-width flex flex-center"
-                  style="height: 24px; font-size: 0.75rem; border-radius: 4px"
-                >
-                  {{ props.row[col.name] }}
-                </q-badge>
-                <!-- Empty spacer or grey text if filtered out -->
-                <span v-else-if="props.row[col.name]" class="text-grey-3 text-caption"> - </span>
-              </template>
+                {{ props.row[col.name] }}
+              </q-badge>
+              <!-- Empty spacer or grey text if filtered out -->
+              <span v-else-if="props.row[col.name]" class="text-grey-3 text-caption"> - </span>
             </q-td>
           </q-tr>
         </template>
@@ -531,34 +559,7 @@ const filteredRows = computed(() => {
     return row;
   });
 
-  // Create validation summary rows
-  const validationRows: TableRow[] = [
-    {
-      id: 'validation-M',
-      operatorName: 'Mattina',
-      schedule: {},
-    },
-    {
-      id: 'validation-P',
-      operatorName: 'Pomeriggio',
-      schedule: {},
-    },
-    {
-      id: 'validation-N',
-      operatorName: 'Notte',
-      schedule: {},
-    },
-  ];
-
-  // Add counts to validation rows
-  dateColumns.value.forEach((col) => {
-    validationRows[0]![col.name] = String(shiftCounts.value[col.name]?.M || 0);
-    validationRows[1]![col.name] = String(shiftCounts.value[col.name]?.P || 0);
-    validationRows[2]![col.name] = String(shiftCounts.value[col.name]?.N || 0);
-  });
-
-  // Return validation rows first, then operator rows
-  return [...validationRows, ...operatorRows];
+  return operatorRows;
 });
 
 function isShiftVisible(code: string): boolean {
@@ -594,5 +595,31 @@ function getShiftColor(code: ShiftCode): string {
   z-index: 1;
   background: white;
   border-right: 1px solid #ddd;
+}
+
+.sticky-column-z5 {
+  position: sticky;
+  left: 0;
+  z-index: 5 !important;
+  border-right: 1px solid #ddd;
+}
+
+/* Make headers sticky vertically */
+:deep(.sticky-header-table thead tr th) {
+  position: sticky;
+  z-index: 2;
+}
+:deep(.sticky-header-table thead tr:nth-child(1) th) {
+  top: 0;
+  height: 55px; /* Forced height for consistent math */
+}
+:deep(.sticky-header-table thead tr:nth-child(2) th) {
+  top: 55px;
+}
+:deep(.sticky-header-table thead tr:nth-child(3) th) {
+  top: 83px; /* 55 + 28 */
+}
+:deep(.sticky-header-table thead tr:nth-child(4) th) {
+  top: 111px; /* 83 + 28 */
 }
 </style>
