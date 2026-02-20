@@ -336,15 +336,49 @@
       </q-tab-panel>
 
       <q-tab-panel name="history">
+        <!-- Archive Widget (Battery) -->
+        <div
+          class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
+          v-if="archivedRequests.length > 0"
+        >
+          <div class="col-grow">
+            <div class="row items-center justify-between q-mb-xs">
+              <div class="text-caption text-grey-8 text-weight-bold">
+                <q-icon name="inventory_2" class="q-mr-xs" />
+                Archivio (> 3 mesi)
+              </div>
+              <div class="text-caption text-grey-6">{{ archivedRequests.length }} elementi</div>
+            </div>
+            <q-linear-progress
+              :value="archiveStorageLevel"
+              :color="storageColor"
+              size="8px"
+              rounded
+              track-color="grey-2"
+            />
+          </div>
+          <div>
+            <q-btn
+              flat
+              dense
+              color="negative"
+              icon="delete_forever"
+              label="Svuota"
+              @click="emptyArchive"
+              size="sm"
+            />
+          </div>
+        </div>
+
         <div v-if="loading" class="row justify-center q-pa-md">
           <q-spinner color="primary" size="3em" />
         </div>
-        <div v-else-if="filteredHistoryRequests.length === 0" class="text-center text-grey q-pa-lg">
-          Nessuna richiesta nello storico.
+        <div v-else-if="visibleHistoryRequests.length === 0" class="text-center text-grey q-pa-lg">
+          Nessuna richiesta visibile nello storico.
         </div>
         <q-list v-else separator bordered class="rounded-borders">
           <q-expansion-item
-            v-for="req in filteredHistoryRequests"
+            v-for="req in visibleHistoryRequests"
             :key="req.id"
             group="history"
             header-class="q-pa-sm"
@@ -365,9 +399,27 @@
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
-                <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
-                  {{ req.status }}
-                </q-chip>
+                <div class="row items-center">
+                  <q-chip
+                    :color="getStatusColor(req.status)"
+                    text-color="white"
+                    size="sm"
+                    class="q-mr-sm"
+                  >
+                    {{ req.status }}
+                  </q-chip>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    color="grey-5"
+                    size="sm"
+                    @click.stop="archiveRequest(req)"
+                  >
+                    <q-tooltip>Sposta nel cestino</q-tooltip>
+                  </q-btn>
+                </div>
               </q-item-section>
             </template>
 
@@ -428,15 +480,15 @@
                     <!-- Esito Sostituzione -->
                     <div v-if="req.status === 'CLOSED'" class="text-positive">
                       <div class="text-weight-bold">Sostituzione Completata</div>
-                      <div v-if="req.offers?.some((o) => o.timestamp === req.approvalTimestamp)">
-                        <q-icon name="check_circle" />
-                        Coperto da:
-                        {{
-                          req.offers.find((o) => o.timestamp === req.approvalTimestamp)
-                            ?.operatorName
-                        }}
+                      <div
+                        class="bg-green-1 q-pa-sm rounded-borders text-caption text-black q-mt-xs"
+                        v-if="getResolutionDetails(req)"
+                      >
+                        <div><strong>Coperta da:</strong> {{ getResolutionDetails(req)?.who }}</div>
+                        <div>
+                          <strong>Scenario:</strong> {{ getResolutionDetails(req)?.scenario }}
+                        </div>
                       </div>
-                      <div v-else>Copertura manuale confermata dall'admin.</div>
                     </div>
 
                     <div v-if="req.rejectionReason" class="text-negative">
@@ -560,9 +612,15 @@ import {
   doc,
   updateDoc,
   writeBatch,
+  arrayUnion,
   onSnapshot,
   orderBy,
 } from 'firebase/firestore';
+
+// ... (other imports)
+
+// ...
+
 import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -684,6 +742,36 @@ const filteredPendingRequests = computed(() => {
 const filteredHistoryRequests = computed(() => {
   const history = requests.value.filter((r) => r.status !== 'OPEN');
   return applyFilters(history);
+});
+
+// Phase 18: Archive & Resolution Logic
+const threeMonthsAgo = new Date();
+threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+const cutoffDate = threeMonthsAgo.toISOString().split('T')[0] || '';
+
+const visibleHistoryRequests = computed(() => {
+  const uid = authStore.currentUser?.uid;
+  return filteredHistoryRequests.value.filter((req) => {
+    const isHidden = uid ? req.hiddenBy?.includes(uid) : false;
+    const isArchived = req.date < cutoffDate;
+    return !isHidden && !isArchived;
+  });
+});
+
+const archivedRequests = computed(() => {
+  return requests.value.filter((req) => req.status !== 'OPEN' && req.date < cutoffDate);
+});
+
+const archiveStorageLevel = computed(() => {
+  const count = archivedRequests.value.length;
+  // Let's say 100 archived requests is "full" for visual bar
+  return Math.min(count / 100, 1);
+});
+
+const storageColor = computed(() => {
+  if (archiveStorageLevel.value > 0.8) return 'negative';
+  if (archiveStorageLevel.value > 0.5) return 'warning';
+  return 'positive';
 });
 
 onMounted(async () => {
@@ -1270,5 +1358,77 @@ function bulkReject() {
   isBulkReject.value = true;
   rejectionReason.value = '';
   showRejectDialog.value = true;
+}
+
+async function archiveRequest(req: ShiftRequest) {
+  if (!authStore.currentUser) return;
+  try {
+    const ref = doc(db, 'shiftRequests', req.id);
+    await updateDoc(ref, {
+      hiddenBy: arrayUnion(authStore.currentUser.uid),
+    });
+    $q.notify({ message: 'Richiesta spostata nel cestino', color: 'info', icon: 'delete' });
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
+  }
+}
+
+function emptyArchive() {
+  if (archivedRequests.value.length === 0) return;
+
+  $q.dialog({
+    title: 'Svuota Archivio',
+    message: `Vuoi eliminare definitivamente ${archivedRequests.value.length} richieste vecchie di oltre 3 mesi?`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    performEmptyArchive();
+  });
+}
+
+async function performEmptyArchive() {
+  loading.value = true;
+  try {
+    const batch = writeBatch(db);
+    archivedRequests.value.forEach((req) => {
+      const ref = doc(db, 'shiftRequests', req.id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+    $q.notify({
+      type: 'positive',
+      message: 'Archivio svuotato con successo',
+      icon: 'delete_forever',
+    });
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function getResolutionDetails(req: ShiftRequest) {
+  if (req.status !== 'CLOSED') return null;
+
+  if (req.offers && req.offers.length > 0) {
+    const accepted = req.approvalTimestamp
+      ? req.offers.find((o) => Math.abs((o.timestamp || 0) - req.approvalTimestamp!) < 5000)
+      : null;
+
+    if (accepted) {
+      return {
+        who: accepted.operatorName || 'Collega',
+        scenario: accepted.scenarioLabel || 'Generico',
+      };
+    }
+  }
+
+  return {
+    who: 'Admin / Manuale',
+    scenario: 'Gestione manuale',
+  };
 }
 </script>

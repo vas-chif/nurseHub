@@ -1,122 +1,173 @@
 <template>
   <div class="q-mt-md">
-    <!-- Section 1: Urgent Requests (Red Card) -->
-    <q-card v-if="urgentRequests.length > 0" flat bordered class="bg-red-0 q-mb-md">
-      <q-card-section class="q-pb-none">
-        <div class="row items-center justify-between">
-          <div class="text-h6 text-red-9">🚨 Richieste Urgenti</div>
-          <q-badge color="red" text-color="white" :label="urgentRequests.length" />
-        </div>
-        <div class="text-caption text-red-7 q-mb-sm">
-          L'amministratore ha richiesto la tua disponibilità per questi turni.
-        </div>
-      </q-card-section>
-
-      <q-list separator>
-        <q-item v-for="req in urgentRequests" :key="req.id" class="bg-white q-py-sm">
-          <q-item-section avatar>
-            <q-avatar icon="warning" color="red-1" text-color="red" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label class="text-weight-bold">
-              {{ formatDate(req.date) }} -
-              <q-badge :color="getShiftColor(req.originalShift)">{{ req.originalShift }}</q-badge>
-            </q-item-label>
-            <q-item-label caption lines="1">
-              {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
-            </q-item-label>
-            <q-item-label v-if="req.requestNote" caption class="text-italic">
-              "{{ req.requestNote }}"
-            </q-item-label>
-          </q-item-section>
-          <q-item-section side>
-            <q-btn
-              unelevated
-              size="sm"
-              color="negative"
-              label="Rispondi"
-              icon="add_task"
-              @click="openOfferDialog(req)"
-            />
-          </q-item-section>
-        </q-item>
-      </q-list>
-    </q-card>
-
-    <!-- Section 2: Voluntary Offers (Blue/Grey Card) -->
-    <q-card flat bordered class="bg-blue-0">
-      <q-card-section class="q-pb-none">
-        <div class="row items-center justify-between">
-          <div class="text-h6 text-primary">🤝 Altre Proposte Copertura</div>
-          <div class="row items-center q-gutter-x-sm">
-            <q-btn
-              flat
-              round
-              dense
-              color="primary"
-              icon="refresh"
-              :loading="loading"
-              @click="fetchRequests"
-            >
-              <q-tooltip>Aggiorna proposte</q-tooltip>
-            </q-btn>
-            <q-badge
-              v-if="otherRequests.length > 0"
-              color="primary"
-              text-color="white"
-              :label="otherRequests.length"
-            />
-          </div>
-        </div>
-        <div class="text-caption text-grey-7 q-mb-sm">
-          Turni ancora scoperti nel reparto. Puoi offrirti volontariamente.
-        </div>
-      </q-card-section>
-
-      <div v-if="loading" class="row justify-center q-pa-md">
-        <q-spinner color="primary" size="2em" />
-      </div>
-
-      <div
-        v-else-if="otherRequests.length === 0 && urgentRequests.length === 0"
-        class="text-center text-grey q-pa-md text-caption"
+    <q-card flat bordered class="bg-white">
+      <q-tabs
+        v-model="activeTab"
+        dense
+        class="text-grey"
+        active-color="primary"
+        indicator-color="primary"
+        align="justify"
+        narrow-indicator
       >
-        Nessun turno disponibile per la copertura al momento.
-      </div>
+        <q-tab name="opportunities">
+          <div class="row items-center no-wrap">
+            <q-icon name="campaign" class="q-mr-sm" />
+            <div>Opportunità</div>
+            <q-badge
+              v-if="urgentRequests.length + otherRequests.length > 0"
+              color="red"
+              floating
+              rounded
+              class="q-ml-xs"
+            >
+              {{ urgentRequests.length + otherRequests.length }}
+            </q-badge>
+          </div>
+        </q-tab>
+        <q-tab name="history" icon="history" label="Le mie Candidature" />
+      </q-tabs>
 
-      <q-list v-else-if="otherRequests.length > 0" separator>
-        <q-item v-for="req in otherRequests" :key="req.id" class="bg-white q-py-sm">
-          <q-item-section avatar>
-            <q-avatar icon="volunteer_activism" color="blue-1" text-color="primary" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label class="text-weight-bold">
-              {{ formatDate(req.date) }} -
-              <q-badge :color="getShiftColor(req.originalShift)">{{ req.originalShift }}</q-badge>
-            </q-item-label>
-            <q-item-label caption lines="1">
-              {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
-            </q-item-label>
-            <q-item-label v-if="req.requestNote" caption class="text-italic">
-              "{{ req.requestNote }}"
-            </q-item-label>
-          </q-item-section>
-          <q-item-section side>
-            <q-btn
-              unelevated
-              size="sm"
-              color="primary"
-              label="Offriti"
-              icon="add_task"
-              @click="openOfferDialog(req)"
-            />
-          </q-item-section>
-        </q-item>
-      </q-list>
+      <q-separator />
 
-      <div v-else-if="urgentRequests.length > 0" class="text-center text-grey q-pa-md text-caption">
-        Nessun'altra proposta disponibile.
-      </div>
+      <q-tab-panels v-model="activeTab" animated>
+        <!-- TAB 1: Opportunità (Urgent + Other) -->
+        <q-tab-panel name="opportunities" class="q-pa-none">
+          <!-- Urgent Requests Section -->
+          <div v-if="urgentRequests.length > 0" class="bg-red-0 q-pa-sm">
+            <div class="row items-center justify-between q-px-sm q-py-xs">
+              <div class="text-subtitle2 text-red-9">🚨 Richieste Urgenti</div>
+            </div>
+            <q-list separator class="bg-white rounded-borders">
+              <q-item v-for="req in urgentRequests" :key="req.id" class="q-py-sm">
+                <q-item-section avatar>
+                  <q-avatar icon="warning" color="red-1" text-color="red" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold">
+                    {{ formatDate(req.date) }} -
+                    <q-badge :color="getShiftColor(req.originalShift)">{{
+                      req.originalShift
+                    }}</q-badge>
+                  </q-item-label>
+                  <q-item-label caption lines="1">
+                    {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
+                  </q-item-label>
+                  <q-item-label v-if="req.requestNote" caption class="text-italic">
+                    "{{ req.requestNote }}"
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    unelevated
+                    size="sm"
+                    color="negative"
+                    label="Rispondi"
+                    icon="add_task"
+                    @click="openOfferDialog(req)"
+                  />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+
+          <!-- Other Requests Section -->
+          <div class="q-pa-sm">
+            <div class="row items-center justify-between q-px-sm q-py-xs">
+              <div class="text-subtitle2 text-primary">🤝 Altre Proposte</div>
+              <q-btn
+                flat
+                round
+                dense
+                color="primary"
+                icon="refresh"
+                :loading="loading"
+                @click="fetchRequests"
+              >
+                <q-tooltip>Aggiorna</q-tooltip>
+              </q-btn>
+            </div>
+
+            <div v-if="loading" class="row justify-center q-pa-md">
+              <q-spinner color="primary" size="2em" />
+            </div>
+
+            <div
+              v-else-if="otherRequests.length === 0 && urgentRequests.length === 0"
+              class="text-center text-grey q-pa-md text-caption"
+            >
+              Nessun turno disponibile al momento.
+            </div>
+
+            <q-list v-else-if="otherRequests.length > 0" separator class="bg-white rounded-borders">
+              <q-item v-for="req in otherRequests" :key="req.id" class="q-py-sm">
+                <q-item-section avatar>
+                  <q-avatar icon="volunteer_activism" color="blue-1" text-color="primary" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold">
+                    {{ formatDate(req.date) }} -
+                    <q-badge :color="getShiftColor(req.originalShift)">{{
+                      req.originalShift
+                    }}</q-badge>
+                  </q-item-label>
+                  <q-item-label caption lines="1">
+                    {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
+                  </q-item-label>
+                  <q-item-label v-if="req.requestNote" caption class="text-italic">
+                    "{{ req.requestNote }}"
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    unelevated
+                    size="sm"
+                    color="primary"
+                    label="Offriti"
+                    icon="add_task"
+                    @click="openOfferDialog(req)"
+                  />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+        </q-tab-panel>
+
+        <!-- TAB 2: Le mie Candidature (History) -->
+        <q-tab-panel name="history" class="q-pa-none">
+          <div v-if="loading" class="row justify-center q-pa-md">
+            <q-spinner color="primary" size="2em" />
+          </div>
+          <div v-else-if="myHistoryRequests.length === 0" class="text-center text-grey q-pa-lg">
+            Nessuna candidatura inviata di recente.
+          </div>
+          <q-list v-else separator>
+            <q-item v-for="req in myHistoryRequests" :key="req.id" class="q-py-md">
+              <q-item-section avatar>
+                <q-avatar
+                  :icon="req.status === 'CLOSED' ? 'check_circle' : 'hourglass_empty'"
+                  :color="req.status === 'CLOSED' ? 'positive' : 'grey-4'"
+                  :text-color="req.status === 'CLOSED' ? 'white' : 'grey-7'"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">
+                  {{ formatDate(req.date) }} - Turno {{ req.originalShift }}
+                </q-item-label>
+                <q-item-label caption>
+                  Stato:
+                  <q-badge :color="getStatusColor(req)" class="q-ml-xs">
+                    {{ getStatusLabel(req) }}
+                  </q-badge>
+                </q-item-label>
+                <q-item-label caption v-if="getMyOfferLabel(req)">
+                  Offerta: {{ getMyOfferLabel(req) }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-tab-panel>
+      </q-tab-panels>
     </q-card>
 
     <!-- Offer Compatibility Dialog -->
@@ -202,7 +253,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { collection, query, where, getDocs, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc,
+  arrayUnion,
+  orderBy,
+} from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useShiftLogic } from '../../composables/useShiftLogic';
@@ -213,7 +273,9 @@ const authStore = useAuthStore();
 const { getCompatibleScenarios } = useShiftLogic();
 const $q = useQuasar();
 
-const requests = ref<ShiftRequest[]>([]);
+const activeTab = ref('opportunities');
+const requests = ref<ShiftRequest[]>([]); // Open Opportunities
+const historyRequests = ref<ShiftRequest[]>([]); // My History
 const loading = ref(true);
 
 // Dialog State
@@ -259,6 +321,8 @@ const otherRequests = computed(() => {
   });
 });
 
+const myHistoryRequests = computed(() => historyRequests.value);
+
 watch(
   () => authStore.currentOperator,
   (newOp: Operator | null) => {
@@ -268,35 +332,64 @@ watch(
   },
 );
 
+watch(activeTab, () => {
+  void fetchRequests();
+});
+
 onMounted(async () => {
   await fetchRequests();
 });
 
 async function fetchRequests() {
+  const myOpId = authStore.currentOperator?.id;
+  if (!myOpId) return;
+
   loading.value = true;
   try {
-    const q = query(collection(db, 'shiftRequests'), where('status', '==', 'OPEN'));
+    // 1. Fetch Opportunities (OPEN requests)
+    if (activeTab.value === 'opportunities') {
+      const q = query(collection(db, 'shiftRequests'), where('status', '==', 'OPEN'));
+      const snapshot = await getDocs(q);
+      const loaded: ShiftRequest[] = [];
 
-    const snapshot = await getDocs(q);
-    const loaded: ShiftRequest[] = [];
-    const myOpId = authStore.currentOperator?.id;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as ShiftRequest;
+        // Filter: Not mine, and I haven't offered yet
+        const isMine = myOpId ? data.absentOperatorId === myOpId : false;
+        // Check new field OR legacy array scan (client side check for safety)
+        const alreadyOffered =
+          data.offeringOperatorIds?.includes(myOpId) ||
+          data.offers?.some((o) => o.operatorId === myOpId) ||
+          false;
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as ShiftRequest;
-      // Filter: Not mine, and I haven't offered yet
-      const isMine = myOpId ? data.absentOperatorId === myOpId : false;
-      const alreadyOffered = myOpId ? data.offers?.some((o) => o.operatorId === myOpId) : false;
+        if (!isMine && !alreadyOffered) {
+          const item = { ...data };
+          item.id = docSnap.id;
+          loaded.push(item);
+        }
+      });
+      requests.value = loaded;
+    }
 
-      if (!isMine && !alreadyOffered) {
-        const item = { ...data };
-        item.id = docSnap.id;
-        loaded.push(item);
-      }
-    });
+    // 2. Fetch History (My offers)
+    // We try to use the new field efficient query.
+    if (activeTab.value === 'history') {
+      // Primary query: explicit offeringOperatorIds (new requests)
+      // For existing history, we might miss them if we didn't migrate.
+      // Assuming 'offeringOperatorIds' is populated from now on.
+      const qHistory = query(
+        collection(db, 'shiftRequests'),
+        where('offeringOperatorIds', 'array-contains', myOpId),
+        orderBy('createdAt', 'desc'),
+      );
+      const histSnap = await getDocs(qHistory);
+      const loadedHist: ShiftRequest[] = [];
+      histSnap.forEach((d) => loadedHist.push({ id: d.id, ...d.data() } as ShiftRequest));
 
-    requests.value = loaded;
+      historyRequests.value = loadedHist;
+    }
   } catch (e) {
-    console.error('Error fetching active requests', e);
+    console.error('Error fetching requests', e);
   } finally {
     loading.value = false;
   }
@@ -333,6 +426,7 @@ async function submitOffer() {
 
     await updateDoc(reqRef, {
       offers: arrayUnion(offer),
+      offeringOperatorIds: arrayUnion(authStore.currentOperator.id), // Add to lookup array
     });
 
     $q.notify({
@@ -387,5 +481,25 @@ function getShiftColor(code: ShiftCode): string {
     default:
       return 'grey';
   }
+}
+
+function getStatusColor(req: ShiftRequest) {
+  if (req.status === 'CLOSED') return 'positive';
+  if (req.status === 'EXPIRED') return 'negative';
+  return 'warning';
+}
+
+function getStatusLabel(req: ShiftRequest) {
+  if (req.status === 'CLOSED') {
+    // Basic status for now. Detailed status is shown in My Applications list via iconography.
+    return 'Chiusa / Coperta';
+  }
+  return 'In Attesa';
+}
+
+function getMyOfferLabel(req: ShiftRequest) {
+  const myOpId = authStore.currentOperator?.id;
+  const myOffer = req.offers?.find((o) => o.operatorId === myOpId);
+  return myOffer?.scenarioLabel || '';
 }
 </script>

@@ -157,15 +157,49 @@
       </q-card-actions>
     </q-card>
 
-    <!-- List of previous requests -->
+    <!-- Archive Widget (Battery) -->
+    <div
+      class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
+      v-if="archivedRequests.length > 0"
+    >
+      <div class="col-grow">
+        <div class="row items-center justify-between q-mb-xs">
+          <div class="text-caption text-grey-8 text-weight-bold">
+            <q-icon name="inventory_2" class="q-mr-xs" />
+            Archivio (> 3 mesi)
+          </div>
+          <div class="text-caption text-grey-6">{{ archivedRequests.length }} elementi</div>
+        </div>
+        <q-linear-progress
+          :value="archiveStorageLevel"
+          :color="storageColor"
+          size="8px"
+          rounded
+          track-color="grey-2"
+        />
+      </div>
+      <div>
+        <q-btn
+          flat
+          dense
+          color="negative"
+          icon="delete_forever"
+          label="Svuota"
+          @click="emptyArchive"
+          size="sm"
+        />
+      </div>
+    </div>
+
+    <!-- List of visible requests -->
     <div class="text-h6 q-my-md">Storico Richiesta</div>
-    <div v-if="requests.length === 0" class="text-grey text-center q-py-lg">
-      Nessuna richiesta effettuata.
+    <div v-if="visibleRequests.length === 0" class="text-grey text-center q-py-lg">
+      Nessuna richiesta visibile.
     </div>
 
     <q-list separator bordered class="bg-white rounded-borders" v-else>
       <q-expansion-item
-        v-for="req in requests"
+        v-for="req in visibleRequests"
         :key="req.id"
         group="requests"
         header-class="q-pa-sm"
@@ -182,9 +216,27 @@
             <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm">
-              {{ req.status }}
-            </q-chip>
+            <div class="row items-center">
+              <q-chip
+                :color="getStatusColor(req.status)"
+                text-color="white"
+                size="sm"
+                class="q-mr-sm"
+              >
+                {{ req.status }}
+              </q-chip>
+              <q-btn
+                flat
+                round
+                dense
+                icon="delete"
+                color="grey-5"
+                size="sm"
+                @click.stop="archiveRequest(req)"
+              >
+                <q-tooltip>Sposta nel cestino</q-tooltip>
+              </q-btn>
+            </div>
           </q-item-section>
         </template>
 
@@ -200,13 +252,21 @@
               class="q-my-sm"
             />
 
+            <!-- Closed / Approved Details -->
             <div v-if="req.status === 'CLOSED'" class="text-positive">
-              <div class="row items-center">
+              <div class="row items-center q-mb-xs">
                 <q-icon name="check_circle" class="q-mr-xs" />
                 <span class="text-weight-bold">Approvata</span>
                 <span v-if="req.approvalTimestamp" class="q-ml-xs text-caption">
                   il {{ formatFullDate(req.approvalTimestamp) }}
                 </span>
+              </div>
+              <div
+                class="bg-green-1 q-pa-sm rounded-borders text-caption text-black"
+                v-if="getResolutionDetails(req)"
+              >
+                <div><strong>Coperta da:</strong> {{ getResolutionDetails(req)?.who }}</div>
+                <div><strong>Scenario:</strong> {{ getResolutionDetails(req)?.scenario }}</div>
               </div>
             </div>
 
@@ -240,7 +300,18 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
 import type { Unsubscribe } from 'firebase/firestore';
-import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  updateDoc,
+  doc,
+  arrayUnion,
+  writeBatch,
+} from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -281,6 +352,37 @@ const requests = ref<ShiftRequest[]>([]);
 const selectedOperatorId = ref(authStore.isAdmin ? '' : authStore.currentOperator?.id || '');
 const operators = ref<Record<string, Operator>>({});
 const filterText = ref('');
+
+// Archive Logic - Phase 18
+const threeMonthsAgo = new Date();
+threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+const cutoffDate = qDate.formatDate(threeMonthsAgo, 'YYYY-MM-DD');
+
+const visibleRequests = computed(() => {
+  if (!authStore.currentUser) return [];
+  const uid = authStore.currentUser.uid;
+  return requests.value.filter((req) => {
+    const isHidden = req.hiddenBy?.includes(uid);
+    const isArchived = req.date < cutoffDate;
+    return !isHidden && !isArchived;
+  });
+});
+
+const archivedRequests = computed(() => {
+  return requests.value.filter((req) => req.date < cutoffDate);
+});
+
+const archiveStorageLevel = computed(() => {
+  const count = archivedRequests.value.length;
+  // Let's say 100 archived requests is "full" for visual bar
+  return Math.min(count / 100, 1);
+});
+
+const storageColor = computed(() => {
+  if (archiveStorageLevel.value > 0.8) return 'negative';
+  if (archiveStorageLevel.value > 0.5) return 'warning';
+  return 'positive';
+});
 
 const filteredOperatorOptions = computed(() => {
   const list = Object.values(operators.value).map((op) => ({
@@ -454,6 +556,87 @@ async function submitRequest() {
   } finally {
     submitting.value = false;
   }
+}
+
+// Phase 18: Archive Actions
+async function archiveRequest(req: ShiftRequest) {
+  if (!authStore.currentUser) return;
+  try {
+    const ref = doc(db, 'shiftRequests', req.id);
+    await updateDoc(ref, {
+      hiddenBy: arrayUnion(authStore.currentUser.uid),
+    });
+    $q.notify({ message: 'Richiesta spostata nel cestino', color: 'info', icon: 'delete' });
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
+  }
+}
+
+function emptyArchive() {
+  if (archivedRequests.value.length === 0) return;
+
+  $q.dialog({
+    title: 'Svuota Archivio',
+    message: `Vuoi eliminare definitivamente ${archivedRequests.value.length} richieste vecchie di oltre 3 mesi?`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    performEmptyArchive();
+  });
+}
+
+async function performEmptyArchive() {
+  loading.value = true;
+  try {
+    const batch = writeBatch(db);
+    archivedRequests.value.forEach((req) => {
+      const ref = doc(db, 'shiftRequests', req.id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+    $q.notify({
+      type: 'positive',
+      message: 'Archivio svuotato con successo',
+      icon: 'delete_forever',
+    });
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function getResolutionDetails(req: ShiftRequest) {
+  if (req.status !== 'CLOSED') return null;
+
+  // Find accepted offer based on timestamp or adminId logic
+  // Since we don't store acceptedOfferId explicitly, we check timestamp match
+  // or simply the firstoffer if automated.
+  // Ideally, 'offers' contains one accepted offer if simple closed.
+  // Better logic: if we have 'approvalTimestamp', look for offer with that timestamp.
+  if (req.offers && req.offers.length > 0) {
+    // Exact timestamp match is safest if we store it.
+    // If Admin manually closed without offer, this might be empty.
+    const accepted = req.approvalTimestamp
+      ? req.offers.find((o) => Math.abs((o.timestamp || 0) - req.approvalTimestamp!) < 5000)
+      : null; // Allow 5s drift
+
+    if (accepted) {
+      return {
+        who: accepted.operatorName || 'Collega',
+        scenario: accepted.scenarioLabel || 'Generico',
+      };
+    }
+  }
+
+  // Fallback: Manually closed by Admin
+  return {
+    who: 'Admin / Manuale',
+    scenario: 'Gestione manuale',
+  };
 }
 
 function formatDate(dt: string) {

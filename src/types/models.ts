@@ -90,6 +90,11 @@ export interface ShiftRequest {
     scenarioLabel?: string;
     timestamp?: number;
   }>; // Offerte ricevute dagli operatori
+
+  // Phase 18: History & Archiving
+  offeringOperatorIds?: string[]; // IDs of operators who offered (for easy querying)
+  hiddenBy?: string[]; // UIDs of users who deleted this from their view
+  isArchived?: boolean; // True if auto-archived (> 3 months)
 }
 
 export interface ShiftOffer {
