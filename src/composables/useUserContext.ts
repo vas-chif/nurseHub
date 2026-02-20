@@ -65,8 +65,12 @@ export function useUserContext() {
       return false;
     }
 
-    // Use business logic to determine compatibility
-    const compatibleScenarios = getCompatibleScenarios(request.originalShift, userShift);
+    const compatibleScenarios = getCompatibleScenarios(
+      request.originalShift,
+      userShift,
+      request.date,
+      authStore.currentOperator.schedule,
+    );
 
     return compatibleScenarios.length > 0;
   }

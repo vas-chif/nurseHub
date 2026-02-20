@@ -214,16 +214,14 @@
               <q-badge v-else color="primary" class="q-ml-sm">{{ req.originalShift }}</q-badge>
             </q-item-label>
             <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
+            <q-item-label caption class="text-grey-7"
+              >Creata il: {{ formatFullDate(req.createdAt) }}</q-item-label
+            >
           </q-item-section>
           <q-item-section side>
             <div class="row items-center">
-              <q-chip
-                :color="getStatusColor(req.status)"
-                text-color="white"
-                size="sm"
-                class="q-mr-sm"
-              >
-                {{ req.status }}
+              <q-chip :color="getStatusColor(req)" text-color="white" size="sm" class="q-mr-sm">
+                {{ getStatusLabel(req) }}
               </q-chip>
               <q-btn
                 flat
@@ -253,7 +251,7 @@
             />
 
             <!-- Closed / Approved Details -->
-            <div v-if="req.status === 'CLOSED'" class="text-positive">
+            <div v-if="req.status === 'CLOSED' && !req.rejectionReason" class="text-positive">
               <div class="row items-center q-mb-xs">
                 <q-icon name="check_circle" class="q-mr-xs" />
                 <span class="text-weight-bold">Approvata</span>
@@ -270,10 +268,19 @@
               </div>
             </div>
 
-            <div v-if="req.status === 'EXPIRED'" class="text-negative">
+            <div
+              v-if="req.status === 'EXPIRED' || (req.status === 'CLOSED' && req.rejectionReason)"
+              class="text-negative"
+            >
               <div class="row items-center">
                 <q-icon name="cancel" class="q-mr-xs" />
-                <span class="text-weight-bold">Mancata Approvazione / Scaduta</span>
+                <span class="text-weight-bold">
+                  {{
+                    req.status === 'CLOSED'
+                      ? 'Rifiutata / Cancellata'
+                      : 'Mancata Approvazione / Scaduta'
+                  }}
+                </span>
                 <span v-if="req.rejectionTimestamp" class="q-ml-xs text-caption">
                   il {{ formatFullDate(req.rejectionTimestamp) }}
                 </span>
@@ -307,10 +314,9 @@ import {
   where,
   onSnapshot,
   orderBy,
-  updateDoc,
   doc,
-  arrayUnion,
   writeBatch,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
@@ -558,19 +564,33 @@ async function submitRequest() {
   }
 }
 
-// Phase 18: Archive Actions
-async function archiveRequest(req: ShiftRequest) {
+// Phase 18/20: Delete Actions
+function archiveRequest(req: ShiftRequest) {
   if (!authStore.currentUser) return;
-  try {
-    const ref = doc(db, 'shiftRequests', req.id);
-    await updateDoc(ref, {
-      hiddenBy: arrayUnion(authStore.currentUser.uid),
-    });
-    $q.notify({ message: 'Richiesta spostata nel cestino', color: 'info', icon: 'delete' });
-  } catch (e) {
-    console.error(e);
-    $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
-  }
+
+  $q.dialog({
+    title: 'Elimina Definitivamente',
+    message:
+      "Sei sicuro di voler eliminare definitivamente questa richiesta? L'azione non può essere annullata.",
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    const performArchive = async () => {
+      try {
+        const ref = doc(db, 'shiftRequests', req.id);
+        await deleteDoc(ref);
+        $q.notify({
+          message: 'Richiesta eliminata definitivamente',
+          color: 'info',
+          icon: 'delete_forever',
+        });
+      } catch (e) {
+        console.error(e);
+        $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
+      }
+    };
+    void performArchive();
+  });
 }
 
 function emptyArchive() {
@@ -612,17 +632,16 @@ async function performEmptyArchive() {
 function getResolutionDetails(req: ShiftRequest) {
   if (req.status !== 'CLOSED') return null;
 
-  // Find accepted offer based on timestamp or adminId logic
-  // Since we don't store acceptedOfferId explicitly, we check timestamp match
-  // or simply the firstoffer if automated.
-  // Ideally, 'offers' contains one accepted offer if simple closed.
-  // Better logic: if we have 'approvalTimestamp', look for offer with that timestamp.
   if (req.offers && req.offers.length > 0) {
-    // Exact timestamp match is safest if we store it.
-    // If Admin manually closed without offer, this might be empty.
-    const accepted = req.approvalTimestamp
-      ? req.offers.find((o) => Math.abs((o.timestamp || 0) - req.approvalTimestamp!) < 5000)
-      : null; // Allow 5s drift
+    let accepted = null;
+    if (req.acceptedOfferId) {
+      accepted = req.offers.find((o) => o.id === req.acceptedOfferId);
+    } else {
+      // Fallback for older closed requests before acceptedOfferId was introduced
+      // Since we don't know exactly which one, we assume the first/last offer in the array
+      // or simply fallback to the first one available
+      accepted = req.offers[0];
+    }
 
     if (accepted) {
       return {
@@ -654,8 +673,9 @@ function formatFullDate(dt: number | undefined) {
   return qDate.formatDate(dt, 'DD/MM/YYYY HH:mm');
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
+function getStatusColor(req: ShiftRequest) {
+  if (req.status === 'CLOSED' && req.rejectionReason) return 'negative';
+  switch (req.status) {
     case 'OPEN':
       return 'primary';
     case 'CLOSED':
@@ -667,5 +687,11 @@ function getStatusColor(status: string) {
     default:
       return 'grey';
   }
+}
+
+function getStatusLabel(req: ShiftRequest) {
+  if (req.status === 'CLOSED' && req.rejectionReason) return 'RIFIUTATA';
+  if (req.status === 'EXPIRED') return 'SCADUTA';
+  return req.status; // OPEN, CLOSED, PARTIAL
 }
 </script>

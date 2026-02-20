@@ -214,7 +214,7 @@ async function handleConfigChange(configId: string) {
         class="text-grey"
         align="justify"
       >
-        <q-route-tab to="/" icon="dashboard" label="Home" />
+        <q-route-tab v-if="!authStore.isAdmin" to="/" icon="dashboard" label="Home" />
         <q-route-tab to="/calendar" icon="calendar_month" label="Turni" />
         <q-route-tab v-if="!authStore.isAdmin" to="/requests" icon="event_note" label="Richieste" />
 

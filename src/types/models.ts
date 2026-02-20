@@ -89,10 +89,12 @@ export interface ShiftRequest {
     operatorName?: string;
     scenarioLabel?: string;
     timestamp?: number;
+    isRejected?: boolean;
   }>; // Offerte ricevute dagli operatori
 
   // Phase 18: History & Archiving
   offeringOperatorIds?: string[]; // IDs of operators who offered (for easy querying)
+  acceptedOfferId?: string; // ID of the accepted offer
   hiddenBy?: string[]; // UIDs of users who deleted this from their view
   isArchived?: boolean; // True if auto-archived (> 3 months)
 }
@@ -183,6 +185,8 @@ export interface ScenarioPosition {
   roleLabel: string;
   originalShift: ShiftCode;
   newShift: ShiftCode;
+  isNextDay?: boolean;
+  requiredNextShift?: ShiftCode;
   candidates: Suggestion[];
 }
 

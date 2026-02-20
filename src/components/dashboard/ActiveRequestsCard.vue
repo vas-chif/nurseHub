@@ -145,24 +145,29 @@
             <q-item v-for="req in myHistoryRequests" :key="req.id" class="q-py-md">
               <q-item-section avatar>
                 <q-avatar
-                  :icon="req.status === 'CLOSED' ? 'check_circle' : 'hourglass_empty'"
-                  :color="req.status === 'CLOSED' ? 'positive' : 'grey-4'"
-                  :text-color="req.status === 'CLOSED' ? 'white' : 'grey-7'"
+                  :icon="getMyOfferIcon(req)"
+                  :color="getMyOfferAvatarColor(req)"
+                  :text-color="getMyOfferAvatarTextColor(req)"
                 />
               </q-item-section>
               <q-item-section>
                 <q-item-label class="text-weight-bold">
-                  {{ formatDate(req.date) }} - Turno {{ req.originalShift }}
+                  Assenza: {{ formatDate(req.date) }} - Turno {{ req.originalShift }}
                 </q-item-label>
                 <q-item-label caption>
-                  Stato:
-                  <q-badge :color="getStatusColor(req)" class="q-ml-xs">
-                    {{ getStatusLabel(req) }}
-                  </q-badge>
+                  Creata il: {{ formatFullDate(req.createdAt) }}
+                </q-item-label>
+                <q-item-label caption v-if="getMyOfferTimestamp(req)">
+                  Candidatura del: {{ formatFullDate(getMyOfferTimestamp(req)) }}
                 </q-item-label>
                 <q-item-label caption v-if="getMyOfferLabel(req)">
-                  Offerta: {{ getMyOfferLabel(req) }}
+                  Proposta: <span class="text-italic">{{ getMyOfferLabel(req) }}</span>
                 </q-item-label>
+                <div class="q-mt-xs">
+                  <q-badge :color="getMyOfferStatusColor(req)">
+                    {{ getMyOfferStatusLabel(req) }}
+                  </q-badge>
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -404,7 +409,12 @@ function openOfferDialog(req: ShiftRequest) {
 
   if (authStore.currentOperator) {
     const opShift = authStore.currentOperator.schedule?.[req.date] || 'R';
-    compatibleScenarios.value = getCompatibleScenarios(req.originalShift, opShift);
+    compatibleScenarios.value = getCompatibleScenarios(
+      req.originalShift,
+      opShift,
+      req.date,
+      authStore.currentOperator.schedule,
+    );
   }
   loadingCompatibility.value = false;
 }
@@ -483,23 +493,84 @@ function getShiftColor(code: ShiftCode): string {
   }
 }
 
-function getStatusColor(req: ShiftRequest) {
-  if (req.status === 'CLOSED') return 'positive';
-  if (req.status === 'EXPIRED') return 'negative';
-  return 'warning';
+function formatFullDate(ts: number | string | undefined) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-function getStatusLabel(req: ShiftRequest) {
-  if (req.status === 'CLOSED') {
-    // Basic status for now. Detailed status is shown in My Applications list via iconography.
-    return 'Chiusa / Coperta';
-  }
-  return 'In Attesa';
+function getMyOffer(req: ShiftRequest) {
+  const myOpId = authStore.currentOperator?.id;
+  if (!myOpId || !req.offers) return null;
+  return req.offers.find((o) => o.operatorId === myOpId) || null;
+}
+
+function getMyOfferTimestamp(req: ShiftRequest) {
+  const offer = getMyOffer(req);
+  return offer?.timestamp;
 }
 
 function getMyOfferLabel(req: ShiftRequest) {
+  return getMyOffer(req)?.scenarioLabel || '';
+}
+
+function getMyOfferStatusLabel(req: ShiftRequest) {
   const myOpId = authStore.currentOperator?.id;
-  const myOffer = req.offers?.find((o) => o.operatorId === myOpId);
-  return myOffer?.scenarioLabel || '';
+  if (!myOpId) return 'Sconosciuto';
+
+  if (req.status === 'CLOSED') {
+    const myOffer = getMyOffer(req);
+    // Use the acceptedOfferId explicitly if available
+    if (myOffer && req.acceptedOfferId === myOffer.id) {
+      return 'Approvata - Assegnato a te';
+    } else {
+      return 'Rifiutata / Coperta da altri';
+    }
+  }
+  if (req.status === 'EXPIRED') return 'Scaduta / Annullata';
+
+  const myOffer = getMyOffer(req);
+  if (myOffer?.isRejected) return "Rifiutata dall'Admin";
+
+  return 'In Valutazione';
+}
+
+function getMyOfferStatusColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'positive';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'negative';
+  if (label.includes('Valutazione')) return 'warning';
+  return 'primary';
+}
+
+function getMyOfferIcon(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'check_circle';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'cancel';
+  return 'hourglass_empty';
+}
+
+function getMyOfferAvatarColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'positive';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'red-1';
+  return 'grey-2';
+}
+
+function getMyOfferAvatarTextColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'white';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'negative';
+  return 'grey-7';
 }
 </script>
