@@ -40,3 +40,4 @@ pglite-debug.log
 # Temp and debug folders
 tempfolder/
 tasks/
+.vercel

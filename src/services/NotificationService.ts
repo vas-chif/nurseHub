@@ -9,7 +9,7 @@ import { db } from '../boot/firebase';
 import type { Notification, NotificationType } from '../types/models';
 
 /**
- * Create a new notification for a user
+ * Create a new notification for a user and trigger a Web Push via Vercel
  */
 export async function notifyUser(
   userId: string,
@@ -17,6 +17,7 @@ export async function notifyUser(
   message: string,
   requestId?: string,
 ): Promise<void> {
+  // 1. Salva la notifica in-app su Firestore (esiste già)
   const notifRef = doc(collection(db, 'notifications'));
   await setDoc(notifRef, {
     id: notifRef.id,
@@ -27,6 +28,43 @@ export async function notifyUser(
     read: false,
     createdAt: Date.now(),
   } as Notification);
+
+  // 2. Invia la Notifica Push vera e propria tramite Vercel
+  try {
+    // Recupera i token FCM dell'utente bersaglio
+    const userDocRef = doc(db, 'users', userId);
+    const { getDoc } = await import('firebase/firestore');
+    const userSnap = await getDoc(userDocRef);
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      const fcmTokens = userData?.fcmTokens || [];
+
+      if (fcmTokens.length > 0) {
+        // Chiama la nostra API gratuita su Vercel
+        const vercelRes = await fetch('https://nursehub-psi.vercel.app/api/send-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Inserisci qui la Password Segreta che hai generato su Vercel!
+            Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET}`,
+          },
+          body: JSON.stringify({
+            title: 'NurseHub Update',
+            body: message,
+            url: '/', // Puoi personalizzare l'URL in base al tipo di notifica
+            fcmTokens: fcmTokens,
+          }),
+        });
+
+        if (!vercelRes.ok) {
+          console.error('Failed to trigger Vercel Push:', await vercelRes.text());
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error sending Push Notification via Vercel:', error);
+  }
 }
 
 /**
