@@ -22,11 +22,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/icons/icon-192x192.png', // Make sure this path exists in your public folder
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // NOTA: Non chiamiamo self.registration.showNotification qui.
+  // Il server Vercel include già l'oggetto "notification" nel payload FCM, quindi Android/Chrome
+  // mostrano la notifica automaticamente. Chiamarlo anche qui crea una notifica doppia!
 });

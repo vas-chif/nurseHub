@@ -100,32 +100,13 @@ if (process.env.MODE !== 'ssr') {
  * --- Push Notifications ---
  */
 
-interface PushNotificationPayload {
-  title: string;
-  body?: string;
-  icon?: string;
-  data?: {
-    url?: string;
-  };
-  tag?: string;
-}
-
-sw.addEventListener('push', (event: PushEvent) => {
-  if (event.data) {
-    const data = event.data.json<PushNotificationPayload>();
-    const options = {
-      body: data.body,
-      icon: '/img/icons/android-chrome-192x192.png',
-      badge: '/img/icons/android-chrome-192x192.png',
-      data: {
-        url: data.data?.url || '/',
-      },
-      tag: data.tag || 'nursehub-notification',
-      renotify: true,
-    };
-
-    event.waitUntil(sw.registration.showNotification(data.title, options));
-  }
+sw.addEventListener('push', () => {
+  // NOTA: Non mostriamo la notifica manualmente qui.
+  // Il server Vercel include già l'oggetto "notification" nel payload FCM, quindi Android/Chrome
+  // la mostrano in modo nativo e automatico. Mostrandola anche qui creeremmo un doppione.
+  console.log(
+    '[custom-service-worker] Push ricevuto. Lascio che il browser mostri la notifica nativa.',
+  );
 });
 
 sw.addEventListener('notificationclick', (event: NotificationEvent) => {
