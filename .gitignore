@@ -39,7 +39,7 @@ pglite-debug.log
 
 # Temp and debug folders
 tempfolder/
-tasks/
+# tasks/
 .vercel
 
 #test files
