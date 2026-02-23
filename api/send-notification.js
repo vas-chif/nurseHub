@@ -1,7 +1,22 @@
 import { GoogleAuth } from 'google-auth-library';
 
 export default async function handler(req, res) {
-  // 1. Accettiamo solo richieste POST (perché stiamo inviando dati privati)
+  // Configurazione CORS (Permette chiamate da Firebase Hosting/Browser)
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+  );
+
+  // Risposta rapida per le richieste di Preflight (OPTIONS)
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // 1. Accettiamo solo richieste POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo non consentito' });
   }
