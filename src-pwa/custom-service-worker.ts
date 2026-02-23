@@ -99,14 +99,42 @@ if (process.env.MODE !== 'ssr') {
 /*
  * --- Push Notifications ---
  */
+interface FCMPayload {
+  notification?: {
+    title: string;
+    body: string;
+  };
+  data?: {
+    url?: string;
+  };
+  fcmOptions?: {
+    link?: string;
+  };
+}
 
-sw.addEventListener('push', () => {
-  // NOTA: Non mostriamo la notifica manualmente qui.
-  // Il server Vercel include già l'oggetto "notification" nel payload FCM, quindi Android/Chrome
-  // la mostrano in modo nativo e automatico. Mostrandola anche qui creeremmo un doppione.
-  console.log(
-    '[custom-service-worker] Push ricevuto. Lascio che il browser mostri la notifica nativa.',
-  );
+sw.addEventListener('push', (event: PushEvent) => {
+  if (event.data) {
+    try {
+      const payload = event.data.json<FCMPayload>();
+
+      const title = payload.notification?.title || 'NurseHub Update';
+      const body = payload.notification?.body || 'Hai una nuova notifica da NurseHub';
+
+      const options = {
+        body: body,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-192x192.png',
+        data: {
+          url: payload.fcmOptions?.link || payload.data?.url || '/',
+        },
+        tag: 'nursehub-' + Date.now(), // Unique tag so they don't overwrite each other immediately if there are multiples
+      };
+
+      event.waitUntil(sw.registration.showNotification(title, options));
+    } catch (e) {
+      console.error('[custom-service-worker] Error parsing push payload', e);
+    }
+  }
 });
 
 sw.addEventListener('notificationclick', (event: NotificationEvent) => {
