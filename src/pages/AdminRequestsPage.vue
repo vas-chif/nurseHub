@@ -782,6 +782,29 @@ function rejectOffer(requestId: string, offerId: string) {
         });
         await updateDoc(reqRef, { offers: updatedOffers });
 
+        // NEW: Notify substitute of rejection
+        const rejectedOffer = req.offers.find((o) => o.id === offerId);
+        if (rejectedOffer && rejectedOffer.operatorId) {
+          const { collection, getDocs } = await import('firebase/firestore');
+          const usersRef = collection(db, 'users');
+          const usersSnap = await getDocs(usersRef);
+          let subUserId = null;
+          usersSnap.docs.forEach((docSnap) => {
+            if (docSnap.data().operatorId === rejectedOffer.operatorId) {
+              subUserId = docSnap.id;
+            }
+          });
+
+          if (subUserId) {
+            await notifyUser(
+              subUserId,
+              'REQUEST_REJECTED',
+              `La tua offerta di sostituzione per il ${req.date} purtroppo è stata rifiutata.`,
+              req.id,
+            );
+          }
+        }
+
         $q.notify({ type: 'info', message: 'Offerta rifiutata' });
       } catch (e) {
         console.error(e);

@@ -38,7 +38,10 @@ export async function notifyUser(
 
     if (userSnap.exists()) {
       const userData = userSnap.data();
-      const fcmTokens = userData?.fcmTokens || [];
+      const rawFcmTokens = userData?.fcmTokens || [];
+
+      // Deduplicate tokens to prevent multiple pushes to the same device
+      const fcmTokens = Array.from(new Set(rawFcmTokens));
 
       if (fcmTokens.length > 0) {
         // Chiama la nostra API gratuita su Vercel
@@ -154,6 +157,8 @@ export async function notifyEligibleOperators(
       }
     });
 
+    const notifiedUids = new Set<string>();
+
     for (const opDoc of opsSnap.docs) {
       const opData = opDoc.data();
       const opId = opDoc.id;
@@ -161,6 +166,11 @@ export async function notifyEligibleOperators(
 
       // Skip the person who just created the request (or the absent person)
       if (opId === requestObj.absentOperatorId || !opUserId) {
+        continue;
+      }
+
+      // Skip if this user was already notified for this request
+      if (notifiedUids.has(opUserId)) {
         continue;
       }
 
@@ -175,6 +185,7 @@ export async function notifyEligibleOperators(
 
       // 3. If compatible, trigger notification!
       if (compatible && compatible.length > 0) {
+        notifiedUids.add(opUserId); // Mark as notified
         const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile, offriti ora!`;
         // Chiamata fire-and-forget
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, requestObj.id).catch((e) =>
@@ -209,12 +220,16 @@ export async function notifyAdmins(
     );
 
     const adminsSnap = await getDocs(q);
+    const notifiedUids = new Set<string>();
 
     for (const adminDoc of adminsSnap.docs) {
       const adminData = adminDoc.data();
-      // Chiamata fire-and-forget
-      if (adminData.uid) {
-        notifyUser(adminData.uid, 'NEW_REQUEST', messageStr, requestId).catch((e) =>
+      const adminUid = adminData.uid || adminDoc.id; // Fallback to doc.id if uid is missing
+
+      if (adminUid && !notifiedUids.has(adminUid)) {
+        notifiedUids.add(adminUid);
+        // Chiamata fire-and-forget
+        notifyUser(adminUid, 'NEW_REQUEST', messageStr, requestId).catch((e) =>
           console.error('Silent fail on notifyAdmins', e),
         );
       }

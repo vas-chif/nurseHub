@@ -41,3 +41,6 @@ pglite-debug.log
 tempfolder/
 tasks/
 .vercel
+
+#test files
+test-duplicates.js
