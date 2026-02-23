@@ -703,6 +703,29 @@ async function processApproval() {
       req.id,
     );
 
+    // 4.5 NEW: Notification to Substitute (if they exist)
+    if (offer && offer.operatorId) {
+      // Find the Firebase UID for the substitute operator
+      const { collection, getDocs } = await import('firebase/firestore');
+      const usersRef = collection(db, 'users');
+      const usersSnap = await getDocs(usersRef);
+      let subUserId = null;
+      usersSnap.docs.forEach((docSnap) => {
+        if (docSnap.data().operatorId === offer.operatorId) {
+          subUserId = docSnap.id;
+        }
+      });
+
+      if (subUserId) {
+        await notifyUser(
+          subUserId,
+          'OFFER_ACCEPTED',
+          `La tua offerta di sostituzione per il ${req.date} è stata accettata!`,
+          req.id,
+        );
+      }
+    }
+
     // 5. Sync back to Sheets (Only if syncMode is 'auto')
     if (syncMode.value === 'auto') {
       if (req.absentOperatorId) {

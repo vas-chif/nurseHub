@@ -143,10 +143,21 @@ export async function notifyEligibleOperators(
     const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
     const opsSnap = await getDocs(opsRef);
 
+    // Fetch users to map operatorId -> Firebase UID
+    const usersRef = collection(db, 'users');
+    const usersSnap = await getDocs(usersRef);
+    const operatorToUserIdMap = new Map<string, string>();
+    usersSnap.docs.forEach((doc) => {
+      const uData = doc.data();
+      if (uData.operatorId) {
+        operatorToUserIdMap.set(uData.operatorId, doc.id); // doc.id is the UID
+      }
+    });
+
     for (const opDoc of opsSnap.docs) {
       const opData = opDoc.data();
       const opId = opDoc.id;
-      const opUserId = opData.userId; // Il Firebase UID dell'operatore (fondamentale per le push)
+      const opUserId = operatorToUserIdMap.get(opId); // Recover the Firebase UID
 
       // Skip the person who just created the request (or the absent person)
       if (opId === requestObj.absentOperatorId || !opUserId) {
