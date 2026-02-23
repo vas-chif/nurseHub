@@ -170,7 +170,8 @@ export type NotificationType =
   | 'REQUEST_REJECTED'
   | 'NEW_REQUEST'
   | 'OFFER_ACCEPTED'
-  | 'OFFER_REJECTED';
+  | 'OFFER_REJECTED'
+  | 'NEW_OPPORTUNITY';
 
 export interface Suggestion {
   operatorId: string;

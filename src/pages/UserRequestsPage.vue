@@ -519,6 +519,7 @@ async function submitRequest() {
     }
 
     const batch = [];
+    const batchData: Omit<ShiftRequest, 'id'>[] = [];
     for (const date of datesToProcess) {
       const newReq: Omit<ShiftRequest, 'id'> = {
         date: date,
@@ -538,10 +539,24 @@ async function submitRequest() {
           ? { endTime: formData.value.endTime }
           : {}),
       };
+      batchData.push(newReq);
       batch.push(addDoc(collection(db, 'shiftRequests'), newReq));
     }
 
-    await Promise.all(batch);
+    const savedRequests = await Promise.all(batch);
+
+    // Phase 19: trigger push notifications to eligible users for each new request
+    const { notifyEligibleOperators } = await import('../services/NotificationService');
+    const activeConfigId = configStore.activeConfigId;
+    if (activeConfigId) {
+      for (let i = 0; i < savedRequests.length; i++) {
+        const docRef = savedRequests[i];
+        if (docRef?.id) {
+          const simulatedRequest = { ...batchData[i], id: docRef.id } as ShiftRequest;
+          notifyEligibleOperators(simulatedRequest, activeConfigId).catch(console.error);
+        }
+      }
+    }
 
     $q.notify({
       type: 'positive',

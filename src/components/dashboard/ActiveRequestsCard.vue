@@ -368,9 +368,20 @@ async function fetchRequests() {
           false;
 
         if (!isMine && !alreadyOffered) {
-          const item = { ...data };
-          item.id = docSnap.id;
-          loaded.push(item);
+          // New Filter: Check if the user is actually compatible for this shift
+          const opShift = authStore.currentOperator?.schedule?.[data.date] || 'R';
+          const compatible = getCompatibleScenarios(
+            data.originalShift,
+            opShift,
+            data.date,
+            authStore.currentOperator?.schedule,
+          );
+
+          if (compatible && compatible.length > 0) {
+            const item = { ...data };
+            item.id = docSnap.id;
+            loaded.push(item);
+          }
         }
       });
       requests.value = loaded;
@@ -438,6 +449,15 @@ async function submitOffer() {
       offers: arrayUnion(offer),
       offeringOperatorIds: arrayUnion(authStore.currentOperator.id), // Add to lookup array
     });
+
+    // Phase 19: trigger push notifications to Admins for the new volunteer offer
+    const { notifyAdmins } = await import('../../services/NotificationService');
+    const configStore = await import('../../stores/configStore').then((m) => m.useConfigStore());
+    const activeConfigId = configStore.activeConfigId;
+    if (activeConfigId) {
+      const msg = `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date} (${selectedScenario.value.scenarioLabel})`;
+      notifyAdmins(msg, offerDialog.value.req.id, activeConfigId).catch(console.error);
+    }
 
     $q.notify({
       type: 'positive',

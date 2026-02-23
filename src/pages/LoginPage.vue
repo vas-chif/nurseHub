@@ -88,6 +88,8 @@ async function handleLogin() {
     // If login successful (email verified), check admin/operator verification
     if (!authStore.isVerified) {
       void router.push('/pending-verification');
+    } else if (authStore.isAdmin) {
+      void router.push('/admin/requests');
     } else {
       void router.push('/');
     }

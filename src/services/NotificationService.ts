@@ -6,7 +6,7 @@
 
 import { collection, doc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
-import type { Notification, NotificationType } from '../types/models';
+import type { Notification, NotificationType, ShiftRequest } from '../types/models';
 
 /**
  * Create a new notification for a user and trigger a Web Push via Vercel
@@ -122,4 +122,93 @@ export async function markAllAsRead(userId: string): Promise<void> {
 export async function getUnreadCount(userId: string): Promise<number> {
   const notifications = await getUnreadNotifications(userId);
   return notifications.length;
+}
+
+/**
+ * NEW: Notify all eligible operators when a new request is created
+ */
+export async function notifyEligibleOperators(
+  requestObj: ShiftRequest,
+  activeConfigId: string,
+): Promise<void> {
+  try {
+    if (!activeConfigId) return;
+
+    // Import here to avoid circular logic or initialization issues, though standard imports work too.
+    const { collection, getDocs } = await import('firebase/firestore');
+    const { useShiftLogic } = await import('../composables/useShiftLogic');
+    const { getCompatibleScenarios } = useShiftLogic();
+
+    // 1. Fetch all operators in this configuration
+    const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
+    const opsSnap = await getDocs(opsRef);
+
+    for (const opDoc of opsSnap.docs) {
+      const opData = opDoc.data();
+      const opId = opDoc.id;
+      const opUserId = opData.userId; // Il Firebase UID dell'operatore (fondamentale per le push)
+
+      // Skip the person who just created the request (or the absent person)
+      if (opId === requestObj.absentOperatorId || !opUserId) {
+        continue;
+      }
+
+      // 2. Check Compatibility
+      const opShift = opData.schedule?.[requestObj.date] || 'R';
+      const compatible = getCompatibleScenarios(
+        requestObj.originalShift,
+        opShift,
+        requestObj.date,
+        opData.schedule,
+      );
+
+      // 3. If compatible, trigger notification!
+      if (compatible && compatible.length > 0) {
+        const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile, offriti ora!`;
+        // Chiamata fire-and-forget
+        notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, requestObj.id).catch((e) =>
+          console.error('Silent fail on notifyUser', e),
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error in notifyEligibleOperators:', err);
+  }
+}
+
+/**
+ * NEW: Notify all Admins when an event occurs (e.g. new offer submitted)
+ */
+export async function notifyAdmins(
+  messageStr: string,
+  requestId: string,
+  activeConfigId: string,
+): Promise<void> {
+  try {
+    if (!activeConfigId) return;
+
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+
+    // Fetch all users who are admins and belong to this configuration
+    const usersRef = collection(db, 'users');
+    const q = query(
+      usersRef,
+      where('role', '==', 'admin'),
+      where('configId', '==', activeConfigId),
+    );
+
+    const adminsSnap = await getDocs(q);
+
+    for (const adminDoc of adminsSnap.docs) {
+      const adminData = adminDoc.data();
+      // Chiamata fire-and-forget
+      if (adminData.uid) {
+        notifyUser(adminData.uid, 'NEW_REQUEST', messageStr, requestId).catch((e) =>
+          console.error('Silent fail on notifyAdmins', e),
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error in notifyAdmins:', err);
+  }
 }
