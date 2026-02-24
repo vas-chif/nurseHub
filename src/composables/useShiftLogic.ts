@@ -1,44 +1,45 @@
 import { REPLACEMENT_SCENARIOS } from '../config/sheets';
-import type { ShiftCode, ComplianceResult, CompatibleScenario } from '../types/models';
+import type {
+  ShiftCode,
+  ComplianceResult,
+  CompatibleScenario,
+  ReplacementScenario,
+} from '../types/models';
 
 export function useShiftLogic() {
   /**
    * Checks if an operator can perform a new shift on a specific date.
-   * This is a simplified check. In a real app, you'd check previous/next day shifts too.
    */
   function checkCompliance(currentShift: ShiftCode, newShift: ShiftCode): ComplianceResult {
-    // 1. Basic conflict: Cannot do the same shift twice if meaningful (M->M no, R->M yes)
     if (currentShift === newShift && currentShift !== 'R') {
       return { allowed: false, reason: `Già in turno ${currentShift}` };
     }
-
-    // 2. Night shift rules (simplified)
     if (currentShift === 'N' && newShift === 'M') {
       return { allowed: false, reason: 'Smonto Notte non può fare Mattina' };
     }
-
-    // 3. Absence
     if (currentShift === 'A') {
       return { allowed: false, reason: 'Operatore Assente' };
     }
-
     return { allowed: true };
   }
 
   /**
    * Finds all possible replacement scenarios for a target shift shortage,
    * given a specific operator's current shift.
+   *
+   * @param scenarios Optional — pass Firestore-loaded scenarios to use live data.
+   *                  Falls back to hardcoded REPLACEMENT_SCENARIOS if omitted.
    */
   function getCompatibleScenarios(
     targetShift: ShiftCode,
     operatorShift: ShiftCode,
     reqDate?: string,
     operatorSchedule?: Record<string, string>,
+    scenarios?: ReplacementScenario[],
   ): CompatibleScenario[] {
     const validScenarios: CompatibleScenario[] = [];
-
-    // Filter scenarios that solve the target shift shortage
-    const scenarios = REPLACEMENT_SCENARIOS.filter((s) => s.targetShift === targetShift);
+    const sourceScenarios = scenarios ?? REPLACEMENT_SCENARIOS;
+    const filtered = sourceScenarios.filter((s) => s.targetShift === targetShift);
 
     let nextShift: ShiftCode = 'R';
     if (reqDate && operatorSchedule) {
@@ -49,16 +50,11 @@ export function useShiftLogic() {
       nextShift = (operatorSchedule[nextDateStr] as ShiftCode) || 'R';
     }
 
-    for (const scenario of scenarios) {
-      // Check each role in the scenario
+    for (const scenario of filtered) {
       scenario.roles.forEach((role, index) => {
         let isMatch = false;
 
         if (role.isNextDay) {
-          // Se la regola dice isNextDay, l'operatorShift deve matchare il turno di DOMANI
-          // NB: Se isNextDay è true ma non abbiamo il calendario (reqDate/operatorSchedule mancanti),
-          // non possiamo validarlo in modo sicuro. Lo saltiamo per default o proviamo operatorShift?
-          // Conviene saltarlo se non abbiamo dati.
           if (reqDate && operatorSchedule) {
             isMatch = nextShift === role.originalShift;
           }
@@ -74,9 +70,7 @@ export function useShiftLogic() {
 
         if (isMatch) {
           const shiftToCheck = role.isNextDay ? nextShift : operatorShift;
-          // Secondary check: is the transition compliant?
           const compliance = checkCompliance(shiftToCheck, role.newShift);
-
           if (compliance.allowed) {
             validScenarios.push({
               scenarioId: scenario.id,

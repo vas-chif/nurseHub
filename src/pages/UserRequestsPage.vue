@@ -2,7 +2,21 @@
   <q-page class="q-pa-md bg-grey-1">
     <div class="text-h5 q-mb-md text-weight-bold text-primary">Le tue Richieste</div>
 
-    <q-card flat bordered class="q-mb-md">
+    <!-- Page-level Tab Toggle: Assenza | Cambio Turno -->
+    <q-tabs
+      v-model="pageTab"
+      dense
+      class="q-mb-md"
+      active-color="primary"
+      indicator-color="primary"
+      align="left"
+    >
+      <q-tab name="absence" label="Assenza" icon="event_busy" />
+      <q-tab name="swap" label="Cambio Turno" icon="swap_horiz" />
+    </q-tabs>
+
+    <!-- =========  ASSENZA TAB  ========= -->
+    <q-card flat bordered class="q-mb-md" v-if="pageTab === 'absence'">
       <q-card-section>
         <div class="text-subtitle1">Nuova Richiesta Assenza</div>
       </q-card-section>
@@ -158,10 +172,7 @@
     </q-card>
 
     <!-- Archive Widget (Battery) -->
-    <div
-      class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
-      v-if="archivedRequests.length > 0"
-    >
+    <div v-if="pageTab === 'absence' && archivedRequests.length > 0">
       <div class="col-grow">
         <div class="row items-center justify-between q-mb-xs">
           <div class="text-caption text-grey-8 text-weight-bold">
@@ -192,114 +203,228 @@
     </div>
 
     <!-- List of visible requests -->
-    <div class="text-h6 q-my-md">Storico Richiesta</div>
-    <div v-if="visibleRequests.length === 0" class="text-grey text-center q-py-lg">
-      Nessuna richiesta visibile.
-    </div>
+    <template v-if="pageTab === 'absence'">
+      <div class="text-h6 q-my-md">Storico Richiesta</div>
+      <div v-if="visibleRequests.length === 0" class="text-grey text-center q-py-lg">
+        Nessuna richiesta visibile.
+      </div>
 
-    <q-list separator bordered class="bg-white rounded-borders" v-else>
-      <q-expansion-item
-        v-for="req in visibleRequests"
-        :key="req.id"
-        group="requests"
-        header-class="q-pa-sm"
-      >
-        <template v-slot:header>
-          <q-item-section>
-            <q-item-label class="text-weight-bold">
-              {{ formatDate(req.date) }}
-              <span v-if="req.startTime && req.endTime" class="text-weight-regular text-grey-8">
-                ({{ req.startTime }} - {{ req.endTime }})
-              </span>
-              <q-badge v-else color="primary" class="q-ml-sm">{{ req.originalShift }}</q-badge>
-            </q-item-label>
-            <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
-            <q-item-label caption class="text-grey-7"
-              >Creata il: {{ formatFullDate(req.createdAt) }}</q-item-label
-            >
-          </q-item-section>
-          <q-item-section side>
-            <div class="row items-center">
-              <q-chip :color="getStatusColor(req)" text-color="white" size="sm" class="q-mr-sm">
-                {{ getStatusLabel(req) }}
-              </q-chip>
-              <q-btn
-                flat
-                round
-                dense
-                icon="delete"
-                color="grey-5"
-                size="sm"
-                @click.stop="archiveRequest(req)"
-              >
-                <q-tooltip>Sposta nel cestino</q-tooltip>
-              </q-btn>
-            </div>
-          </q-item-section>
-        </template>
-
-        <q-card class="bg-grey-1">
-          <q-card-section class="q-py-sm">
-            <div v-if="req.requestNote" class="q-mb-sm">
-              <div class="text-caption text-grey-7">Le tue note:</div>
-              <div>{{ req.requestNote }}</div>
-            </div>
-
-            <q-separator
-              v-if="req.requestNote && (req.status === 'CLOSED' || req.rejectionReason)"
-              class="q-my-sm"
-            />
-
-            <!-- Closed / Approved Details -->
-            <div v-if="req.status === 'CLOSED' && !req.rejectionReason" class="text-positive">
-              <div class="row items-center q-mb-xs">
-                <q-icon name="check_circle" class="q-mr-xs" />
-                <span class="text-weight-bold">Approvata</span>
-                <span v-if="req.approvalTimestamp" class="q-ml-xs text-caption">
-                  il {{ formatFullDate(req.approvalTimestamp) }}
+      <q-list separator bordered class="bg-white rounded-borders" v-else>
+        <q-expansion-item
+          v-for="req in visibleRequests"
+          :key="req.id"
+          group="requests"
+          header-class="q-pa-sm"
+        >
+          <template v-slot:header>
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ formatDate(req.date) }}
+                <span v-if="req.startTime && req.endTime" class="text-weight-regular text-grey-8">
+                  ({{ req.startTime }} - {{ req.endTime }})
                 </span>
+                <q-badge v-else color="primary" class="q-ml-sm">{{ req.originalShift }}</q-badge>
+              </q-item-label>
+              <q-item-label caption>{{ getReasonLabel(req.reason) }}</q-item-label>
+              <q-item-label caption class="text-grey-7"
+                >Creata il: {{ formatFullDate(req.createdAt) }}</q-item-label
+              >
+            </q-item-section>
+            <q-item-section side>
+              <div class="row items-center">
+                <q-chip :color="getStatusColor(req)" text-color="white" size="sm" class="q-mr-sm">
+                  {{ getStatusLabel(req) }}
+                </q-chip>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="grey-5"
+                  size="sm"
+                  @click.stop="archiveRequest(req)"
+                >
+                  <q-tooltip>Sposta nel cestino</q-tooltip>
+                </q-btn>
               </div>
+            </q-item-section>
+          </template>
+
+          <q-card class="bg-grey-1">
+            <q-card-section class="q-py-sm">
+              <div v-if="req.requestNote" class="q-mb-sm">
+                <div class="text-caption text-grey-7">Le tue note:</div>
+                <div>{{ req.requestNote }}</div>
+              </div>
+
+              <q-separator
+                v-if="req.requestNote && (req.status === 'CLOSED' || req.rejectionReason)"
+                class="q-my-sm"
+              />
+
+              <!-- Closed / Approved Details -->
+              <div v-if="req.status === 'CLOSED' && !req.rejectionReason" class="text-positive">
+                <div class="row items-center q-mb-xs">
+                  <q-icon name="check_circle" class="q-mr-xs" />
+                  <span class="text-weight-bold">Approvata</span>
+                  <span v-if="req.approvalTimestamp" class="q-ml-xs text-caption">
+                    il {{ formatFullDate(req.approvalTimestamp) }}
+                  </span>
+                </div>
+                <div
+                  class="bg-green-1 q-pa-sm rounded-borders text-caption text-black"
+                  v-if="getResolutionDetails(req)"
+                >
+                  <div><strong>Coperta da:</strong> {{ getResolutionDetails(req)?.who }}</div>
+                  <div><strong>Scenario:</strong> {{ getResolutionDetails(req)?.scenario }}</div>
+                </div>
+              </div>
+
               <div
-                class="bg-green-1 q-pa-sm rounded-borders text-caption text-black"
-                v-if="getResolutionDetails(req)"
+                v-if="req.status === 'EXPIRED' || (req.status === 'CLOSED' && req.rejectionReason)"
+                class="text-negative"
               >
-                <div><strong>Coperta da:</strong> {{ getResolutionDetails(req)?.who }}</div>
-                <div><strong>Scenario:</strong> {{ getResolutionDetails(req)?.scenario }}</div>
+                <div class="row items-center">
+                  <q-icon name="cancel" class="q-mr-xs" />
+                  <span class="text-weight-bold">
+                    {{
+                      req.status === 'CLOSED'
+                        ? 'Rifiutata / Cancellata'
+                        : 'Mancata Approvazione / Scaduta'
+                    }}
+                  </span>
+                  <span v-if="req.rejectionTimestamp" class="q-ml-xs text-caption">
+                    il {{ formatFullDate(req.rejectionTimestamp) }}
+                  </span>
+                </div>
+                <div v-if="req.rejectionReason" class="q-mt-xs bg-red-1 q-pa-sm rounded-borders">
+                  <strong>Motivo Admin:</strong> {{ req.rejectionReason }}
+                </div>
               </div>
-            </div>
 
-            <div
-              v-if="req.status === 'EXPIRED' || (req.status === 'CLOSED' && req.rejectionReason)"
-              class="text-negative"
-            >
-              <div class="row items-center">
-                <q-icon name="cancel" class="q-mr-xs" />
-                <span class="text-weight-bold">
-                  {{
-                    req.status === 'CLOSED'
-                      ? 'Rifiutata / Cancellata'
-                      : 'Mancata Approvazione / Scaduta'
-                  }}
-                </span>
-                <span v-if="req.rejectionTimestamp" class="q-ml-xs text-caption">
-                  il {{ formatFullDate(req.rejectionTimestamp) }}
-                </span>
+              <div v-if="req.status === 'PARTIAL'" class="text-warning">
+                <div class="row items-center">
+                  <q-icon name="hourglass_empty" class="q-mr-xs" />
+                  <span class="text-weight-bold">Parzialmente Coperta</span>
+                </div>
               </div>
-              <div v-if="req.rejectionReason" class="q-mt-xs bg-red-1 q-pa-sm rounded-borders">
-                <strong>Motivo Admin:</strong> {{ req.rejectionReason }}
-              </div>
-            </div>
+            </q-card-section>
+          </q-card>
+        </q-expansion-item>
+      </q-list>
+    </template>
 
-            <div v-if="req.status === 'PARTIAL'" class="text-warning">
-              <div class="row items-center">
-                <q-icon name="hourglass_empty" class="q-mr-xs" />
-                <span class="text-weight-bold">Parzialmente Coperta</span>
+    <!-- ====== CAMBIO TURNO TAB ====== -->
+    <div v-if="pageTab === 'swap'">
+      <!-- New Swap Form -->
+      <q-card flat bordered class="q-mb-md">
+        <q-card-section class="q-pb-none">
+          <div class="text-subtitle1 text-weight-bold">
+            <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />
+            Proponi un Cambio Turno
+          </div>
+          <div class="text-caption text-grey">
+            Indica il turno che cedi e quello che vuoi in cambio. Il tuo nome sarà visibile solo
+            dopo che un collega accetta.
+          </div>
+        </q-card-section>
+        <q-card-section class="q-gutter-md">
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-md-4">
+              <q-input v-model="swapForm.date" type="date" label="Data del turno" outlined dense />
+            </div>
+            <div class="col-12 col-md-4">
+              <q-select
+                v-model="swapForm.offeredShift"
+                :options="swapShiftOptions"
+                label="Turno che cedi"
+                outlined
+                dense
+                emit-value
+                map-options
+              />
+            </div>
+            <div class="col-12 col-md-4">
+              <q-select
+                v-model="swapForm.desiredShift"
+                :options="swapShiftOptions"
+                label="Turno che vuoi"
+                outlined
+                dense
+                emit-value
+                map-options
+              />
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            label="Proponi Cambio"
+            color="primary"
+            icon="swap_horiz"
+            unelevated
+            :loading="swapSubmitting"
+            :disable="
+              !swapForm.date ||
+              !swapForm.offeredShift ||
+              !swapForm.desiredShift ||
+              swapForm.offeredShift === swapForm.desiredShift
+            "
+            @click="submitSwap"
+          />
+        </q-card-actions>
+      </q-card>
+
+      <!-- My Swap Requests History -->
+      <div class="text-subtitle2 text-weight-bold q-mb-sm q-mt-md">Le mie proposte di Cambio</div>
+      <div v-if="mySwaps.length === 0" class="text-grey text-center q-pa-lg">
+        <q-icon name="inbox" size="2em" />
+        <div>Nessuna proposta di cambio turno ancora.</div>
+      </div>
+      <q-card v-for="swap in mySwaps" :key="swap.id" flat bordered class="q-mb-sm">
+        <q-card-section class="q-py-sm">
+          <div class="row items-center justify-between">
+            <div>
+              <div class="row items-center q-gutter-sm">
+                <q-chip color="amber-9" text-color="white" size="sm" dense>{{
+                  swap.offeredShift
+                }}</q-chip>
+                <q-icon name="arrow_forward" />
+                <q-chip color="deep-orange-6" text-color="white" size="sm" dense>{{
+                  swap.desiredShift
+                }}</q-chip>
+                <span class="text-caption text-grey">{{ formatDate(swap.date) }}</span>
+              </div>
+              <div class="text-caption q-mt-xs">
+                <span v-if="swap.status === 'OPEN'" class="text-primary"
+                  >In attesa di un collega...</span
+                >
+                <span
+                  v-else-if="swap.status === 'MATCHED' || swap.status === 'PENDING_ADMIN'"
+                  class="text-warning"
+                >
+                  <q-icon name="handshake" /> Accordo con
+                  <strong>{{ swap.counterpartName || 'un collega' }}</strong> — in attesa di
+                  approvazione admin
+                </span>
+                <span v-else-if="swap.status === 'APPROVED'" class="text-positive">
+                  <q-icon name="check_circle" /> Approvato!
+                </span>
+                <span v-else-if="swap.status === 'REJECTED'" class="text-negative">
+                  <q-icon name="cancel" /> Rifiutato<span v-if="swap.adminNote"
+                    >: {{ swap.adminNote }}</span
+                  >
+                </span>
               </div>
             </div>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item>
-    </q-list>
+            <q-badge
+              :color="getSwapStatusColor(swap.status)"
+              :label="getSwapStatusLabel(swap.status)"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </div>
   </q-page>
 </template>
 
@@ -317,12 +442,20 @@ import {
   doc,
   writeBatch,
   deleteDoc,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
 import { operatorsService } from '../services/OperatorsService';
-import type { ShiftRequest, ShiftCode, RequestReason, Operator } from '../types/models';
+import type {
+  ShiftRequest,
+  ShiftCode,
+  RequestReason,
+  Operator,
+  ShiftSwap,
+  ShiftSwapStatus,
+} from '../types/models';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
@@ -331,7 +464,95 @@ const submitting = ref(false);
 const loading = ref(false);
 let unsubscribe: Unsubscribe | null = null;
 
+// Page tab: absence | swap
+const pageTab = ref<'absence' | 'swap'>('absence');
+
+// Swap form state
+const swapForm = ref({
+  date: qDate.formatDate(new Date(), 'YYYY-MM-DD'),
+  offeredShift: 'M' as ShiftCode,
+  desiredShift: 'P' as ShiftCode,
+});
+const swapSubmitting = ref(false);
+const mySwaps = ref<ShiftSwap[]>([]);
+
+const swapShiftOptions = [
+  { label: 'M - Mattina', value: 'M' },
+  { label: 'P - Pomeriggio', value: 'P' },
+  { label: 'N - Notte', value: 'N' },
+  { label: 'S - Smonto', value: 'S' },
+  { label: 'R - Riposo', value: 'R' },
+];
+
 const inputMode = ref<'SHIFT' | 'TIME'>('SHIFT');
+
+function getSwapStatusColor(status: ShiftSwapStatus): string {
+  const map: Record<ShiftSwapStatus, string> = {
+    OPEN: 'primary',
+    MATCHED: 'warning',
+    PENDING_ADMIN: 'orange',
+    APPROVED: 'positive',
+    REJECTED: 'negative',
+  };
+  return map[status] || 'grey';
+}
+function getSwapStatusLabel(status: ShiftSwapStatus): string {
+  const map: Record<ShiftSwapStatus, string> = {
+    OPEN: 'Aperta',
+    MATCHED: 'Accordo',
+    PENDING_ADMIN: 'In revisione',
+    APPROVED: 'Approvata',
+    REJECTED: 'Rifiutata',
+  };
+  return map[status] || status;
+}
+
+async function submitSwap() {
+  const uid = authStore.currentUser?.uid;
+  const operatorId = authStore.currentOperator?.id;
+  const configId = configStore.activeConfigId;
+  if (!uid || !operatorId || !configId) {
+    $q.notify({ type: 'warning', message: 'Profilo operatore non collegato' });
+    return;
+  }
+  swapSubmitting.value = true;
+  try {
+    const creatorName =
+      `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
+      'Utente';
+    const newSwap: Omit<ShiftSwap, 'id'> = {
+      creatorId: uid,
+      creatorOperatorId: operatorId,
+      creatorName,
+      configId,
+      date: swapForm.value.date,
+      offeredShift: swapForm.value.offeredShift,
+      desiredShift: swapForm.value.desiredShift,
+      status: 'OPEN',
+      createdAt: Date.now(),
+    };
+    await addDoc(collection(db, 'shiftSwaps'), newSwap);
+    $q.notify({ type: 'positive', message: 'Proposta di cambio inviata!' });
+    await loadMySwaps();
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: "Errore durante l'invio della proposta" });
+  } finally {
+    swapSubmitting.value = false;
+  }
+}
+
+async function loadMySwaps() {
+  const uid = authStore.currentUser?.uid;
+  if (!uid) return;
+  const q = query(
+    collection(db, 'shiftSwaps'),
+    where('creatorId', '==', uid),
+    orderBy('createdAt', 'desc'),
+  );
+  const snap = await getDocs(q);
+  mySwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+}
 
 const formData = ref({
   date: qDate.formatDate(new Date(), 'YYYY-MM-DD'),
@@ -420,8 +641,8 @@ onMounted(async () => {
       console.error('Error fetching operators', e);
     }
   }
-
   initRealtimeRequests();
+  void loadMySwaps();
 });
 
 onUnmounted(() => {

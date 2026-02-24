@@ -173,7 +173,10 @@ export type NotificationType =
   | 'NEW_REQUEST'
   | 'OFFER_ACCEPTED'
   | 'OFFER_REJECTED'
-  | 'NEW_OPPORTUNITY';
+  | 'NEW_OPPORTUNITY'
+  | 'SWAP_MATCHED'
+  | 'SWAP_APPROVED'
+  | 'SWAP_REJECTED';
 
 export interface Suggestion {
   operatorId: string;
@@ -219,4 +222,34 @@ export interface Notification {
   requestId?: string; // Link to related request
   read: boolean;
   createdAt: number;
+}
+
+// --- Phase 20: Cambio Turno (Shift Swaps) ---
+
+export type ShiftSwapStatus = 'OPEN' | 'MATCHED' | 'PENDING_ADMIN' | 'APPROVED' | 'REJECTED';
+
+export interface ShiftSwap {
+  id: string;
+  creatorId: string; // Firebase UID of the proposer
+  creatorOperatorId: string; // Operator ID of proposer
+  creatorName?: string; // De-normalized for display
+  configId: string;
+
+  date: string; // YYYY-MM-DD — date of the shift being swapped
+  offeredShift: ShiftCode; // What the creator gives up (e.g. 'M')
+  desiredShift: ShiftCode; // What the creator wants in return (e.g. 'P')
+
+  status: ShiftSwapStatus;
+  createdAt: number;
+
+  // Filled when a counterpart accepts
+  counterpartId?: string; // Firebase UID of the acceptor
+  counterpartOperatorId?: string; // Operator ID of acceptor
+  counterpartName?: string; // De-normalized for display
+  matchedAt?: number;
+
+  // Admin decision
+  adminId?: string;
+  adminNote?: string;
+  resolvedAt?: number;
 }

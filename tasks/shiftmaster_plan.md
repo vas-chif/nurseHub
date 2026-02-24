@@ -247,13 +247,14 @@
 - [ ] **20.3** Match & Acceptance flow (mutual reveal after both accept).
 - [ ] **20.4** Admin approval tab for Shift Swaps with Sheets sync & push notifications.
 
-## ⚙️ Phase 21: Admin Scenario Management (Upcoming)
+## ⚙️ Phase 21: Admin Scenario Management ✅
 
-- [ ] **21.1** Migrate `REPLACEMENT_SCENARIOS` from `sheets.ts` to Firestore (`systemConfigurations/<configId>/replacementScenarios`).
-- [ ] **21.2** Create Admin UI page/section "Gestione Scenari":
-  - [ ] List scenarios grouped by missing shift type (M / P / N).
-  - [ ] Add new scenario (id, targetShift, label, roles[]).
-  - [ ] Edit scenario label and roles (originalShift, newShift, incentive, requiredNextShift).
-  - [ ] Delete scenario.
-- [ ] **21.3** Update `notifyEligibleOperators` and `getCompatibleScenarios` to read from Firestore.
-- [ ] **21.4** Seed Firestore with current hardcoded scenarios on first load (migration utility).
+- [x] **21.1** Auto-seed `REPLACEMENT_SCENARIOS` from `sheets.ts` to Firestore on first config expand (lazy, per-config).
+- [x] **21.2** Scenario CRUD inside "Configurazione Sistema" (no new page):
+  - [x] List scenarios grouped by missing shift type (M / P / N) with colored chips.
+  - [x] Add new scenario (id, targetShift, label, roles[]).
+  - [x] Edit scenario label, roles (originalShift, newShift, startTime, endTime, incentive, requiredNextShift, isNextDay).
+  - [x] Delete scenario with confirmation.
+- [x] **21.3** Elegant full-screen edit dialog (primary header, role cards with left border, shift chips).
+- [x] **21.4** Added `startTime` / `endTime` fields to `ReplacementRole` model for precise hour configuration.
+- [ ] **21.5** Update `getCompatibleScenarios` composable to read scenarios from Firestore instead of static `sheets.ts`.

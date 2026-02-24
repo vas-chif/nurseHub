@@ -5,6 +5,8 @@ import type { Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   query,
+  where,
+  orderBy,
   doc,
   updateDoc,
   writeBatch,
@@ -21,13 +23,21 @@ import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { operatorsService } from '../services/OperatorsService';
-import type { ShiftRequest, ShiftCode, Operator, ScenarioGroup, Suggestion } from '../types/models';
+import type {
+  ShiftRequest,
+  ShiftCode,
+  Operator,
+  ScenarioGroup,
+  Suggestion,
+  ShiftSwap,
+} from '../types/models';
 import { notifyUser } from '../services/NotificationService';
 import { useAuthStore } from '../stores/authStore';
 import { useShiftLogic } from '../composables/useShiftLogic';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { SyncService } from '../services/SyncService';
-import { DEFAULT_SHEETS_CONFIG, REPLACEMENT_SCENARIOS } from '../config/sheets';
+import { DEFAULT_SHEETS_CONFIG } from '../config/sheets';
+import { useScenarioStore } from '../stores/scenarioStore';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
@@ -49,6 +59,7 @@ import { storeToRefs } from 'pinia';
 
 const adminStore = useAdminStore();
 const { suggestions, selectedSuggestions, calculating } = storeToRefs(adminStore);
+const scenarioStore = useScenarioStore();
 // interface Suggestion is now imported/inferred or can be kept if needed for type assertion
 
 // Approval Dialog Logic
@@ -175,6 +186,9 @@ onMounted(async () => {
   await fetchOperators();
   await fetchUsersMap();
   initRealtimeRequests();
+  if (configStore.activeConfigId) {
+    void scenarioStore.loadScenarios(configStore.activeConfigId);
+  }
 });
 
 watch(
@@ -182,6 +196,7 @@ watch(
   async (newVal) => {
     if (newVal) {
       await fetchOperators();
+      void scenarioStore.loadScenarios(newVal);
     }
   },
 );
@@ -443,7 +458,7 @@ async function findSubstitutes(req: ShiftRequest) {
   const groups: ScenarioGroup[] = [];
 
   // 1. Get scenarios for this targetShift
-  const scenarios = REPLACEMENT_SCENARIOS.filter((s) => s.targetShift === targetShift);
+  const scenarios = scenarioStore.scenarios.filter((s) => s.targetShift === targetShift);
 
   scenarios.forEach((scen) => {
     const group: ScenarioGroup = {
@@ -977,6 +992,105 @@ function getResolutionDetails(req: ShiftRequest) {
     scenario: 'Gestione manuale',
   };
 }
+
+// ==================== PHASE 20: ADMIN SWAP MANAGEMENT ====================
+
+const pendingSwaps = ref<ShiftSwap[]>([]);
+const swapLoading = ref(false);
+
+async function loadPendingSwaps() {
+  swapLoading.value = true;
+  try {
+    const colRef = collection(db, 'shiftSwaps');
+    const q = query(colRef, where('status', '==', 'PENDING_ADMIN'), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    pendingSwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+  } catch (e) {
+    console.error('Error loading swaps', e);
+    $q.notify({ type: 'negative', message: 'Errore nel caricamento dei cambi turno' });
+  } finally {
+    swapLoading.value = false;
+  }
+}
+
+function approveSwap(swap: ShiftSwap) {
+  $q.dialog({
+    title: 'Approva Cambio Turno',
+    message: `Approvare il cambio ${swap.offeredShift} ↔ ${swap.desiredShift} del ${swap.date}?`,
+    cancel: true,
+  }).onOk(() => {
+    void (async () => {
+      try {
+        // Update swap status
+        await updateDoc(doc(db, 'shiftSwaps', swap.id), {
+          status: 'APPROVED',
+          adminId: authStore.currentUser?.uid,
+          resolvedAt: Date.now(),
+        });
+        // Update creator's schedule
+        if (swap.creatorOperatorId && configStore.activeConfigId) {
+          const creatorRef = doc(
+            db,
+            'systemConfigurations',
+            configStore.activeConfigId,
+            'operators',
+            swap.creatorOperatorId,
+          );
+          await updateDoc(creatorRef, { [`schedule.${swap.date}`]: swap.desiredShift });
+        }
+        // Update counterpart's schedule
+        if (swap.counterpartOperatorId && configStore.activeConfigId) {
+          const counterRef = doc(
+            db,
+            'systemConfigurations',
+            configStore.activeConfigId,
+            'operators',
+            swap.counterpartOperatorId,
+          );
+          await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
+        }
+        pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+        $q.notify({ type: 'positive', message: 'Cambio turno approvato e turni aggiornati!' });
+      } catch (e) {
+        console.error(e);
+        $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
+      }
+    })();
+  });
+}
+
+function rejectSwap(swap: ShiftSwap) {
+  $q.dialog({
+    title: 'Rifiuta Cambio Turno',
+    message: 'Specifica il motivo del rifiuto:',
+    prompt: { model: '', type: 'text', label: 'Motivazione' },
+    cancel: true,
+    persistent: true,
+  }).onOk((adminNote: string) => {
+    void (async () => {
+      try {
+        await updateDoc(doc(db, 'shiftSwaps', swap.id), {
+          status: 'REJECTED',
+          adminId: authStore.currentUser?.uid,
+          adminNote: adminNote || "Rifiutato dall'admin",
+          resolvedAt: Date.now(),
+        });
+        pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+        $q.notify({ type: 'info', message: 'Cambio turno rifiutato' });
+      } catch (e) {
+        console.error(e);
+        $q.notify({ type: 'negative', message: 'Errore durante il rifiuto' });
+      }
+    })();
+  });
+}
+
+// Load swaps when tab switches to 'swaps'
+watch(activeTab, (val) => {
+  if (val === 'swaps' && pendingSwaps.value.length === 0) {
+    void loadPendingSwaps();
+  }
+});
 </script>
 
 <template>
@@ -1054,6 +1168,7 @@ function getResolutionDetails(req: ShiftRequest) {
     >
       <q-tab name="pending" label="In Attesa" />
       <q-tab name="history" label="Storico" />
+      <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz" />
     </q-tabs>
 
     <q-separator />
@@ -1526,6 +1641,99 @@ function getResolutionDetails(req: ShiftRequest) {
             </q-card>
           </q-expansion-item>
         </q-list>
+      </q-tab-panel>
+
+      <!-- ===== CAMBI TURNO TAB PANEL ===== -->
+      <q-tab-panel name="swaps" class="q-pa-md">
+        <div class="row items-center justify-between q-mb-md">
+          <div class="text-subtitle1 text-weight-bold">
+            <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />Richieste Cambio Turno
+          </div>
+          <q-btn
+            flat
+            dense
+            size="sm"
+            icon="refresh"
+            label="Aggiorna"
+            @click="loadPendingSwaps"
+            :loading="swapLoading"
+          />
+        </div>
+
+        <div v-if="swapLoading" class="text-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+        </div>
+
+        <div v-else-if="pendingSwaps.length === 0" class="text-center text-grey q-pa-lg">
+          <q-icon name="inbox" size="2em" />
+          <div class="q-mt-sm">Nessuna proposta di cambio turno in attesa di approvazione.</div>
+        </div>
+
+        <q-card v-for="swap in pendingSwaps" :key="swap.id" flat bordered class="q-mb-sm">
+          <q-card-section class="q-py-sm q-px-md">
+            <div class="row items-center justify-between">
+              <div>
+                <div class="text-weight-medium q-mb-xs">
+                  {{ swap.date }} — <q-badge color="amber-8" :label="swap.offeredShift" /> ↔
+                  <q-badge color="deep-orange" :label="swap.desiredShift" />
+                </div>
+                <div class="text-caption">
+                  <q-icon name="person" />
+                  <strong>{{ swap.creatorName || swap.creatorId }}</strong> cede
+                  <q-chip
+                    size="xs"
+                    dense
+                    :color="
+                      swap.offeredShift === 'M'
+                        ? 'amber-9'
+                        : swap.offeredShift === 'P'
+                          ? 'deep-orange-6'
+                          : 'blue-8'
+                    "
+                    text-color="white"
+                    >{{ swap.offeredShift }}</q-chip
+                  >
+                  in cambio di
+                  <q-chip
+                    size="xs"
+                    dense
+                    :color="
+                      swap.desiredShift === 'M'
+                        ? 'amber-9'
+                        : swap.desiredShift === 'P'
+                          ? 'deep-orange-6'
+                          : 'blue-8'
+                    "
+                    text-color="white"
+                    >{{ swap.desiredShift }}</q-chip
+                  >
+                </div>
+                <div v-if="swap.counterpartName" class="text-caption q-mt-xs">
+                  <q-icon name="handshake" color="positive" />
+                  <strong>{{ swap.counterpartName }}</strong> ha accettato lo scambio.
+                </div>
+              </div>
+              <div class="row q-gutter-sm">
+                <q-btn
+                  unelevated
+                  size="sm"
+                  icon="check"
+                  color="positive"
+                  label="Approva"
+                  @click="approveSwap(swap)"
+                />
+                <q-btn
+                  flat
+                  size="sm"
+                  icon="close"
+                  color="negative"
+                  label="Rifiuta"
+                  @click="rejectSwap(swap)"
+                />
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
       </q-tab-panel>
     </q-tab-panels>
 
