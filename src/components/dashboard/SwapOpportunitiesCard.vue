@@ -107,7 +107,6 @@ import { useQuasar, date as qDate } from 'quasar';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
-import { useConfigStore } from '../../stores/configStore';
 import type { ShiftSwap } from '../../types/models';
 
 const $q = useQuasar();
