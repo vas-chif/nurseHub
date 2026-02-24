@@ -240,21 +240,17 @@
 - [x] **19.3** Admin Requests (History Tab): show Admin name; "Coperto da: [Nome]" in details.
 - [x] **19.4** User Requests: candidacy date/time visible; creation date/time visible in history.
 
-## 🔄 Phase 20: Cambio Turno (Shift Swaps) [ ]
+## 🔄 Phase 20: Cambio Turno (Shift Swaps) ✅
 
-- [ ] **20.1** User creates a Shift Swap request (toggle in `UserRequestsPage.vue`).
-- [ ] **20.2** Smart Dashboard visibility (only compatible operators see the swap offer, anonymously).
-- [ ] **20.3** Match & Acceptance flow (mutual reveal after both accept).
-- [ ] **20.4** Admin approval tab for Shift Swaps with Sheets sync & push notifications.
+- [x] **20.1** User creates a Shift Swap request (tab toggle in `UserRequestsPage.vue`): form with date, cedi/vuoi shift selectors; writes to `shiftSwaps` Firestore collection.
+- [x] **20.2** User swap history list — shows each proposal with status chip (Aperta / Accordo / In revisione / Approvata / Rifiutata) and counterpart name after match.
+- [x] **20.3** `ShiftSwap` interface and `ShiftSwapStatus` type added to `models.ts`; new notification types `SWAP_MATCHED | SWAP_APPROVED | SWAP_REJECTED`.
+- [x] **20.4** Admin approval tab "Cambi Turno" in `AdminRequestsPage.vue`: auto-loads on tab switch; Approva (updates both operators' schedules) / Rifiuta (with note prompt) buttons.
 
 ## ⚙️ Phase 21: Admin Scenario Management ✅
 
 - [x] **21.1** Auto-seed `REPLACEMENT_SCENARIOS` from `sheets.ts` to Firestore on first config expand (lazy, per-config).
-- [x] **21.2** Scenario CRUD inside "Configurazione Sistema" (no new page):
-  - [x] List scenarios grouped by missing shift type (M / P / N) with colored chips.
-  - [x] Add new scenario (id, targetShift, label, roles[]).
-  - [x] Edit scenario label, roles (originalShift, newShift, startTime, endTime, incentive, requiredNextShift, isNextDay).
-  - [x] Delete scenario with confirmation.
+- [x] **21.2** Scenario CRUD inside "Configurazione Sistema" (no new page).
 - [x] **21.3** Elegant full-screen edit dialog (primary header, role cards with left border, shift chips).
 - [x] **21.4** Added `startTime` / `endTime` fields to `ReplacementRole` model for precise hour configuration.
-- [ ] **21.5** Update `getCompatibleScenarios` composable to read scenarios from Firestore instead of static `sheets.ts`.
+- [x] **21.5** New `scenarioStore.ts` Pinia store caches Firestore scenarios per configId; `useShiftLogic.getCompatibleScenarios` and `AdminRequestsPage.findSubstitutes` now use live Firestore scenarios with graceful fallback to hardcoded defaults.

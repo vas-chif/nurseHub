@@ -15,6 +15,9 @@
     <!-- Active Requests -->
     <ActiveRequestsCard />
 
+    <!-- Swap Opportunities (Phase 20.5) -->
+    <SwapOpportunitiesCard v-if="authStore.currentOperator" />
+
     <!-- Quick Actions (Optional Future) -->
     <div class="q-mt-lg text-center">
       <q-btn
@@ -33,6 +36,7 @@ import { ref, onMounted, watch } from 'vue';
 import { useQuasar, AppVisibility } from 'quasar';
 import ShiftCalendar from '../components/dashboard/ShiftCalendar.vue';
 import ActiveRequestsCard from '../components/dashboard/ActiveRequestsCard.vue';
+import SwapOpportunitiesCard from '../components/dashboard/SwapOpportunitiesCard.vue';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
 import { SyncService } from '../services/SyncService';
