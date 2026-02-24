@@ -58,6 +58,11 @@ service cloud.firestore {
         allow update: if isAdmin() || isOperatorOwner(operatorId);
         allow create: if isAdmin();
       }
+
+      match /replacementScenarios/{scenarioId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
     }
 
     match /system/{configId} {
