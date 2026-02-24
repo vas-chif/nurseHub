@@ -119,6 +119,8 @@ export interface ReplacementRole {
   originalShift: ShiftCode;
   newShift: ShiftCode;
   incentive: string;
+  startTime?: string; // es: "07:00"
+  endTime?: string; // es: "14:00"
   isNextDay?: boolean;
   requiredNextShift?: ShiftCode;
 }
