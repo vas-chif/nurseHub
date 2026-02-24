@@ -209,3 +209,51 @@
 - [x] **19.4 User Requests Page (Le mie Candidature / History)**
   - [x] Improve "Le mie Candidature" view: show request date/time, candidacy date, and status.
   - [x] Improve "Le mie Richieste" view: ensure creation date/time is clearly visible.
+
+## 🔔 Phase 16: Push Notifications (Real FCM)
+
+- [x] Configure FCM in `src/boot/firebase.ts` & set VAPID key.
+- [x] Switch PWA to `InjectManifest` mode & implement push listeners in `custom-service-worker.ts`.
+- [x] Implement Settings Toggle to request permission and save/remove FCM Token in Firestore.
+- [x] **Backend (Vercel Serverless)**: `api/send-notification.js` calls FCM HTTP v1 API. Replaces Cloud Functions (avoids Blaze plan).
+  - [x] CORS headers added for cross-origin calls from Firebase Hosting.
+  - [x] Bearer token authentication (`VERCEL_API_SECRET`).
+  - [x] Fix GitHub Actions to inject `VITE_VERCEL_API_SECRET` during build.
+- [x] `notifyUser()` — saves in-app notification + triggers Vercel push.
+- [x] `notifyEligibleOperators()` — notifies compatible operators (deduplication via `Set`).
+- [x] `notifyAdmins()` — notifies admins on new offer (deduplication via `Set`).
+- [x] Rejection notification for substitute operator.
+- [x] Fix duplicate push notifications (removed duplicate `showNotification()` from `firebase-messaging-sw.js`).
+
+## 🗃️ Phase 18: Request History & Archiving
+
+- [x] Update data model (`offeringOperatorIds`, `hiddenBy`, `isArchived`).
+- [x] Implement history tab in Dashboard.
+- [x] Detailed resolution view in User & Admin pages.
+- [x] Archive System (Auto > 3 months, Manual Delete, Empty Archive).
+- [x] Visual indicator for archive storage level.
+
+## 🎨 Phase 19: UI/UX Refinements (Admin & User Views)
+
+- [x] **19.1** Hide main "Dashboard" tab for Admin users.
+- [x] **19.2** Admin Requests (Pending Tab): absentee name always shown; badge with offer count.
+- [x] **19.3** Admin Requests (History Tab): show Admin name; "Coperto da: [Nome]" in details.
+- [x] **19.4** User Requests: candidacy date/time visible; creation date/time visible in history.
+
+## 🔄 Phase 20: Cambio Turno (Shift Swaps) [ ]
+
+- [ ] **20.1** User creates a Shift Swap request (toggle in `UserRequestsPage.vue`).
+- [ ] **20.2** Smart Dashboard visibility (only compatible operators see the swap offer, anonymously).
+- [ ] **20.3** Match & Acceptance flow (mutual reveal after both accept).
+- [ ] **20.4** Admin approval tab for Shift Swaps with Sheets sync & push notifications.
+
+## ⚙️ Phase 21: Admin Scenario Management (Upcoming)
+
+- [ ] **21.1** Migrate `REPLACEMENT_SCENARIOS` from `sheets.ts` to Firestore (`systemConfigurations/<configId>/replacementScenarios`).
+- [ ] **21.2** Create Admin UI page/section "Gestione Scenari":
+  - [ ] List scenarios grouped by missing shift type (M / P / N).
+  - [ ] Add new scenario (id, targetShift, label, roles[]).
+  - [ ] Edit scenario label and roles (originalShift, newShift, incentive, requiredNextShift).
+  - [ ] Delete scenario.
+- [ ] **21.3** Update `notifyEligibleOperators` and `getCompatibleScenarios` to read from Firestore.
+- [ ] **21.4** Seed Firestore with current hardcoded scenarios on first load (migration utility).
