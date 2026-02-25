@@ -417,10 +417,25 @@
                 </span>
               </div>
             </div>
-            <q-badge
-              :color="getSwapStatusColor(swap.status)"
-              :label="getSwapStatusLabel(swap.status)"
-            />
+            <div class="column items-end q-gutter-xs">
+              <q-badge
+                :color="getSwapStatusColor(swap.status)"
+                :label="getSwapStatusLabel(swap.status)"
+              />
+              <!-- Cancel only while still OPEN (nobody accepted yet) -->
+              <q-btn
+                v-if="swap.status === 'OPEN'"
+                flat
+                dense
+                round
+                icon="delete"
+                color="negative"
+                size="sm"
+                @click="cancelSwap(swap)"
+              >
+                <q-tooltip>Cancella proposta</q-tooltip>
+              </q-btn>
+            </div>
           </div>
         </q-card-section>
       </q-card>
@@ -552,6 +567,26 @@ async function loadMySwaps() {
   );
   const snap = await getDocs(q);
   mySwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+}
+
+function cancelSwap(swap: ShiftSwap) {
+  $q.dialog({
+    title: 'Cancella Proposta',
+    message: `Sei sicuro di voler cancellare la proposta di cambio del ${formatDate(swap.date)}? (${swap.offeredShift} → ${swap.desiredShift})`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void (async () => {
+      try {
+        await deleteDoc(doc(db, 'shiftSwaps', swap.id));
+        mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
+        $q.notify({ type: 'info', message: 'Proposta cancellata', icon: 'delete' });
+      } catch (e) {
+        console.error(e);
+        $q.notify({ type: 'negative', message: 'Errore durante la cancellazione' });
+      }
+    })();
+  });
 }
 
 const formData = ref({

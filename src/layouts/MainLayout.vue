@@ -214,10 +214,14 @@ async function handleConfigChange(configId: string) {
         class="text-grey"
         align="justify"
       >
-        <q-route-tab v-if="!authStore.isAdmin" to="/" icon="dashboard" label="Home" />
+        <!-- Home: always visible for all users -->
+        <q-route-tab to="/" icon="dashboard" label="Home" />
         <q-route-tab to="/calendar" icon="calendar_month" label="Turni" />
+
+        <!-- User-only tabs -->
         <q-route-tab v-if="!authStore.isAdmin" to="/requests" icon="event_note" label="Richieste" />
 
+        <!-- Admin-only tabs -->
         <q-route-tab
           v-if="authStore.isAdmin"
           to="/requests"
