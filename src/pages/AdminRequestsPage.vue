@@ -996,15 +996,18 @@ function getResolutionDetails(req: ShiftRequest) {
 // ==================== PHASE 20: ADMIN SWAP MANAGEMENT ====================
 
 const pendingSwaps = ref<ShiftSwap[]>([]);
+const allSwaps = ref<ShiftSwap[]>([]);
 const swapLoading = ref(false);
 
 async function loadPendingSwaps() {
   swapLoading.value = true;
   try {
     const colRef = collection(db, 'shiftSwaps');
-    const q = query(colRef, where('status', '==', 'PENDING_ADMIN'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    pendingSwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+    // Load ALL swaps for full history (admin needs to see everything)
+    const snap = await getDocs(query(colRef, orderBy('createdAt', 'desc')));
+    allSwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+    // Pending = only those needing admin decision
+    pendingSwaps.value = allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN');
   } catch (e) {
     console.error('Error loading swaps', e);
     $q.notify({ type: 'negative', message: 'Errore nel caricamento dei cambi turno' });
@@ -1734,6 +1737,64 @@ watch(activeTab, (val) => {
             </div>
           </q-card-section>
         </q-card>
+
+        <!-- ===== Storico completo ===== -->
+        <template v-if="!swapLoading && allSwaps.length > 0">
+          <q-separator class="q-my-md" />
+          <div class="text-caption text-weight-bold text-grey-8 q-mb-sm">
+            <q-icon name="history" size="xs" class="q-mr-xs" />
+            Storico tutti i cambi ({{ allSwaps.length }})
+          </div>
+          <q-card v-for="s in allSwaps" :key="s.id + '-hist'" flat bordered class="q-mb-xs">
+            <q-card-section class="q-py-xs q-px-md">
+              <div class="row items-center justify-between no-wrap">
+                <div class="col">
+                  <div class="text-caption text-grey-7">{{ s.date }}</div>
+                  <div class="row items-center q-gutter-xs">
+                    <q-chip size="xs" dense color="amber-9" text-color="white">{{
+                      s.offeredShift
+                    }}</q-chip>
+                    <q-icon name="swap_horiz" size="xs" />
+                    <q-chip size="xs" dense color="deep-orange-6" text-color="white">{{
+                      s.desiredShift
+                    }}</q-chip>
+                  </div>
+                  <div class="text-caption q-mt-xs">
+                    <q-icon name="person" size="xs" />
+                    <strong>{{ s.creatorName || s.creatorId }}</strong>
+                    <span v-if="s.counterpartName">
+                      ↔ <strong>{{ s.counterpartName }}</strong></span
+                    >
+                  </div>
+                  <div v-if="s.adminNote" class="text-caption text-negative q-mt-xs">
+                    Nota admin: {{ s.adminNote }}
+                  </div>
+                </div>
+                <q-badge
+                  :color="
+                    s.status === 'APPROVED'
+                      ? 'positive'
+                      : s.status === 'REJECTED'
+                        ? 'negative'
+                        : s.status === 'PENDING_ADMIN'
+                          ? 'orange'
+                          : 'primary'
+                  "
+                  :label="
+                    s.status === 'APPROVED'
+                      ? 'Approvato'
+                      : s.status === 'REJECTED'
+                        ? 'Rifiutato'
+                        : s.status === 'PENDING_ADMIN'
+                          ? 'In revisione'
+                          : 'Aperto'
+                  "
+                  class="q-ml-sm"
+                />
+              </div>
+            </q-card-section>
+          </q-card>
+        </template>
       </q-tab-panel>
     </q-tab-panels>
 

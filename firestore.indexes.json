@@ -37,6 +37,14 @@
         { "fieldPath": "creatorId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "shiftSwaps",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "counterpartId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

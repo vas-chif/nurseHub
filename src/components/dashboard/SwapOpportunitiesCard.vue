@@ -171,6 +171,62 @@
           </q-card-section>
         </q-card>
       </div>
+      <!-- ===== SEZIONE 3: Cambi che ho accettato ===== -->
+      <template v-if="myAcceptedSwaps.length > 0">
+        <q-separator class="q-my-sm" />
+        <div class="text-caption text-weight-bold text-grey-8 q-mb-sm q-mt-sm">
+          <q-icon name="handshake" size="xs" class="q-mr-xs" />
+          Cambi che ho accettato
+        </div>
+        <div class="q-gutter-xs">
+          <q-card
+            v-for="swap in myAcceptedSwaps"
+            :key="swap.id + '-accepted'"
+            flat
+            class="my-swap-card rounded-borders"
+          >
+            <q-card-section class="q-py-sm q-px-md">
+              <div class="row items-center justify-between no-wrap">
+                <div class="col">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    <q-icon name="event" size="xs" class="q-mr-xs" />
+                    {{ formatDate(swap.date) }}
+                  </div>
+                  <div class="row items-center q-gutter-xs">
+                    <span class="text-caption">Ricevo</span>
+                    <q-chip
+                      :color="getShiftColor(swap.offeredShift)"
+                      text-color="white"
+                      size="sm"
+                      dense
+                    >
+                      {{ swap.offeredShift }}
+                    </q-chip>
+                    <span class="text-caption">, cedo</span>
+                    <q-chip
+                      :color="getShiftColor(swap.desiredShift)"
+                      text-color="white"
+                      size="sm"
+                      dense
+                    >
+                      {{ swap.desiredShift }}
+                    </q-chip>
+                  </div>
+                  <!-- Proposer name revealed after match -->
+                  <div class="text-caption text-grey-7 q-mt-xs">
+                    <q-icon name="person" size="xs" />
+                    Proposte da: <strong>{{ swap.creatorName || 'Collega' }}</strong>
+                  </div>
+                </div>
+                <q-badge
+                  :color="getSwapStatusColor(swap.status)"
+                  :label="getSwapStatusLabel(swap.status)"
+                />
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </template>
     </q-card-section>
   </q-card>
 </template>
@@ -199,6 +255,7 @@ const loading = ref(false);
 const accepting = ref<Record<string, boolean>>({});
 const compatibleSwaps = ref<ShiftSwap[]>([]);
 const mySwaps = ref<ShiftSwap[]>([]);
+const myAcceptedSwaps = ref<ShiftSwap[]>([]);
 
 const shiftColorMap: Record<string, string> = {
   M: 'amber-9',
@@ -246,7 +303,7 @@ onMounted(() => {
 async function loadAll() {
   loading.value = true;
   try {
-    await Promise.all([loadOpportunities(), loadMySwaps()]);
+    await Promise.all([loadOpportunities(), loadMySwaps(), loadMyAcceptedSwaps()]);
   } finally {
     loading.value = false;
   }
@@ -279,6 +336,19 @@ async function loadMySwaps() {
     ),
   );
   mySwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+}
+
+async function loadMyAcceptedSwaps() {
+  const uid = authStore.currentUser?.uid;
+  if (!uid) return;
+  const snap = await getDocs(
+    query(
+      collection(db, 'shiftSwaps'),
+      where('counterpartId', '==', uid),
+      orderBy('createdAt', 'desc'),
+    ),
+  );
+  myAcceptedSwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
 }
 
 function acceptSwap(swap: ShiftSwap) {
