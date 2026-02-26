@@ -75,7 +75,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }
   }
 }
