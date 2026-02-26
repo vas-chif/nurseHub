@@ -462,7 +462,7 @@ import {
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
-import { notifyAdmins } from '../utils/notifications';
+import { notifyAdmins } from '../services/NotificationService';
 import { operatorsService } from '../services/OperatorsService';
 import type {
   ShiftRequest,
@@ -551,10 +551,9 @@ async function submitSwap() {
 
     // Notify admins of new proposal
     void notifyAdmins(
-      'NEW_REQUEST',
-      'Nuova Proposta Cambio Turno',
       `${creatorName} ha proposto un cambio per il ${formatDate(swapForm.value.date)} (${swapForm.value.offeredShift} ↔ ${swapForm.value.desiredShift}).`,
-      '/admin/requests',
+      'new-swap', // placeholder since swap document was just created and we don't strictly need it for the dashboard notification dot
+      configId,
     );
 
     $q.notify({ type: 'positive', message: 'Proposta di cambio inviata!' });

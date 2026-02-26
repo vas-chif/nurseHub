@@ -246,11 +246,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
-import { notifyUser, notifyAdmins } from '../../utils/notifications';
+import { useConfigStore } from '../../stores/configStore';
+import { notifyUser, notifyAdmins } from '../../services/NotificationService';
 import type { ShiftSwap, ShiftSwapStatus } from '../../types/models';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 
 const loading = ref(false);
 const accepting = ref<Record<string, boolean>>({});
@@ -385,18 +387,18 @@ function acceptSwap(swap: ShiftSwap) {
         void notifyUser(
           swap.creatorId,
           'SWAP_MATCHED',
-          'Proposta Accettata!',
           `${counterpartName} ha accettato il tuo cambio del ${formatDate(swap.date)}. Attendi l'approvazione del coordinatore.`,
-          '/requests',
+          swap.id,
         );
 
         // Notify admins that there's a match to review
-        void notifyAdmins(
-          'SWAP_MATCHED',
-          'Cambio da Approvare',
-          `Accordo raggiunto tra ${swap.creatorName} e ${counterpartName} per il ${formatDate(swap.date)}. In attesa di revisione.`,
-          '/admin/requests',
-        );
+        if (configStore.activeConfigId) {
+          void notifyAdmins(
+            `Accordo raggiunto tra ${swap.creatorName} e ${counterpartName} per il ${formatDate(swap.date)}. In attesa di revisione.`,
+            swap.id,
+            configStore.activeConfigId,
+          );
+        }
 
         $q.notify({
           type: 'positive',

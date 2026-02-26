@@ -1057,17 +1057,15 @@ function approveSwap(swap: ShiftSwap) {
         void notifyUser(
           swap.creatorId,
           'SWAP_APPROVED',
-          'Cambio Approvato!',
-          `Il cambio turno del ${swap.date} (${swap.offeredShift} ↔ ${swap.desiredShift}) è stato approvato dal coordinatore.`,
-          '/requests',
+          `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.offeredShift} ↔ ${swap.desiredShift}) è stato approvato dal coordinatore.`,
+          swap.id,
         );
         if (swap.counterpartId) {
           void notifyUser(
             swap.counterpartId,
             'SWAP_APPROVED',
-            'Cambio Approvato!',
-            `Il cambio turno del ${swap.date} (${swap.desiredShift} ↔ ${swap.offeredShift}) è stato approvato dal coordinatore.`,
-            '/',
+            `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.desiredShift} ↔ ${swap.offeredShift}) è stato approvato dal coordinatore.`,
+            swap.id,
           );
         }
 
@@ -1103,17 +1101,15 @@ function rejectSwap(swap: ShiftSwap) {
         void notifyUser(
           swap.creatorId,
           'SWAP_REJECTED',
-          'Cambio Rifiutato',
-          `Il cambio turno del ${swap.date} è stato rifiutato dal coordinatore.${noteText}`,
-          '/requests',
+          `Cambio Rifiutato. Il cambio turno del ${swap.date} è stato rifiutato dal coordinatore.${noteText}`,
+          swap.id,
         );
         if (swap.counterpartId) {
           void notifyUser(
             swap.counterpartId,
             'SWAP_REJECTED',
-            'Cambio Rifiutato',
-            `Il cambio turno del ${swap.date} a cui avevi aderito è stato rifiutato dal coordinatore.${noteText}`,
-            '/',
+            `Cambio Rifiutato. Il cambio turno del ${swap.date} a cui avevi aderito è stato rifiutato dal coordinatore.${noteText}`,
+            swap.id,
           );
         }
 
