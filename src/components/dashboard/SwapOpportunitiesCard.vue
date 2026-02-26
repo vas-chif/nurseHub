@@ -246,6 +246,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
+import { notifyUser, notifyAdmins } from '../../utils/notifications';
 import type { ShiftSwap, ShiftSwapStatus } from '../../types/models';
 
 const $q = useQuasar();
@@ -379,6 +380,23 @@ function acceptSwap(swap: ShiftSwap) {
           counterpartName,
           matchedAt: Date.now(),
         });
+
+        // Notify the original creator that someone accepted
+        void notifyUser(
+          swap.creatorId,
+          'SWAP_MATCHED',
+          'Proposta Accettata!',
+          `${counterpartName} ha accettato il tuo cambio del ${formatDate(swap.date)}. Attendi l'approvazione del coordinatore.`,
+          '/requests',
+        );
+
+        // Notify admins that there's a match to review
+        void notifyAdmins(
+          'SWAP_MATCHED',
+          'Cambio da Approvare',
+          `Accordo raggiunto tra ${swap.creatorName} e ${counterpartName} per il ${formatDate(swap.date)}. In attesa di revisione.`,
+          '/admin/requests',
+        );
 
         $q.notify({
           type: 'positive',

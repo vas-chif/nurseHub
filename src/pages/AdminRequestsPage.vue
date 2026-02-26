@@ -1052,6 +1052,25 @@ function approveSwap(swap: ShiftSwap) {
           await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
         }
         pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+
+        // Notify users
+        void notifyUser(
+          swap.creatorId,
+          'SWAP_APPROVED',
+          'Cambio Approvato!',
+          `Il cambio turno del ${swap.date} (${swap.offeredShift} ↔ ${swap.desiredShift}) è stato approvato dal coordinatore.`,
+          '/requests',
+        );
+        if (swap.counterpartId) {
+          void notifyUser(
+            swap.counterpartId,
+            'SWAP_APPROVED',
+            'Cambio Approvato!',
+            `Il cambio turno del ${swap.date} (${swap.desiredShift} ↔ ${swap.offeredShift}) è stato approvato dal coordinatore.`,
+            '/',
+          );
+        }
+
         $q.notify({ type: 'positive', message: 'Cambio turno approvato e turni aggiornati!' });
       } catch (e) {
         console.error(e);
@@ -1078,6 +1097,26 @@ function rejectSwap(swap: ShiftSwap) {
           resolvedAt: Date.now(),
         });
         pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+
+        // Notify users
+        const noteText = adminNote ? ` Motivo: ${adminNote}` : '';
+        void notifyUser(
+          swap.creatorId,
+          'SWAP_REJECTED',
+          'Cambio Rifiutato',
+          `Il cambio turno del ${swap.date} è stato rifiutato dal coordinatore.${noteText}`,
+          '/requests',
+        );
+        if (swap.counterpartId) {
+          void notifyUser(
+            swap.counterpartId,
+            'SWAP_REJECTED',
+            'Cambio Rifiutato',
+            `Il cambio turno del ${swap.date} a cui avevi aderito è stato rifiutato dal coordinatore.${noteText}`,
+            '/',
+          );
+        }
+
         $q.notify({ type: 'info', message: 'Cambio turno rifiutato' });
       } catch (e) {
         console.error(e);

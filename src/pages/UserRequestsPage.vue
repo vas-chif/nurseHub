@@ -462,6 +462,7 @@ import {
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
+import { notifyAdmins } from '../utils/notifications';
 import { operatorsService } from '../services/OperatorsService';
 import type {
   ShiftRequest,
@@ -547,6 +548,15 @@ async function submitSwap() {
       createdAt: Date.now(),
     };
     await addDoc(collection(db, 'shiftSwaps'), newSwap);
+
+    // Notify admins of new proposal
+    void notifyAdmins(
+      'NEW_REQUEST',
+      'Nuova Proposta Cambio Turno',
+      `${creatorName} ha proposto un cambio per il ${formatDate(swapForm.value.date)} (${swapForm.value.offeredShift} ↔ ${swapForm.value.desiredShift}).`,
+      '/admin/requests',
+    );
+
     $q.notify({ type: 'positive', message: 'Proposta di cambio inviata!' });
     await loadMySwaps();
   } catch (e) {
