@@ -5,7 +5,6 @@ import type { Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   query,
-  where,
   orderBy,
   doc,
   updateDoc,
