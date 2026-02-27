@@ -97,6 +97,9 @@ export interface ShiftRequest {
   acceptedOfferId?: string; // ID of the accepted offer
   hiddenBy?: string[]; // UIDs of users who deleted this from their view
   isArchived?: boolean; // True if auto-archived (> 3 months)
+
+  // Phase 22: Soft Delete
+  deletedByCreator?: boolean; // True if the creator deleted it from their view
 }
 
 export interface ShiftOffer {
@@ -252,4 +255,7 @@ export interface ShiftSwap {
   adminId?: string;
   adminNote?: string;
   resolvedAt?: number;
+
+  // Phase 22: Soft Delete
+  deletedByCreator?: boolean; // True if the creator deleted it from their view
 }

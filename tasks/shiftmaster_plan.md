@@ -254,3 +254,18 @@
 - [x] **21.3** Elegant full-screen edit dialog (primary header, role cards with left border, shift chips).
 - [x] **21.4** Added `startTime` / `endTime` fields to `ReplacementRole` model for precise hour configuration.
 - [x] **21.5** New `scenarioStore.ts` Pinia store caches Firestore scenarios per configId; `useShiftLogic.getCompatibleScenarios` and `AdminRequestsPage.findSubstitutes` now use live Firestore scenarios with graceful fallback to hardcoded defaults.
+
+## ⌛ Phase 22: Precise Expiration & Soft Delete (Archiving)
+
+- [ ] **22.1 Precise Expiration Logic**:
+  - Automatically expire `OPEN` shift swaps and `PENDING` absence requests based on the exact start time of the involved shift, not just midnight of the day.
+  - Expiration times: Mattina (M) -> 07:00, Pomeriggio (P) -> 14:00, Notte (N) -> 21:00.
+  - Expired items should visually appear disabled/grayed out to users, losing the "Accept" action, leaving only the "Delete" action.
+  - Expired items automatically move to the user's history/archive view.
+- [ ] **22.2 Soft Delete for Users**:
+  - When a user deletes a request/swap, it should no longer be completely removed from Firestore (`deleteDoc`).
+  - Instead, use a soft-delete approach (e.g., `deletedByCreator: true` or `archived: true`).
+  - The item disappears from the user's view but remains in the database.
+- [ ] **22.3 Admin Archive & Cleanup**:
+  - Admins can view these soft-deleted/expired requests in a dedicated "Archivio" section.
+  - Admins have the power to permanently delete (`deleteDoc`) these records from Firestore either individually or via a bulk "Clear > 30 days" action.

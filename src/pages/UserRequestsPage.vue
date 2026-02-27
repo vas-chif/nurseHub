@@ -242,7 +242,7 @@
                   icon="delete"
                   color="grey-5"
                   size="sm"
-                  @click.stop="archiveRequest(req)"
+                  @click.stop="deleteRequest(req)"
                 >
                   <q-tooltip>Sposta nel cestino</q-tooltip>
                 </q-btn>
@@ -381,7 +381,18 @@
         <q-icon name="inbox" size="2em" />
         <div>Nessuna proposta di cambio turno ancora.</div>
       </div>
-      <q-card v-for="swap in mySwaps" :key="swap.id" flat bordered class="q-mb-sm">
+      <q-card
+        v-for="swap in mySwaps"
+        :key="swap.id"
+        flat
+        bordered
+        class="q-mb-sm"
+        :class="{
+          'border-primary': swap.status === 'OPEN',
+          'opacity-50 grayscale':
+            swap.status === 'OPEN' && isRequestExpired(swap.date, swap.offeredShift),
+        }"
+      >
         <q-card-section class="q-py-sm">
           <div class="row items-center justify-between">
             <div>
@@ -422,6 +433,15 @@
                 :color="getSwapStatusColor(swap.status)"
                 :label="getSwapStatusLabel(swap.status)"
               />
+              <span
+                class="text-weight-bold"
+                :class="
+                  isRequestExpired(swap.date, swap.offeredShift) ? 'text-grey' : 'text-primary'
+                "
+                v-if="swap.status === 'OPEN'"
+              >
+                {{ isRequestExpired(swap.date, swap.offeredShift) ? 'Scaduta' : 'Aperta' }}
+              </span>
               <!-- Cancel only while still OPEN (nobody accepted yet) -->
               <q-btn
                 v-if="swap.status === 'OPEN'"
@@ -456,14 +476,15 @@ import {
   orderBy,
   doc,
   writeBatch,
-  deleteDoc,
   getDocs,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
 import { notifyAdmins } from '../services/NotificationService';
 import { operatorsService } from '../services/OperatorsService';
+import { useShiftLogic } from '../composables/useShiftLogic';
 import type {
   ShiftRequest,
   ShiftCode,
@@ -476,6 +497,7 @@ import type {
 const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const { isRequestExpired } = useShiftLogic();
 const submitting = ref(false);
 const loading = ref(false);
 let unsubscribe: Unsubscribe | null = null;
@@ -572,10 +594,13 @@ async function loadMySwaps() {
   const q = query(
     collection(db, 'shiftSwaps'),
     where('creatorId', '==', uid),
+    where('deletedByCreator', '!=', true), // Filter out soft-deleted swaps
     orderBy('createdAt', 'desc'),
   );
   const snap = await getDocs(q);
-  mySwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+  mySwaps.value = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap)
+    .filter((s) => !s.deletedByCreator);
 }
 
 function cancelSwap(swap: ShiftSwap) {
@@ -587,7 +612,7 @@ function cancelSwap(swap: ShiftSwap) {
   }).onOk(() => {
     void (async () => {
       try {
-        await deleteDoc(doc(db, 'shiftSwaps', swap.id));
+        await updateDoc(doc(db, 'shiftSwaps', swap.id), { deletedByCreator: true });
         mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
         $q.notify({ type: 'info', message: 'Proposta cancellata', icon: 'delete' });
       } catch (e) {
@@ -699,6 +724,7 @@ function initRealtimeRequests() {
   const q = query(
     collection(db, 'shiftRequests'),
     where('creatorId', '==', authStore.currentUser.uid),
+    where('deletedByCreator', '!=', true), // Filter out soft-deleted requests
     orderBy('createdAt', 'desc'),
   );
 
@@ -844,32 +870,32 @@ async function submitRequest() {
   }
 }
 
-// Phase 18/20: Delete Actions
-function archiveRequest(req: ShiftRequest) {
+// Phase 18/20/22: Delete Actions (Soft Delete)
+function deleteRequest(req: ShiftRequest) {
   if (!authStore.currentUser) return;
 
   $q.dialog({
-    title: 'Elimina Definitivamente',
+    title: 'Cancella Richiesta',
     message:
-      "Sei sicuro di voler eliminare definitivamente questa richiesta? L'azione non può essere annullata.",
+      "Sei sicuro di voler cancellare questa richiesta? L'azione rimuoverà la richiesta dalla tua lista.",
     cancel: true,
     persistent: true,
   }).onOk(() => {
-    const performArchive = async () => {
+    const performDelete = async () => {
       try {
         const ref = doc(db, 'shiftRequests', req.id);
-        await deleteDoc(ref);
+        await updateDoc(ref, { deletedByCreator: true });
         $q.notify({
-          message: 'Richiesta eliminata definitivamente',
+          message: 'Richiesta cancellata',
           color: 'info',
-          icon: 'delete_forever',
+          icon: 'delete',
         });
       } catch (e) {
         console.error(e);
         $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
       }
     };
-    void performArchive();
+    void performDelete();
   });
 }
 

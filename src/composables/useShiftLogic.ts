@@ -88,8 +88,37 @@ export function useShiftLogic() {
     return validScenarios;
   }
 
+  /**
+   * Checks if a request (absence or swap) is expired based on the shift's exact start time.
+   * Mattina (M) -> expires at 07:00
+   * Pomeriggio (P) -> expires at 14:00
+   * Notte (N) -> expires at 21:00
+   */
+  function isRequestExpired(dateStr: string, shiftCode: ShiftCode): boolean {
+    if (!dateStr || !shiftCode) return false;
+
+    // Parse the date (assumed format YYYY-MM-DD or similar standard format)
+    const shiftDate = new Date(dateStr);
+    if (isNaN(shiftDate.getTime())) return false; // Invalid date
+
+    // Set expiration hours based on Italian time (browser local time is used)
+    if (shiftCode.startsWith('M')) {
+      shiftDate.setHours(7, 0, 0, 0);
+    } else if (shiftCode.startsWith('P')) {
+      shiftDate.setHours(14, 0, 0, 0);
+    } else if (shiftCode.startsWith('N')) {
+      shiftDate.setHours(21, 0, 0, 0);
+    } else {
+      // For DayOff (R) or others without a precise time, expire at 23:59:59
+      shiftDate.setHours(23, 59, 59, 999);
+    }
+
+    return Date.now() > shiftDate.getTime();
+  }
+
   return {
     checkCompliance,
     getCompatibleScenarios,
+    isRequestExpired,
   };
 }

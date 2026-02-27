@@ -37,6 +37,7 @@
           :key="swap.id"
           flat
           class="swap-card bg-blue-1 rounded-borders"
+          :class="{ 'opacity-50 grayscale': isRequestExpired(swap.date, swap.offeredShift) }"
         >
           <q-card-section class="q-py-sm q-px-md">
             <div class="row items-center justify-between no-wrap">
@@ -70,6 +71,7 @@
                 </div>
               </div>
               <q-btn
+                v-if="!isRequestExpired(swap.date, swap.offeredShift)"
                 unelevated
                 color="primary"
                 icon="handshake"
@@ -79,6 +81,7 @@
                 :loading="accepting[swap.id]"
                 @click="acceptSwap(swap)"
               />
+              <q-badge v-else color="grey" label="Scaduta" class="q-ml-sm" />
             </div>
           </q-card-section>
         </q-card>
@@ -97,7 +100,16 @@
       </div>
 
       <div v-else class="q-gutter-xs">
-        <q-card v-for="swap in mySwaps" :key="swap.id" flat class="my-swap-card rounded-borders">
+        <q-card
+          v-for="swap in mySwaps"
+          :key="swap.id"
+          flat
+          class="my-swap-card rounded-borders"
+          :class="{
+            'opacity-50 grayscale':
+              swap.status === 'OPEN' && isRequestExpired(swap.date, swap.desiredShift),
+          }"
+        >
           <q-card-section class="q-py-sm q-px-md">
             <div class="row items-center justify-between no-wrap">
               <div class="col">
@@ -127,8 +139,17 @@
                 </div>
                 <!-- Status text -->
                 <div class="text-caption q-mt-xs">
-                  <span v-if="swap.status === 'OPEN'" class="text-primary">
-                    In attesa di un collega...
+                  <span
+                    v-if="swap.status === 'OPEN'"
+                    :class="
+                      isRequestExpired(swap.date, swap.desiredShift) ? 'text-grey' : 'text-primary'
+                    "
+                  >
+                    {{
+                      isRequestExpired(swap.date, swap.desiredShift)
+                        ? 'Scaduta senza accordo'
+                        : 'In attesa di un collega...'
+                    }}
                   </span>
                   <span
                     v-else-if="swap.status === 'MATCHED' || swap.status === 'PENDING_ADMIN'"
@@ -249,10 +270,12 @@ import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
 import { notifyUser, notifyAdmins } from '../../services/NotificationService';
 import type { ShiftSwap, ShiftSwapStatus } from '../../types/models';
+import { useShiftLogic } from '../../composables/useShiftLogic';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const { isRequestExpired } = useShiftLogic();
 
 const loading = ref(false);
 const accepting = ref<Record<string, boolean>>({});
