@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * NurseHub Auto-Sync Trigger per Google Sheets
  * ------------------------------------------------
