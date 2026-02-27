@@ -20,6 +20,7 @@ import {
 
 import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
+import { useScheduleStore } from '../stores/scheduleStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { operatorsService } from '../services/OperatorsService';
 import type {
@@ -41,6 +42,7 @@ import { useScenarioStore } from '../stores/scenarioStore';
 const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
 const notificationStore = useNotificationStore();
 const { checkCompliance } = useShiftLogic();
 
@@ -1050,6 +1052,11 @@ function approveSwap(swap: ShiftSwap) {
             swap.counterpartOperatorId,
           );
           await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
+        }
+
+        // Auto-sync the schedules to update the internal cache and UI without requiring a manual click
+        if (configStore.activeConfigId) {
+          void scheduleStore.loadOperators(configStore.activeConfigId, true);
         }
         pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
 

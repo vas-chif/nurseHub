@@ -257,15 +257,27 @@
 
 ## ⌛ Phase 22: Precise Expiration & Soft Delete (Archiving)
 
-- [ ] **22.1 Precise Expiration Logic**:
+- [x] **22.1 Precise Expiration Logic**:
   - Automatically expire `OPEN` shift swaps and `PENDING` absence requests based on the exact start time of the involved shift, not just midnight of the day.
   - Expiration times: Mattina (M) -> 07:00, Pomeriggio (P) -> 14:00, Notte (N) -> 21:00.
   - Expired items should visually appear disabled/grayed out to users, losing the "Accept" action, leaving only the "Delete" action.
   - Expired items automatically move to the user's history/archive view.
-- [ ] **22.2 Soft Delete for Users**:
+- [x] **22.2 Soft Delete for Users**:
   - When a user deletes a request/swap, it should no longer be completely removed from Firestore (`deleteDoc`).
   - Instead, use a soft-delete approach (e.g., `deletedByCreator: true` or `archived: true`).
   - The item disappears from the user's view but remains in the database.
 - [ ] **22.3 Admin Archive & Cleanup**:
   - Admins can view these soft-deleted/expired requests in a dedicated "Archivio" section.
   - Admins have the power to permanently delete (`deleteDoc`) these records from Firestore either individually or via a bulk "Clear > 30 days" action.
+
+## 🔄 Phase 23: Dashboard Refactoring & Auto-Sync
+
+- [x] **23.1 Real-Time Google Sheets Push Sync (Webhook)**:
+  - Instead of having the app constantly poll the spreadsheet, the spreadsheet will "push" updates to the app.
+  - Create a new Vercel serverless function (e.g., `api/sync-shifts.js`) that, when called, triggers a sync from Google Sheets to Firestore for a specific `configId`.
+  - Provide a Google Apps Script (GAS) snippet to the user. This script will use an `onChange` or `onEdit` trigger in Google Sheets. After 5 minutes of inactivity (debouncing using Script Properties and Time-driven triggers), the GAS will send a POST request to the Vercel endpoint to tell the app to update the database.
+- [x] **23.2 Move "Le mie proposte" from Dashboard to Requests Page**:
+  - Remove the section "Le mie proposte" (the swaps the user created) from `DashboardPage.vue`/`SwapOpportunitiesCard.vue`.
+  - Ensure these are ONLY visible inside `UserRequestsPage.vue` under the "Cambio Turno" tab, unifying the creation and history view.
+- [x] **23.3 Display "Cambi Accettati" on Dashboard**:
+  - In `SwapOpportunitiesCard.vue`, under "Proposte disponibili per te", add a new section or prominent visual indicator showing the swap proposals that the current user has _accepted_ from others (where `counterpartId === currentUser.uid`), allowing them to track the status (In revisione, Approvata) directly from the Dashboard.

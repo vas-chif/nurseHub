@@ -89,109 +89,6 @@
 
       <q-separator class="q-my-sm" />
 
-      <!-- ===== SEZIONE 2: Le mie proposte ===== -->
-      <div class="text-caption text-weight-bold text-grey-8 q-mb-sm q-mt-sm">
-        <q-icon name="edit_note" size="xs" class="q-mr-xs" />
-        Le mie proposte
-      </div>
-
-      <div v-if="mySwaps.length === 0" class="text-grey text-caption q-pl-sm">
-        <q-icon name="inbox" size="xs" /> Nessuna proposta inviata.
-      </div>
-
-      <div v-else class="q-gutter-xs">
-        <q-card
-          v-for="swap in mySwaps"
-          :key="swap.id"
-          flat
-          class="my-swap-card rounded-borders"
-          :class="{
-            'opacity-50 grayscale':
-              swap.status === 'OPEN' && isRequestExpired(swap.date, swap.desiredShift),
-          }"
-        >
-          <q-card-section class="q-py-sm q-px-md">
-            <div class="row items-center justify-between no-wrap">
-              <div class="col">
-                <div class="text-caption text-grey-7 q-mb-xs">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />
-                  {{ formatDate(swap.date) }}
-                </div>
-                <div class="row items-center q-gutter-xs">
-                  <span class="text-caption">Cedo</span>
-                  <q-chip
-                    :color="getShiftColor(swap.offeredShift)"
-                    text-color="white"
-                    size="sm"
-                    dense
-                  >
-                    {{ swap.offeredShift }}
-                  </q-chip>
-                  <span class="text-caption">per</span>
-                  <q-chip
-                    :color="getShiftColor(swap.desiredShift)"
-                    text-color="white"
-                    size="sm"
-                    dense
-                  >
-                    {{ swap.desiredShift }}
-                  </q-chip>
-                </div>
-                <!-- Status text -->
-                <div class="text-caption q-mt-xs">
-                  <span
-                    v-if="swap.status === 'OPEN'"
-                    :class="
-                      isRequestExpired(swap.date, swap.desiredShift) ? 'text-grey' : 'text-primary'
-                    "
-                  >
-                    {{
-                      isRequestExpired(swap.date, swap.desiredShift)
-                        ? 'Scaduta senza accordo'
-                        : 'In attesa di un collega...'
-                    }}
-                  </span>
-                  <span
-                    v-else-if="swap.status === 'MATCHED' || swap.status === 'PENDING_ADMIN'"
-                    class="text-warning"
-                  >
-                    <q-icon name="handshake" size="xs" />
-                    Accordo con <strong>{{ swap.counterpartName || 'un collega' }}</strong> — attesa
-                    admin
-                  </span>
-                  <span v-else-if="swap.status === 'APPROVED'" class="text-positive">
-                    <q-icon name="check_circle" size="xs" /> Approvato!
-                  </span>
-                  <span v-else-if="swap.status === 'REJECTED'" class="text-negative">
-                    <q-icon name="cancel" size="xs" /> Rifiutato
-                    <span v-if="swap.adminNote">: {{ swap.adminNote }}</span>
-                  </span>
-                </div>
-              </div>
-
-              <!-- Right: badge + cancel -->
-              <div class="column items-end q-gutter-xs q-ml-sm">
-                <q-badge
-                  :color="getSwapStatusColor(swap.status)"
-                  :label="getSwapStatusLabel(swap.status)"
-                />
-                <q-btn
-                  v-if="swap.status === 'OPEN'"
-                  flat
-                  dense
-                  round
-                  icon="delete"
-                  color="negative"
-                  size="sm"
-                  @click="cancelSwap(swap)"
-                >
-                  <q-tooltip>Cancella proposta</q-tooltip>
-                </q-btn>
-              </div>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
       <!-- ===== SEZIONE 3: Cambi che ho accettato ===== -->
       <template v-if="myAcceptedSwaps.length > 0">
         <q-separator class="q-my-sm" />
@@ -255,16 +152,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  doc,
-  updateDoc,
-  deleteDoc,
-} from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
@@ -280,7 +168,6 @@ const { isRequestExpired } = useShiftLogic();
 const loading = ref(false);
 const accepting = ref<Record<string, boolean>>({});
 const compatibleSwaps = ref<ShiftSwap[]>([]);
-const mySwaps = ref<ShiftSwap[]>([]);
 const myAcceptedSwaps = ref<ShiftSwap[]>([]);
 
 const shiftColorMap: Record<string, string> = {
@@ -329,7 +216,7 @@ onMounted(() => {
 async function loadAll() {
   loading.value = true;
   try {
-    await Promise.all([loadOpportunities(), loadMySwaps(), loadMyAcceptedSwaps()]);
+    await Promise.all([loadOpportunities(), loadMyAcceptedSwaps()]);
   } finally {
     loading.value = false;
   }
@@ -349,19 +236,6 @@ async function loadOpportunities() {
     if (!operatorSchedule) return false;
     return operatorSchedule[swap.date] === swap.desiredShift;
   });
-}
-
-async function loadMySwaps() {
-  const uid = authStore.currentUser?.uid;
-  if (!uid) return;
-  const snap = await getDocs(
-    query(
-      collection(db, 'shiftSwaps'),
-      where('creatorId', '==', uid),
-      orderBy('createdAt', 'desc'),
-    ),
-  );
-  mySwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
 }
 
 async function loadMyAcceptedSwaps() {
@@ -429,33 +303,13 @@ function acceptSwap(swap: ShiftSwap) {
           icon: 'handshake',
         });
         compatibleSwaps.value = compatibleSwaps.value.filter((s) => s.id !== swap.id);
-        // Reload my swaps to show it as PENDING_ADMIN
-        await loadMySwaps();
+        // Reload accepted swaps to show it as PENDING_ADMIN in the dashboard
+        await loadMyAcceptedSwaps();
       } catch (e) {
         console.error(e);
         $q.notify({ type: 'negative', message: "Errore durante l'accettazione" });
       } finally {
         accepting.value[swap.id] = false;
-      }
-    })();
-  });
-}
-
-function cancelSwap(swap: ShiftSwap) {
-  $q.dialog({
-    title: 'Cancella Proposta',
-    message: `Sei sicuro di voler cancellare la proposta del ${formatDate(swap.date)}? (${swap.offeredShift} → ${swap.desiredShift})`,
-    cancel: true,
-    persistent: true,
-  }).onOk(() => {
-    void (async () => {
-      try {
-        await deleteDoc(doc(db, 'shiftSwaps', swap.id));
-        mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
-        $q.notify({ type: 'info', message: 'Proposta cancellata', icon: 'delete' });
-      } catch (e) {
-        console.error(e);
-        $q.notify({ type: 'negative', message: 'Errore durante la cancellazione' });
       }
     })();
   });
