@@ -1000,6 +1000,10 @@ const pendingSwaps = ref<ShiftSwap[]>([]);
 const allSwaps = ref<ShiftSwap[]>([]);
 const swapLoading = ref(false);
 
+const showSwapApprovalDialog = ref(false);
+const swapSyncMode = ref<'auto' | 'manual'>('auto');
+const approvalSwapContext = ref<ShiftSwap | null>(null);
+
 const archivedSwaps = computed(() => {
   const cutoffDate = qDate.formatDate(
     qDate.subtractFromDate(new Date(), { days: 90 }),
@@ -1077,71 +1081,101 @@ async function loadPendingSwaps() {
 }
 
 function approveSwap(swap: ShiftSwap) {
-  $q.dialog({
-    title: 'Approva Cambio Turno',
-    message: `Approvare il cambio ${swap.offeredShift} ↔ ${swap.desiredShift} del ${swap.date}?`,
-    cancel: true,
-  }).onOk(() => {
-    void (async () => {
-      try {
-        // Update swap status
-        await updateDoc(doc(db, 'shiftSwaps', swap.id), {
-          status: 'APPROVED',
-          adminId: authStore.currentUser?.uid,
-          resolvedAt: Date.now(),
-        });
-        // Update creator's schedule
-        if (swap.creatorOperatorId && configStore.activeConfigId) {
-          const creatorRef = doc(
-            db,
-            'systemConfigurations',
-            configStore.activeConfigId,
-            'operators',
-            swap.creatorOperatorId,
-          );
-          await updateDoc(creatorRef, { [`schedule.${swap.date}`]: swap.desiredShift });
-        }
-        // Update counterpart's schedule
-        if (swap.counterpartOperatorId && configStore.activeConfigId) {
-          const counterRef = doc(
-            db,
-            'systemConfigurations',
-            configStore.activeConfigId,
-            'operators',
-            swap.counterpartOperatorId,
-          );
-          await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
-        }
+  approvalSwapContext.value = swap;
+  swapSyncMode.value = 'auto';
+  showSwapApprovalDialog.value = true;
+}
 
-        // Auto-sync the schedules to update the internal cache and UI without requiring a manual click
-        if (configStore.activeConfigId) {
-          void scheduleStore.loadOperators(configStore.activeConfigId, true);
-        }
-        pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+async function processSwapApproval() {
+  if (!approvalSwapContext.value) return;
+  const swap = approvalSwapContext.value;
+  swapLoading.value = true;
 
-        // Notify users
-        void notifyUser(
-          swap.creatorId,
-          'SWAP_APPROVED',
-          `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.offeredShift} ↔ ${swap.desiredShift}) è stato approvato dal coordinatore.`,
-          swap.id,
-        );
-        if (swap.counterpartId) {
-          void notifyUser(
-            swap.counterpartId,
-            'SWAP_APPROVED',
-            `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.desiredShift} ↔ ${swap.offeredShift}) è stato approvato dal coordinatore.`,
-            swap.id,
-          );
-        }
+  try {
+    // Update swap status
+    await updateDoc(doc(db, 'shiftSwaps', swap.id), {
+      status: 'APPROVED',
+      adminId: authStore.currentUser?.uid,
+      resolvedAt: Date.now(),
+    });
 
-        $q.notify({ type: 'positive', message: 'Cambio turno approvato e turni aggiornati!' });
-      } catch (e) {
-        console.error(e);
-        $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
+    // Update creator's schedule
+    if (swap.creatorOperatorId && configStore.activeConfigId) {
+      const creatorRef = doc(
+        db,
+        'systemConfigurations',
+        configStore.activeConfigId,
+        'operators',
+        swap.creatorOperatorId,
+      );
+      await updateDoc(creatorRef, { [`schedule.${swap.date}`]: swap.desiredShift });
+    }
+
+    // Update counterpart's schedule
+    if (swap.counterpartOperatorId && configStore.activeConfigId) {
+      const counterRef = doc(
+        db,
+        'systemConfigurations',
+        configStore.activeConfigId,
+        'operators',
+        swap.counterpartOperatorId,
+      );
+      await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
+    }
+
+    // Auto-sync the schedules to update the internal cache and UI without requiring a manual click
+    if (configStore.activeConfigId) {
+      void scheduleStore.loadOperators(configStore.activeConfigId, true);
+    }
+    pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+
+    // Notify users
+    void notifyUser(
+      swap.creatorId,
+      'SWAP_APPROVED',
+      `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.offeredShift} ↔ ${swap.desiredShift}) è stato approvato dal coordinatore.`,
+      swap.id,
+    );
+    if (swap.counterpartId) {
+      void notifyUser(
+        swap.counterpartId,
+        'SWAP_APPROVED',
+        `Cambio Approvato! Il cambio turno del ${swap.date} (${swap.desiredShift} ↔ ${swap.offeredShift}) è stato approvato dal coordinatore.`,
+        swap.id,
+      );
+    }
+
+    // Google Sheets Auto-Sync
+    if (swapSyncMode.value === 'auto') {
+      const creatorName =
+        swap.creatorName ||
+        (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '');
+      const counterName =
+        swap.counterpartName ||
+        (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '');
+
+      if (creatorName) {
+        void syncToSheets(creatorName, swap.date, swap.desiredShift);
       }
-    })();
-  });
+      if (counterName) {
+        void syncToSheets(counterName, swap.date, swap.offeredShift);
+      }
+    }
+
+    showSwapApprovalDialog.value = false;
+    $q.notify({
+      type: 'positive',
+      message:
+        swapSyncMode.value === 'auto'
+          ? 'Cambio approvato e sincronizzato con Excel!'
+          : 'Cambio approvato (Sincronizzazione manuale richiesta)',
+    });
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
+  } finally {
+    swapLoading.value = false;
+  }
 }
 
 function rejectSwap(swap: ShiftSwap) {
@@ -2021,6 +2055,71 @@ watch(activeTab, (val) => {
             label="Conferma & Chiudi"
             @click="processApproval"
             :loading="loading"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Phase 20: Swap Approval Sync Mode Dialog -->
+    <q-dialog v-model="showSwapApprovalDialog" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="row items-center">
+          <q-avatar icon="swap_horiz" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">Conferma Approvazione Cambio</span>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <div v-if="approvalSwapContext" class="q-mb-md">
+            Stai confermando il cambio turno del <strong>{{ approvalSwapContext.date }}</strong
+            ><br />
+            tra
+            <strong>{{ approvalSwapContext.creatorName || approvalSwapContext.creatorId }}</strong>
+            e
+            <strong>{{
+              approvalSwapContext.counterpartName ||
+              approvalSwapContext.counterpartId ||
+              'Assegnazione'
+            }}</strong
+            >.
+          </div>
+
+          <div class="bg-grey-2 q-pa-md rounded-borders">
+            <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
+            <q-btn-toggle
+              v-model="swapSyncMode"
+              spread
+              no-caps
+              rounded
+              unelevated
+              toggle-color="primary"
+              color="white"
+              text-color="primary"
+              :options="[
+                { label: 'Automatica', value: 'auto' },
+                { label: 'Manuale', value: 'manual' },
+              ]"
+            />
+            <div class="text-caption text-grey-7 q-mt-sm">
+              <span v-if="swapSyncMode === 'auto'">
+                I turni invertiti verranno aggiornati automaticamente sul file Excel Master per
+                entrambi gli operatori.
+              </span>
+              <span v-else>
+                Dovrai aggiornare i turni degli operatori sul file Excel Master manualmente in un
+                secondo momento.
+              </span>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="text-primary">
+          <q-btn flat label="Annulla" v-close-popup />
+          <q-btn
+            unelevated
+            color="positive"
+            label="Approva & Applica"
+            @click="processSwapApproval"
+            :loading="swapLoading"
           />
         </q-card-actions>
       </q-card>
