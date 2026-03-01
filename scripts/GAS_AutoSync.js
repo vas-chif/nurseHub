@@ -9,7 +9,7 @@
 
 // ==== IMPOSTAZIONI (DA MODIFICARE) ====
 const VERCEL_API_URL = 'https://tuo-progetto-vercel.vercel.app/api/sync-shifts';
-const SYNC_SECRET_TOKEN = 'LA_TUA_PASSWORD_SEGRETA'; // Deve coincidere con env su Vercel
+const VITE_VERCEL_API_SECRET = 'NurseHub-AIzaSyD37bwODUeDZ6'; // Deve coincidere con env su Vercel
 const CONFIG_ID = 'ID_DELLA_CONFIGURAZIONE'; // L'ID della configurazione corrente su Firestore (es: 'BOFo...Wxt')
 // ======================================
 
@@ -46,7 +46,7 @@ function sendSyncWebhook() {
     method: 'post',
     contentType: 'application/json',
     headers: {
-      Authorization: 'Bearer ' + SYNC_SECRET_TOKEN,
+      Authorization: 'Bearer ' + VITE_VERCEL_API_SECRET,
     },
     payload: JSON.stringify({
       configId: CONFIG_ID,
