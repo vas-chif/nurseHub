@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
-import { useQuasar } from 'quasar';
+import { useQuasar, date as qDate } from 'quasar';
 import type { Unsubscribe } from 'firebase/firestore';
 import {
   collection,
@@ -1000,6 +1000,65 @@ const pendingSwaps = ref<ShiftSwap[]>([]);
 const allSwaps = ref<ShiftSwap[]>([]);
 const swapLoading = ref(false);
 
+const archivedSwaps = computed(() => {
+  const cutoffDate = qDate.formatDate(
+    qDate.subtractFromDate(new Date(), { days: 90 }),
+    'YYYY-MM-DD',
+  );
+  return allSwaps.value.filter((swap) => swap.status !== 'OPEN' && swap.date < cutoffDate);
+});
+
+const archiveSwapStorageLevel = computed(() => {
+  const count = archivedSwaps.value.length;
+  // Maximum capacity let's say 200 swaps before red alert
+  return Math.min(count / 200, 1);
+});
+
+const storageSwapColor = computed(() => {
+  const level = archiveSwapStorageLevel.value;
+  if (level > 0.8) return 'negative';
+  if (level > 0.5) return 'warning';
+  return 'primary';
+});
+
+function emptySwapArchive() {
+  if (archivedSwaps.value.length === 0) return;
+
+  $q.dialog({
+    title: 'Svuota Archivio Cambi',
+    message: `Vuoi eliminare definitivamente ${archivedSwaps.value.length} cambi turno vecchi di oltre 3 mesi?`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void performEmptySwapArchive();
+  });
+}
+
+async function performEmptySwapArchive() {
+  swapLoading.value = true;
+  try {
+    const batch = writeBatch(db);
+    archivedSwaps.value.forEach((swap) => {
+      const ref = doc(db, 'shiftSwaps', swap.id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+    $q.notify({
+      type: 'positive',
+      message: 'Archivio Cambi svuotato con successo',
+      icon: 'delete_forever',
+    });
+    allSwaps.value = allSwaps.value.filter(
+      (s) => !archivedSwaps.value.some((as) => as.id === s.id),
+    );
+  } catch (e) {
+    console.error(e);
+    $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
+  } finally {
+    swapLoading.value = false;
+  }
+}
+
 async function loadPendingSwaps() {
   swapLoading.value = true;
   try {
@@ -1689,6 +1748,40 @@ watch(activeTab, (val) => {
 
       <!-- ===== CAMBI TURNO TAB PANEL ===== -->
       <q-tab-panel name="swaps" class="q-pa-md">
+        <!-- Archive Widget (Battery) -->
+        <div
+          class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
+          v-if="archivedSwaps.length > 0"
+        >
+          <div class="col-grow">
+            <div class="row items-center justify-between q-mb-xs">
+              <div class="text-caption text-grey-8 text-weight-bold">
+                <q-icon name="inventory_2" class="q-mr-xs" />
+                Archivio Cambi (> 3 mesi)
+              </div>
+              <div class="text-caption text-grey-6">{{ archivedSwaps.length }} elementi</div>
+            </div>
+            <q-linear-progress
+              :value="archiveSwapStorageLevel"
+              :color="storageSwapColor"
+              size="8px"
+              rounded
+              track-color="grey-2"
+            />
+          </div>
+          <div>
+            <q-btn
+              flat
+              dense
+              color="negative"
+              icon="delete_forever"
+              label="Svuota"
+              @click="emptySwapArchive"
+              size="sm"
+            />
+          </div>
+        </div>
+
         <div class="row items-center justify-between q-mb-md">
           <div class="text-subtitle1 text-weight-bold">
             <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />Richieste Cambio Turno

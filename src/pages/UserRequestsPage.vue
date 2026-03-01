@@ -478,6 +478,7 @@ import {
   writeBatch,
   getDocs,
   updateDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
@@ -614,7 +615,12 @@ function cancelSwap(swap: ShiftSwap) {
   }).onOk(() => {
     void (async () => {
       try {
-        await updateDoc(doc(db, 'shiftSwaps', swap.id), { deletedByCreator: true });
+        const ref = doc(db, 'shiftSwaps', swap.id);
+        if (swap.status === 'OPEN') {
+          await deleteDoc(ref);
+        } else {
+          await updateDoc(ref, { deletedByCreator: true });
+        }
         mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
         $q.notify({ type: 'info', message: 'Proposta cancellata', icon: 'delete' });
       } catch (e) {
@@ -886,7 +892,12 @@ function deleteRequest(req: ShiftRequest) {
     const performDelete = async () => {
       try {
         const ref = doc(db, 'shiftRequests', req.id);
-        await updateDoc(ref, { deletedByCreator: true });
+        if (req.status === 'OPEN') {
+          await deleteDoc(ref);
+        } else {
+          await updateDoc(ref, { deletedByCreator: true });
+        }
+
         $q.notify({
           message: 'Richiesta cancellata',
           color: 'info',
