@@ -6,7 +6,7 @@
 
 import { collection, doc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
-import type { Notification, NotificationType, ShiftRequest } from '../types/models';
+import type { Notification, NotificationType, ShiftRequest, ShiftSwap } from '../types/models';
 
 /**
  * Create a new notification for a user and trigger a Web Push via Vercel
@@ -236,5 +236,64 @@ export async function notifyAdmins(
     }
   } catch (err) {
     console.error('Error in notifyAdmins:', err);
+  }
+}
+
+/**
+ * NEW: Notify operators eligible for a shift swap
+ */
+export async function notifyEligibleSwappers(
+  swapObj: ShiftSwap,
+  activeConfigId: string,
+): Promise<void> {
+  try {
+    if (!activeConfigId) return;
+
+    const { collection, getDocs } = await import('firebase/firestore');
+
+    // 1. Fetch all operators in this configuration
+    const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
+    const opsSnap = await getDocs(opsRef);
+
+    // Fetch users to map operatorId -> Firebase UID
+    const usersRef = collection(db, 'users');
+    const usersSnap = await getDocs(usersRef);
+    const operatorToUserIdMap = new Map<string, string>();
+    usersSnap.docs.forEach((doc) => {
+      const uData = doc.data();
+      if (uData.operatorId) {
+        operatorToUserIdMap.set(uData.operatorId, doc.id);
+      }
+    });
+
+    const notifiedUids = new Set<string>();
+
+    for (const opDoc of opsSnap.docs) {
+      const opData = opDoc.data();
+      const opId = opDoc.id;
+      const opUserId = operatorToUserIdMap.get(opId);
+
+      // Skip the creator
+      if (opId === swapObj.creatorOperatorId || !opUserId) {
+        continue;
+      }
+
+      if (notifiedUids.has(opUserId)) {
+        continue;
+      }
+
+      // Check if this operator has the desired shift on that date
+      const opShift = opData.schedule?.[swapObj.date];
+
+      if (opShift === swapObj.desiredShift) {
+        notifiedUids.add(opUserId);
+        const messageStr = `Nuovo cambio turno: ${swapObj.creatorName || 'Un collega'} offre ${swapObj.offeredShift} per il tuo ${swapObj.desiredShift} del ${swapObj.date}. Accetta ora!`;
+        notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, swapObj.id).catch((e) =>
+          console.error('Silent fail on notifyUser', e),
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error in notifyEligibleSwappers:', err);
   }
 }

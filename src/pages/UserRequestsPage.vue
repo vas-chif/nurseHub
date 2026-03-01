@@ -482,7 +482,7 @@ import {
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
-import { notifyAdmins } from '../services/NotificationService';
+import { notifyAdmins, notifyEligibleSwappers } from '../services/NotificationService';
 import { operatorsService } from '../services/OperatorsService';
 import { useShiftLogic } from '../composables/useShiftLogic';
 import type {
@@ -569,14 +569,17 @@ async function submitSwap() {
       status: 'OPEN',
       createdAt: Date.now(),
     };
-    await addDoc(collection(db, 'shiftSwaps'), newSwap);
+    const docRef = await addDoc(collection(db, 'shiftSwaps'), newSwap);
 
     // Notify admins of new proposal
     void notifyAdmins(
       `${creatorName} ha proposto un cambio per il ${formatDate(swapForm.value.date)} (${swapForm.value.offeredShift} ↔ ${swapForm.value.desiredShift}).`,
-      'new-swap', // placeholder since swap document was just created and we don't strictly need it for the dashboard notification dot
+      docRef.id, // placeholder since swap document was just created and we don't strictly need it for the dashboard notification dot
       configId,
     );
+
+    // Notify ALL compatible peers
+    void notifyEligibleSwappers({ id: docRef.id, ...newSwap } as ShiftSwap, configId);
 
     $q.notify({ type: 'positive', message: 'Proposta di cambio inviata!' });
     await loadMySwaps();
@@ -594,13 +597,12 @@ async function loadMySwaps() {
   const q = query(
     collection(db, 'shiftSwaps'),
     where('creatorId', '==', uid),
-    where('deletedByCreator', '!=', true), // Filter out soft-deleted swaps
     orderBy('createdAt', 'desc'),
   );
   const snap = await getDocs(q);
   mySwaps.value = snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap)
-    .filter((s) => !s.deletedByCreator);
+    .filter((s) => s.deletedByCreator !== true);
 }
 
 function cancelSwap(swap: ShiftSwap) {
