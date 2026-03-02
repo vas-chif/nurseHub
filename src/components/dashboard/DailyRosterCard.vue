@@ -1,3 +1,113 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { useAuthStore } from '../../stores/authStore';
+import { useConfigStore } from '../../stores/configStore';
+import { useScheduleStore } from '../../stores/scheduleStore';
+import { date } from 'quasar';
+import { useQuasar } from 'quasar';
+
+const $q = useQuasar();
+const authStore = useAuthStore();
+const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
+
+const loading = ref(false);
+
+// Initialize selectedDate with today (YYYY-MM-DD format)
+const today = new Date();
+const selectedDate = ref(date.formatDate(today, 'YYYY-MM-DD'));
+
+// Formatted date for display (e.g., "15 Marzo 2024")
+const formattedSelectedDate = computed(() => {
+  if (!selectedDate.value) return '';
+  return date.formatDate(selectedDate.value, 'DD MMMM YYYY', {
+    days: ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'],
+    daysShort: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'],
+    months: [
+      'Gennaio',
+      'Febbraio',
+      'Marzo',
+      'Aprile',
+      'Maggio',
+      'Giugno',
+      'Luglio',
+      'Agosto',
+      'Settembre',
+      'Ottobre',
+      'Novembre',
+      'Dicembre',
+    ],
+    monthsShort: [
+      'Gen',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mag',
+      'Giu',
+      'Lug',
+      'Ago',
+      'Set',
+      'Ott',
+      'Nov',
+      'Dic',
+    ],
+  });
+});
+
+// Calculate shifts for the selected date
+const shifts = computed(() => {
+  const result = { M: [] as string[], P: [] as string[], N: [] as string[] };
+
+  if (!selectedDate.value || scheduleStore.operators.length === 0) return result;
+
+  // Filter and sort operators alphabetically
+  const sortedOps = [...scheduleStore.operators].sort((a, b) => a.name.localeCompare(b.name));
+
+  sortedOps.forEach((op) => {
+    const shiftCode = op.schedule?.[selectedDate.value];
+    if (shiftCode) {
+      if (shiftCode.startsWith('M')) result.M.push(op.name);
+      else if (shiftCode.startsWith('P')) result.P.push(op.name);
+      else if (shiftCode.startsWith('N')) result.N.push(op.name);
+    }
+  });
+
+  return result;
+});
+
+async function refreshRoster() {
+  const configId = configStore.activeConfigId || authStore.currentUser?.configId;
+  if (!configId) return;
+
+  loading.value = true;
+  try {
+    // Force refresh store from database
+    await scheduleStore.loadOperators(configId, true);
+    $q.notify({
+      type: 'positive',
+      message: 'Presenze aggiornate correttamente',
+      icon: 'sync',
+    });
+  } catch (error) {
+    console.error('Error refreshing roster:', error);
+    $q.notify({
+      type: 'negative',
+      message: "Errore durante l'aggiornamento",
+      icon: 'error',
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Initial load if required
+onMounted(() => {
+  if (scheduleStore.operators.length === 0) {
+    void refreshRoster();
+  }
+});
+</script>
+
 <template>
   <q-card flat bordered class="q-mt-sm">
     <q-card-section class="row items-center justify-between bg-primary text-white q-py-sm">
@@ -98,114 +208,6 @@
     </q-card-section>
   </q-card>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
-import { useAuthStore } from '../../stores/authStore';
-import { useConfigStore } from '../../stores/configStore';
-import { useScheduleStore } from '../../stores/scheduleStore';
-import { date } from 'quasar';
-import { useQuasar } from 'quasar';
-
-const $q = useQuasar();
-const authStore = useAuthStore();
-const configStore = useConfigStore();
-const scheduleStore = useScheduleStore();
-
-const loading = ref(false);
-
-// Initialize selectedDate with today (YYYY-MM-DD format)
-const today = new Date();
-const selectedDate = ref(date.formatDate(today, 'YYYY-MM-DD'));
-
-// Formatted date for display (e.g., "15 Marzo 2024")
-const formattedSelectedDate = computed(() => {
-  if (!selectedDate.value) return '';
-  return date.formatDate(selectedDate.value, 'DD MMMM YYYY', {
-    days: ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'],
-    daysShort: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'],
-    months: [
-      'Gennaio',
-      'Febbraio',
-      'Marzo',
-      'Aprile',
-      'Maggio',
-      'Giugno',
-      'Luglio',
-      'Agosto',
-      'Settembre',
-      'Ottobre',
-      'Novembre',
-      'Dicembre',
-    ],
-    monthsShort: [
-      'Gen',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mag',
-      'Giu',
-      'Lug',
-      'Ago',
-      'Set',
-      'Ott',
-      'Nov',
-      'Dic',
-    ],
-  });
-});
-
-// Calculate shifts for the selected date
-const shifts = computed(() => {
-  const result = { M: [] as string[], P: [] as string[], N: [] as string[] };
-
-  if (!selectedDate.value || scheduleStore.operators.length === 0) return result;
-
-  // Filter and sort operators alphabetically
-  const sortedOps = [...scheduleStore.operators].sort((a, b) => a.name.localeCompare(b.name));
-
-  sortedOps.forEach((op) => {
-    const shiftCode = op.schedule?.[selectedDate.value];
-    if (shiftCode === 'M') result.M.push(op.name);
-    if (shiftCode === 'P') result.P.push(op.name);
-    if (shiftCode === 'N') result.N.push(op.name);
-  });
-
-  return result;
-});
-
-async function refreshRoster() {
-  const configId = configStore.activeConfigId || authStore.currentUser?.configId;
-  if (!configId) return;
-
-  loading.value = true;
-  try {
-    // Force refresh store from database
-    await scheduleStore.loadOperators(configId, true);
-    $q.notify({
-      type: 'positive',
-      message: 'Presenze aggiornate correttamente',
-      icon: 'sync',
-    });
-  } catch (error) {
-    console.error('Error refreshing roster:', error);
-    $q.notify({
-      type: 'negative',
-      message: "Errore durante l'aggiornamento",
-      icon: 'error',
-    });
-  } finally {
-    loading.value = false;
-  }
-}
-
-// Initial load if required
-onMounted(() => {
-  if (scheduleStore.operators.length === 0) {
-    refreshRoster();
-  }
-});
-</script>
 
 <style scoped>
 .border-amber {
