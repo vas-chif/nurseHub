@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
-import type { Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   query,
@@ -45,8 +44,6 @@ const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const notificationStore = useNotificationStore();
 const { checkCompliance } = useShiftLogic();
-
-const unsubscribe: Unsubscribe | null = null;
 
 const activeTab = ref('pending');
 const loading = ref(false);
