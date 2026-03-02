@@ -186,7 +186,7 @@ export async function notifyEligibleOperators(
       // 3. If compatible, trigger notification!
       if (compatible && compatible.length > 0) {
         notifiedUids.add(opUserId); // Mark as notified
-        const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile, offriti ora!`;
+        const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile!`;
         // Chiamata fire-and-forget
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, requestObj.id).catch((e) =>
           console.error('Silent fail on notifyUser', e),
@@ -287,7 +287,7 @@ export async function notifyEligibleSwappers(
 
       if (opShift === swapObj.desiredShift) {
         notifiedUids.add(opUserId);
-        const messageStr = `Nuovo cambio turno: ${swapObj.creatorName || 'Un collega'} offre ${swapObj.offeredShift} per il tuo ${swapObj.desiredShift} del ${swapObj.date}. Accetta ora!`;
+        const messageStr = `Nuovo cambio turno: Un collega offre ${swapObj.offeredShift} per il tuo ${swapObj.desiredShift} del ${swapObj.date}!`;
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, swapObj.id).catch((e) =>
           console.error('Silent fail on notifyUser', e),
         );

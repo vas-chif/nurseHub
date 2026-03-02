@@ -8,9 +8,9 @@
  */
 
 // ==== IMPOSTAZIONI (DA MODIFICARE) ====
-const VERCEL_API_URL = 'https://tuo-progetto-vercel.vercel.app/api/sync-shifts';
+const VERCEL_API_URL = 'https://nursehub-psi.vercel.app/api/sync-shifts';
 const VITE_VERCEL_API_SECRET = 'NurseHub-AIzaSyD37bwODUeDZ6'; // Deve coincidere con env su Vercel
-const CONFIG_ID = 'ID_DELLA_CONFIGURAZIONE'; // L'ID della configurazione corrente su Firestore (es: 'BOFo...Wxt')
+const CONFIG_ID = 'BOFo6KpGcBy8mZK40Wxt'; // L'ID della configurazione corrente su Firestore (es: 'BOFo...Wxt')
 // ======================================
 
 const WAIT_MINUTES = 5;

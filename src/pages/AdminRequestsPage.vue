@@ -46,7 +46,7 @@ const scheduleStore = useScheduleStore();
 const notificationStore = useNotificationStore();
 const { checkCompliance } = useShiftLogic();
 
-let unsubscribe: Unsubscribe | null = null;
+const unsubscribe: Unsubscribe | null = null;
 
 const activeTab = ref('pending');
 const loading = ref(false);
@@ -187,6 +187,7 @@ onMounted(async () => {
   await fetchOperators();
   await fetchUsersMap();
   initRealtimeRequests();
+  initRealtimeSwaps();
   if (configStore.activeConfigId) {
     void scenarioStore.loadScenarios(configStore.activeConfigId);
   }
@@ -202,8 +203,12 @@ watch(
   },
 );
 
+let unsubscribeRequests: () => void;
+let unsubscribeSwaps: () => void;
+
 onUnmounted(() => {
-  if (unsubscribe) unsubscribe();
+  if (unsubscribeRequests) unsubscribeRequests();
+  if (unsubscribeSwaps) unsubscribeSwaps();
 });
 
 async function fetchOperators() {
@@ -240,7 +245,7 @@ function initRealtimeRequests() {
   loading.value = true;
   const q = query(collection(db, 'shiftRequests')); // Removed orderBy('createdAt', 'desc')
 
-  unsubscribe = onSnapshot(
+  unsubscribeRequests = onSnapshot(
     q,
     (snapshot) => {
       const loaded: ShiftRequest[] = [];
@@ -1063,21 +1068,25 @@ async function performEmptySwapArchive() {
   }
 }
 
-async function loadPendingSwaps() {
+function initRealtimeSwaps() {
   swapLoading.value = true;
-  try {
-    const colRef = collection(db, 'shiftSwaps');
-    // Load ALL swaps for full history (admin needs to see everything)
-    const snap = await getDocs(query(colRef, orderBy('createdAt', 'desc')));
-    allSwaps.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
-    // Pending = only those needing admin decision
-    pendingSwaps.value = allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN');
-  } catch (e) {
-    console.error('Error loading swaps', e);
-    $q.notify({ type: 'negative', message: 'Errore nel caricamento dei cambi turno' });
-  } finally {
-    swapLoading.value = false;
-  }
+  const colRef = collection(db, 'shiftSwaps');
+  // Load ALL swaps for full history (admin needs to see everything)
+  const q = query(colRef, orderBy('createdAt', 'desc'));
+
+  unsubscribeSwaps = onSnapshot(
+    q,
+    (snapshot) => {
+      allSwaps.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
+      // Pending = only those needing admin decision
+      pendingSwaps.value = allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN');
+      swapLoading.value = false;
+    },
+    (error) => {
+      console.error('Error loading swaps snapshot:', error);
+      swapLoading.value = false;
+    },
+  );
 }
 
 function approveSwap(swap: ShiftSwap) {
@@ -1225,7 +1234,7 @@ function rejectSwap(swap: ShiftSwap) {
 // Load swaps when tab switches to 'swaps'
 watch(activeTab, (val) => {
   if (val === 'swaps' && pendingSwaps.value.length === 0) {
-    void loadPendingSwaps();
+    void initRealtimeSwaps();
   }
 });
 </script>
@@ -1305,7 +1314,11 @@ watch(activeTab, (val) => {
     >
       <q-tab name="pending" label="In Attesa" />
       <q-tab name="history" label="Storico" />
-      <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz" />
+      <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
+        <q-badge v-if="pendingSwaps.length > 0" color="red" floating>{{
+          pendingSwaps.length
+        }}</q-badge>
+      </q-tab>
     </q-tabs>
 
     <q-separator />
@@ -1826,7 +1839,7 @@ watch(activeTab, (val) => {
             size="sm"
             icon="refresh"
             label="Aggiorna"
-            @click="loadPendingSwaps"
+            @click="initRealtimeSwaps"
             :loading="swapLoading"
           />
         </div>

@@ -12,6 +12,9 @@
     <!-- Shift Calendar -->
     <ShiftCalendar />
 
+    <!-- Daily Roster (Chi c'è di turno) -->
+    <DailyRosterCard />
+
     <!-- Active Requests -->
     <ActiveRequestsCard />
 
@@ -35,6 +38,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar, AppVisibility } from 'quasar';
 import ShiftCalendar from '../components/dashboard/ShiftCalendar.vue';
+import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
 import ActiveRequestsCard from '../components/dashboard/ActiveRequestsCard.vue';
 import SwapOpportunitiesCard from '../components/dashboard/SwapOpportunitiesCard.vue';
 import { useAuthStore } from '../stores/authStore';

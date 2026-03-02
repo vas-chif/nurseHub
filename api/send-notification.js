@@ -66,7 +66,7 @@ export default async function handler(req, res) {
           },
           webpush: {
             notification: {
-              icon: '/icons/icon-192x192.png',
+              icon: '/icon.png',
               vibrate: [200, 100, 200],
             },
             fcm_options: {
