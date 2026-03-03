@@ -15,6 +15,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../boot/firebase';
@@ -30,8 +31,10 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
+  const authUser = ref<FirebaseUser | null>(null);
+
   // Computed
-  const isAuthenticated = computed(() => currentUser.value !== null);
+  const isAuthenticated = computed(() => authUser.value !== null);
   const userRole = computed(() => currentUser.value?.role || 'user');
   const isAdmin = computed(() => userRole.value === 'admin');
   const isVerified = computed(() => currentUser.value?.isVerified || false);
@@ -50,6 +53,19 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       await loadUserProfile(userCredential.user.uid);
+    } catch (err) {
+      error.value = (err as Error).message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function resetPassword(email: string): Promise<void> {
+    loading.value = true;
+    error.value = null;
+    try {
+      await sendPasswordResetEmail(auth, email);
     } catch (err) {
       error.value = (err as Error).message;
       throw err;
@@ -124,6 +140,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     try {
       await signOut(auth);
+      authUser.value = null;
       currentUser.value = null;
       currentOperator.value = null;
       selectedOperatorIds.value = [];
@@ -159,10 +176,10 @@ export const useAuthStore = defineStore('auth', () => {
     selectedOperatorIds.value = operatorIds;
   }
 
-  // Initialize auth state listener and wait for first state
   function init(): Promise<void> {
     return new Promise((resolve) => {
       onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+        authUser.value = firebaseUser;
         if (firebaseUser) {
           void loadUserProfile(firebaseUser.uid).finally(() => resolve());
         } else {
@@ -177,6 +194,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     // State
+    authUser,
     currentUser,
     currentOperator,
     selectedOperatorIds,
@@ -190,6 +208,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Actions
     login,
     register,
+    resetPassword,
     logout,
     loadUserProfile,
     setSelectedOperators,

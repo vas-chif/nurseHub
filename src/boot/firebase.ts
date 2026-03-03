@@ -19,8 +19,13 @@
  */
 import { boot } from 'quasar/wrappers';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getAuth, type Auth } from 'firebase/auth';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore';
+import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
 import { getMessaging, type Messaging, isSupported } from 'firebase/messaging';
 import type { App } from 'vue';
 import { smartEnv } from 'src/config/smartEnvironment';
@@ -36,8 +41,17 @@ const firebaseConfig = smartEnv.getFirebaseConfig();
 logger.info('Initializing Firebase', { projectId: firebaseConfig.projectId });
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db: Firestore = getFirestore(firebaseApp);
+const db: Firestore = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 const auth: Auth = getAuth(firebaseApp);
+
+// Ensure local persistence for mobile/PWA instances across app restarts
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    logger.error('Auth persistence error', err);
+  });
+}
 let messaging: Messaging | null = null;
 
 // Messaging only works in the browser

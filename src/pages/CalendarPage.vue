@@ -17,12 +17,16 @@
         <q-badge color="grey-5" label="Riposo" />
       </div>
     </div>
+
+    <!-- Daily Roster (Chi c'è di turno) -->
+    <DailyRosterCard />
   </q-page>
 </template>
 
 <script setup lang="ts">
 import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
 import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
+import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
 import { useAuthStore } from '../stores/authStore';
 
 const authStore = useAuthStore();

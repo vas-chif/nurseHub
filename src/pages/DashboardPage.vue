@@ -1,44 +1,7 @@
-<template>
-  <q-page class="q-pa-md bg-grey-1">
-    <div class="row items-center justify-between q-mb-md">
-      <div class="text-h5 text-weight-bold text-primary">Dashboard</div>
-      <div>
-        <q-btn flat round color="primary" icon="refresh" :loading="syncing" @click="syncMyShifts">
-          <q-tooltip>Aggiorna i tuoi turni da Excel</q-tooltip>
-        </q-btn>
-      </div>
-    </div>
-
-    <!-- Shift Calendar -->
-    <ShiftCalendar />
-
-    <!-- Daily Roster (Chi c'è di turno) -->
-    <DailyRosterCard />
-
-    <!-- Active Requests -->
-    <ActiveRequestsCard />
-
-    <!-- Swap Opportunities (Phase 20.5) -->
-    <SwapOpportunitiesCard v-if="authStore.currentOperator" />
-
-    <!-- Quick Actions (Optional Future) -->
-    <div class="q-mt-lg text-center">
-      <q-btn
-        outline
-        color="primary"
-        label="Vedi tutto il calendario"
-        to="/calendar"
-        class="full-width"
-      />
-    </div>
-  </q-page>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar, AppVisibility } from 'quasar';
 import ShiftCalendar from '../components/dashboard/ShiftCalendar.vue';
-import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
 import ActiveRequestsCard from '../components/dashboard/ActiveRequestsCard.vue';
 import SwapOpportunitiesCard from '../components/dashboard/SwapOpportunitiesCard.vue';
 import { useAuthStore } from '../stores/authStore';
@@ -105,3 +68,36 @@ watch(
   },
 );
 </script>
+
+<template>
+  <q-page class="q-pa-md bg-grey-1">
+    <div class="row items-center justify-between q-mb-md">
+      <div class="text-h5 text-weight-bold text-primary">Dashboard</div>
+      <div>
+        <q-btn flat round color="primary" icon="refresh" :loading="syncing" @click="syncMyShifts">
+          <q-tooltip>Aggiorna i tuoi turni da Excel</q-tooltip>
+        </q-btn>
+      </div>
+    </div>
+
+    <!-- Shift Calendar -->
+    <ShiftCalendar />
+
+    <!-- Active Requests -->
+    <ActiveRequestsCard />
+
+    <!-- Swap Opportunities (Phase 20.5) -->
+    <SwapOpportunitiesCard v-if="authStore.currentOperator" />
+
+    <!-- Quick Actions (Optional Future) -->
+    <div class="q-mt-lg text-center">
+      <q-btn
+        outline
+        color="primary"
+        label="Vedi tutto il calendario"
+        to="/calendar"
+        class="full-width"
+      />
+    </div>
+  </q-page>
+</template>

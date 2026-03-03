@@ -50,9 +50,19 @@
             class="full-width"
           />
 
-          <div class="text-center q-mt-md">
+          <div class="row justify-between text-caption q-mt-md">
             <q-btn
               flat
+              dense
+              no-caps
+              label="Password dimenticata?"
+              color="primary"
+              @click="showResetDialog = true"
+            />
+            <q-btn
+              flat
+              dense
+              no-caps
               label="Non hai un account? Registrati"
               color="primary"
               @click="$router.push('/register')"
@@ -61,14 +71,45 @@
         </q-form>
       </q-card-section>
     </q-card>
+
+    <!-- Dialog for Password Reset -->
+    <q-dialog v-model="showResetDialog" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Recupera Password</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <p class="text-body2">
+            Inserisci l'indirizzo email associato al tuo account. Ti invieremo un link per
+            reimpostare la tua password.
+          </p>
+          <q-input
+            dense
+            v-model="resetEmail"
+            type="email"
+            autofocus
+            placeholder="La tua email..."
+            @keyup.enter="handleResetPassword"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right" class="text-primary">
+          <q-btn flat label="Annulla" v-close-popup />
+          <q-btn flat label="Invia Email" :loading="resetLoading" @click="handleResetPassword" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 import { useAuthStore } from '../stores/authStore';
 
+const $q = useQuasar();
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -77,6 +118,46 @@ const password = ref('');
 const loading = ref(false);
 const errorMessage = ref('');
 const isPwd = ref(true);
+
+// Password Reset refs
+const showResetDialog = ref(false);
+const resetEmail = ref('');
+const resetLoading = ref(false);
+
+async function handleResetPassword() {
+  if (!resetEmail.value) {
+    $q.notify({
+      color: 'negative',
+      message: 'Inserisci un indirizzo email',
+      icon: 'warning',
+      position: 'top',
+    });
+    return;
+  }
+
+  resetLoading.value = true;
+  try {
+    await authStore.resetPassword(resetEmail.value);
+    showResetDialog.value = false;
+    resetEmail.value = '';
+    $q.notify({
+      color: 'positive',
+      message: 'Email di ripristino inviata! Controlla la tua casella di posta.',
+      icon: 'check_circle',
+      position: 'top',
+    });
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    $q.notify({
+      color: 'negative',
+      message: err.message || "Errore durante l'invio della mail. Riprova.",
+      icon: 'warning',
+      position: 'top',
+    });
+  } finally {
+    resetLoading.value = false;
+  }
+}
 
 async function handleLogin() {
   loading.value = true;

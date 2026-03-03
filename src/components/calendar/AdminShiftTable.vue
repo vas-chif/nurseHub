@@ -246,9 +246,9 @@
           <div class="column q-gutter-sm">
             <div class="row items-center">
               <q-badge color="amber-9" class="text-black" style="width: 40px">M</q-badge>
-              <span class="q-ml-md"
-                >Mattina (tutti i codici che iniziano con M: M, MRDN, etc.)</span
-              >
+              <span class="q-ml-md">
+                Mattina (tutti i codici che iniziano con M: M, MRDN, etc.)
+              </span>
             </div>
             <div class="row items-center">
               <q-badge color="deep-orange-6" class="text-white" style="width: 40px">P</q-badge>

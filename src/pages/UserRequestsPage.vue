@@ -419,7 +419,12 @@
                   approvazione admin
                 </span>
                 <span v-else-if="swap.status === 'APPROVED'" class="text-positive">
-                  <q-icon name="check_circle" /> Approvato!
+                  <q-icon name="check_circle" /> Approvato
+                  <span class="text-grey-8 q-ml-xs text-caption" v-if="swap.counterpartName">
+                    (Cambio con: <strong>{{ swap.counterpartName }}</strong
+                    >)
+                  </span>
+                  <span v-else>!</span>
                 </span>
                 <span v-else-if="swap.status === 'REJECTED'" class="text-negative">
                   <q-icon name="cancel" /> Rifiutato<span v-if="swap.adminNote"
