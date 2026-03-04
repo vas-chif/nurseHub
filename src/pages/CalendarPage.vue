@@ -1,3 +1,12 @@
+<script setup lang="ts">
+import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
+import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
+import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
+import { useAuthStore } from '../stores/authStore';
+
+const authStore = useAuthStore();
+</script>
+
 <template>
   <q-page class="q-pa-md bg-white column">
     <!-- Admin View: Full Table -->
@@ -19,15 +28,6 @@
     </div>
 
     <!-- Daily Roster (Chi c'è di turno) -->
-    <DailyRosterCard />
+    <DailyRosterCard class="q-mt-lg" v-if="!authStore.isAdmin" />
   </q-page>
 </template>
-
-<script setup lang="ts">
-import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
-import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
-import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
-import { useAuthStore } from '../stores/authStore';
-
-const authStore = useAuthStore();
-</script>

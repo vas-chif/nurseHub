@@ -1,17 +1,19 @@
-import admin from 'firebase-admin';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
+if (!getApps().length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    initializeApp({
+      credential: cert(serviceAccount),
     });
   } catch (error) {
     console.error('Firebase Admin init error:', error);
   }
 }
 
-const db = admin.firestore();
+const db = getFirestore();
 
 // Note: Ensure this node-fetch is available in Vercel. We can simply use the built-in fetch if Node >= 18.
 export default async function handler(req, res) {
@@ -166,7 +168,7 @@ export default async function handler(req, res) {
       if (docId) {
         // Update existing operator
         const opRef = db.collection('operators').doc(docId);
-        batch.update(opRef, { schedule, lastSynced: admin.firestore.FieldValue.serverTimestamp() });
+        batch.update(opRef, { schedule, lastSynced: FieldValue.serverTimestamp() });
         operatorsUpdated++;
       }
       // If operator doesn't exist, we don't create them here. Creation happens via "Importa File" in Admin.
@@ -174,7 +176,7 @@ export default async function handler(req, res) {
 
     // 7. Update Configuration sync timestamp
     const configRef = db.collection('configurations').doc(configId);
-    batch.update(configRef, { lastSyncedFromSheets: admin.firestore.FieldValue.serverTimestamp() });
+    batch.update(configRef, { lastSyncedFromSheets: FieldValue.serverTimestamp() });
 
     await batch.commit();
 

@@ -10,6 +10,7 @@ const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
+const expanded = ref(false);
 
 const loading = ref(false);
 
@@ -109,104 +110,108 @@ onMounted(() => {
 </script>
 
 <template>
-  <q-card flat bordered class="q-mt-sm">
-    <q-card-section class="row items-center justify-between bg-primary text-white q-py-sm">
-      <div class="text-subtitle1 text-weight-bold">
-        <q-icon name="groups" size="sm" class="q-mr-xs" />
-        Chi c'è in turno
-      </div>
-      <div>
-        <q-btn flat dense round icon="event" class="q-mr-sm" title="Scegli data">
-          <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-            <q-date v-model="selectedDate" mask="YYYY-MM-DD">
-              <div class="row items-center justify-end">
-                <q-btn v-close-popup label="Chiudi" color="primary" flat />
-              </div>
-            </q-date>
-          </q-popup-proxy>
-        </q-btn>
-        <q-btn
-          flat
-          dense
-          round
-          icon="refresh"
-          title="Aggiorna presenze"
-          :loading="loading"
-          @click="refreshRoster"
-        />
-      </div>
-    </q-card-section>
+  <q-expansion-item
+    header-class="bg-primary text-white text-weight-bold"
+    v-model="expanded"
+    label="Chi c'è in turno"
+    icon="groups"
+    expand-icon-class="text-white"
+  >
+    <q-card flat bordered class="q-mt-sm">
+      <q-card-section class="row items-center justify-between bg-primary text-white q-py-sm">
+        <div>
+          <q-btn flat dense round icon="event" class="q-mr-sm" title="Scegli data">
+            <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+              <q-date v-model="selectedDate" mask="YYYY-MM-DD">
+                <div class="row items-center justify-end">
+                  <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                </div>
+              </q-date>
+            </q-popup-proxy>
+          </q-btn>
+          <q-btn
+            flat
+            dense
+            round
+            icon="refresh"
+            title="Aggiorna presenze"
+            :loading="loading"
+            @click="refreshRoster"
+          />
+        </div>
+      </q-card-section>
 
-    <q-card-section class="q-pa-sm bg-grey-2 text-center text-caption text-weight-bold">
-      {{ formattedSelectedDate }}
-    </q-card-section>
+      <q-card-section class="q-pa-sm bg-grey-2 text-center text-caption text-weight-bold">
+        {{ formattedSelectedDate }}
+      </q-card-section>
 
-    <q-card-section class="q-pa-md">
-      <div v-if="loading" class="text-center q-pa-lg">
-        <q-spinner color="primary" size="2em" />
-        <div class="q-mt-sm text-grey">Sincronizzazione turni in corso...</div>
-      </div>
-
-      <div v-else class="row q-col-gutter-md">
-        <!-- Mattina -->
-        <div class="col-12 col-md-4">
-          <q-card flat class="bg-amber-1 border-amber">
-            <q-card-section class="q-pb-xs">
-              <div class="text-subtitle2 text-black">
-                <q-badge color="amber-8" class="q-mr-sm">M</q-badge> Mattina
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-none">
-              <div v-if="shifts.M.length === 0" class="text-caption text-grey text-italic">
-                Nessun operatore
-              </div>
-              <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                <li v-for="name in shifts.M" :key="name">{{ name }}</li>
-              </ul>
-            </q-card-section>
-          </q-card>
+      <q-card-section class="q-pa-md">
+        <div v-if="loading" class="text-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+          <div class="q-mt-sm text-grey">Sincronizzazione turni in corso...</div>
         </div>
 
-        <!-- Pomeriggio -->
-        <div class="col-12 col-md-4">
-          <q-card flat class="bg-orange-1 border-orange">
-            <q-card-section class="q-pb-xs">
-              <div class="text-subtitle2 text-black">
-                <q-badge color="orange-8" class="q-mr-sm">P</q-badge> Pomeriggio
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-none">
-              <div v-if="shifts.P.length === 0" class="text-caption text-grey text-italic">
-                Nessun operatore
-              </div>
-              <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                <li v-for="name in shifts.P" :key="name">{{ name }}</li>
-              </ul>
-            </q-card-section>
-          </q-card>
-        </div>
+        <div v-else class="row q-col-gutter-md">
+          <!-- Mattina -->
+          <div class="col-12 col-md-4">
+            <q-card flat class="bg-amber-1 border-amber">
+              <q-card-section class="q-pb-xs">
+                <div class="text-subtitle2 text-black">
+                  <q-badge color="amber-8" class="q-mr-sm">M</q-badge> Mattina
+                </div>
+              </q-card-section>
+              <q-card-section class="q-pt-none">
+                <div v-if="shifts.M.length === 0" class="text-caption text-grey text-italic">
+                  Nessun operatore
+                </div>
+                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
+                  <li v-for="name in shifts.M" :key="name">{{ name }}</li>
+                </ul>
+              </q-card-section>
+            </q-card>
+          </div>
 
-        <!-- Notte -->
-        <div class="col-12 col-md-4">
-          <q-card flat class="bg-blue-1 border-blue">
-            <q-card-section class="q-pb-xs">
-              <div class="text-subtitle2 text-black">
-                <q-badge color="blue-10" class="q-mr-sm">N</q-badge> Notte
-              </div>
-            </q-card-section>
-            <q-card-section class="q-pt-none">
-              <div v-if="shifts.N.length === 0" class="text-caption text-grey text-italic">
-                Nessun operatore
-              </div>
-              <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                <li v-for="name in shifts.N" :key="name">{{ name }}</li>
-              </ul>
-            </q-card-section>
-          </q-card>
+          <!-- Pomeriggio -->
+          <div class="col-12 col-md-4">
+            <q-card flat class="bg-orange-1 border-orange">
+              <q-card-section class="q-pb-xs">
+                <div class="text-subtitle2 text-black">
+                  <q-badge color="orange-8" class="q-mr-sm">P</q-badge> Pomeriggio
+                </div>
+              </q-card-section>
+              <q-card-section class="q-pt-none">
+                <div v-if="shifts.P.length === 0" class="text-caption text-grey text-italic">
+                  Nessun operatore
+                </div>
+                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
+                  <li v-for="name in shifts.P" :key="name">{{ name }}</li>
+                </ul>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <!-- Notte -->
+          <div class="col-12 col-md-4">
+            <q-card flat class="bg-blue-1 border-blue">
+              <q-card-section class="q-pb-xs">
+                <div class="text-subtitle2 text-black">
+                  <q-badge color="blue-10" class="q-mr-sm">N</q-badge> Notte
+                </div>
+              </q-card-section>
+              <q-card-section class="q-pt-none">
+                <div v-if="shifts.N.length === 0" class="text-caption text-grey text-italic">
+                  Nessun operatore
+                </div>
+                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
+                  <li v-for="name in shifts.N" :key="name">{{ name }}</li>
+                </ul>
+              </q-card-section>
+            </q-card>
+          </div>
         </div>
-      </div>
-    </q-card-section>
-  </q-card>
+      </q-card-section>
+    </q-card>
+  </q-expansion-item>
 </template>
 
 <style scoped>
