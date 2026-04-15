@@ -85,7 +85,19 @@
               hint="Incolla qui il link completo del foglio Google"
             >
               <template v-slot:append>
-                <q-btn flat round dense icon="content_paste" @click="pasteUrl(config)" />
+                <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'spreadsheet')" />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="config.gasWebUrl"
+              label="GAS Web App URL (Script Google)"
+              outlined
+              dense
+              hint="Incolla l'URL dell'applicazione web creato dallo script"
+            >
+              <template v-slot:append>
+                <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'gas')" />
               </template>
             </q-input>
           </q-card-section>
@@ -625,6 +637,7 @@ async function createConfiguration() {
       name: newConfigName.value,
       profession: newConfigProfession.value,
       spreadsheetUrl: '',
+      gasWebUrl: '',
       createdAt: Date.now(),
       createdBy: authStore.currentUser!.uid,
       isActive: false,
@@ -651,6 +664,7 @@ async function saveConfig(config: SystemConfiguration) {
       name: config.name,
       profession: config.profession,
       spreadsheetUrl: config.spreadsheetUrl,
+      gasWebUrl: config.gasWebUrl || '',
     });
     const index = configurations.value.findIndex((c) => c.id === config.id);
     if (index !== -1) configurations.value[index] = { ...config };
@@ -724,10 +738,13 @@ async function triggerSync(config: SystemConfiguration) {
   }
 }
 
-async function pasteUrl(config: SystemConfiguration) {
+async function pasteUrl(config: SystemConfiguration, type: 'spreadsheet' | 'gas') {
   try {
     const text = await navigator.clipboard.readText();
-    if (config) config.spreadsheetUrl = text;
+    if (config) {
+      if (type === 'spreadsheet') config.spreadsheetUrl = text;
+      else config.gasWebUrl = text;
+    }
   } catch {
     $q.notify({ type: 'warning', message: 'Impossibile incollare dagli appunti' });
   }

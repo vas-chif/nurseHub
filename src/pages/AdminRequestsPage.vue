@@ -385,6 +385,7 @@ async function syncToSheets(operatorName: string, date: string, newShift: string
     ...DEFAULT_SHEETS_CONFIG,
     spreadsheetUrl:
       configStore.activeConfig?.spreadsheetUrl || DEFAULT_SHEETS_CONFIG.spreadsheetUrl,
+    gasWebUrl: configStore.activeConfig?.gasWebUrl || '',
   };
 
   const sheetsService = new GoogleSheetsService(appConfig);

@@ -212,6 +212,7 @@ export interface SystemConfiguration {
   name: string; // User-defined name (e.g., "Turni Infermieri Reparto A")
   profession: 'Infermiere' | 'Medico' | 'OSS'; // Target profession
   spreadsheetUrl: string; // Google Sheets URL for this config
+  gasWebUrl?: string; // Google Apps Script URL for this config
   createdAt: number;
   createdBy: string; // Admin UID
   isActive?: boolean; // Currently selected configuration
