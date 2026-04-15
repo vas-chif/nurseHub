@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   // 2. Validate Secret Token
   const authHeader = req.headers['authorization'];
-  if (!authHeader || authHeader !== `Bearer ${process.env.VERCEL_API_SECRET}`) {
+  if (!authHeader || authHeader !== 'Bearer ' + process.env.VERCEL_API_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
