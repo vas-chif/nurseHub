@@ -68,6 +68,20 @@
               @click="$router.push('/register')"
             />
           </div>
+
+          <q-separator class="q-my-md" />
+
+          <div class="row justify-center">
+            <q-btn
+              flat
+              no-caps
+              icon="install_mobile"
+              label="Installa come App"
+              color="grey-7"
+              to="/install"
+              class="full-width"
+            />
+          </div>
         </q-form>
       </q-card-section>
     </q-card>
