@@ -55,42 +55,49 @@ const dismiss = () => {
   <div v-if="pwaStore.isInstallable" class="pwa-banner-container">
     <q-banner dense class="pwa-premium-banner text-white q-py-sm">
       <template v-slot:avatar>
-        <q-icon name="stars" color="amber" size="md" class="q-mr-sm" />
+        <q-avatar size="40px" color="amber" text-color="primary" class="q-mr-sm">
+          <q-icon name="star" />
+        </q-avatar>
       </template>
 
-      <div class="column">
+      <div class="column justify-center h-full">
         <span class="text-weight-bold text-subtitle1">Installa l'app per un'esperienza migliore!</span>
-        <span class="text-caption opacity-80"> Più veloce, sicura e sempre pronta sul tuo desktop. </span>
+        <span class="text-caption opacity-80">
+          Più veloce, sicura e sempre pronta sul tuo desktop.
+        </span>
       </div>
 
       <template v-slot:action>
-        <q-btn
-          flat
-          dense
-          icon="help_outline"
-          class="q-mr-md"
-          @click="showHelp = true"
-          v-if="pwaStore.isSafari && !pwaStore.deferredPrompt"
-        >
-          <q-tooltip>Come installare su Safari?</q-tooltip>
-        </q-btn>
+        <div class="row items-center">
+          <q-btn
+            flat
+            dense
+            icon="help_outline"
+            class="q-mr-md"
+            @click="showHelp = true"
+            v-if="pwaStore.isSafari && !pwaStore.deferredPrompt"
+          >
+            <q-tooltip>Come installare su Safari?</q-tooltip>
+          </q-btn>
 
-        <q-btn
-          flat
-          label="Più tardi"
-          color="white"
-          class="q-mr-sm text-capitalize"
-          @click="dismiss"
-        />
-        <q-btn
-          unelevated
-          label="Installa Ora"
-          color="white"
-          text-color="primary"
-          icon="downloading"
-          class="install-btn text-weight-bold q-px-md"
-          @click="installApp"
-        />
+          <q-btn
+            flat
+            label="Più Tardi"
+            color="white"
+            class="q-mr-sm text-capitalize"
+            @click="dismiss"
+          />
+          <q-btn
+            unelevated
+            rounded
+            label="INSTALLA ORA"
+            color="white"
+            text-color="primary"
+            icon="download_for_offline"
+            class="install-btn text-weight-bold q-px-md shadow-2"
+            @click="installApp"
+          />
+        </div>
       </template>
     </q-banner>
 
