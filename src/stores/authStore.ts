@@ -207,6 +207,7 @@ export const useAuthStore = defineStore('auth', () => {
     selectedOperatorIds,
     loading,
     error,
+    isInitialized,
     // Computed
     isAuthenticated,
     userRole,
