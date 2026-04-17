@@ -25,7 +25,13 @@ import {
   persistentMultipleTabManager,
   type Firestore,
 } from 'firebase/firestore';
-import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
+import {
+  getAuth,
+  setPersistence,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  type Auth,
+} from 'firebase/auth';
 import { getMessaging, type Messaging, isSupported } from 'firebase/messaging';
 import type { App } from 'vue';
 import { smartEnv } from 'src/config/smartEnvironment';
@@ -48,9 +54,15 @@ const auth: Auth = getAuth(firebaseApp);
 
 // Ensure local persistence for mobile/PWA instances across app restarts
 if (typeof window !== 'undefined') {
-  setPersistence(auth, browserLocalPersistence).catch((err) => {
-    logger.error('Auth persistence error', err);
-  });
+  // Try indexedDB first (best for PWA/iOS), fallback to localStorage
+  setPersistence(auth, indexedDBLocalPersistence)
+    .catch(() => {
+      logger.warn('IndexedDB persistence failed, falling back to browserLocalPersistence');
+      return setPersistence(auth, browserLocalPersistence);
+    })
+    .catch((err) => {
+      logger.error('Auth persistence error', err);
+    });
 }
 let messaging: Messaging | null = null;
 

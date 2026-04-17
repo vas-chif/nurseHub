@@ -32,13 +32,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('pages/RegisterPage.vue'),
   },
   {
-    path: '/install',
-    component: () => import('layouts/SimpleLayout.vue'),
-    children: [
-      { path: '', component: () => import('pages/pwa/InstallPage.vue') }
-    ]
-  },
-  {
     path: '/pending-verification',
     component: () => import('pages/PendingVerificationPage.vue'),
     meta: { requiresAuth: true },

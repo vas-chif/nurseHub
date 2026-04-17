@@ -30,6 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
   const selectedOperatorIds = ref<string[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const isInitialized = ref(false);
 
   const authUser = ref<FirebaseUser | null>(null);
 
@@ -177,20 +178,26 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function init(): Promise<void> {
+    if (isInitialized.value) return Promise.resolve();
+
     return new Promise((resolve) => {
       onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
         authUser.value = firebaseUser;
         if (firebaseUser) {
-          void loadUserProfile(firebaseUser.uid).finally(() => resolve());
+          void loadUserProfile(firebaseUser.uid).finally(() => {
+            isInitialized.value = true;
+            resolve();
+          });
         } else {
           currentUser.value = null;
           currentOperator.value = null;
           selectedOperatorIds.value = [];
+          isInitialized.value = true;
           resolve();
         }
       });
     });
-  }
+  } /*end init*/
 
   return {
     // State

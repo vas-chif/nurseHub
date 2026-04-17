@@ -7,12 +7,17 @@
 import type { NavigationGuardNext, RouteLocationNormalized } from 'vue-router';
 import { useAuthStore } from '../../stores/authStore';
 
-export function authGuard(
+export async function authGuard(
   to: RouteLocationNormalized,
   from: RouteLocationNormalized,
   next: NavigationGuardNext,
-): void {
+): Promise<void> {
   const authStore = useAuthStore();
+
+  // Wait for auth state to be initialized on first load
+  if (!authStore.isInitialized) {
+    await authStore.init();
+  }
 
   // Check if route requires authentication
   if (to.meta.requiresAuth) {

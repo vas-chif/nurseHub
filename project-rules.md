@@ -22,6 +22,8 @@
 5. **§1.5 GDPR Compliance**: Art. 30 (audit logs) + Art. 32 (data security)
 6. **§1.6 Pre-Commit Error Check**: TypeScript + ESLint PRIMA di commit/build
 7. **§1.7 JSDoc File Headers**: OBBLIGATORIO per tutti i file .ts/.vue
+8. **§1.8 No `any`**: MAI usare `any` (Sostituire con interfacce o `unknown`)
+9. **§1.9 No `eslint-disable`**: MAI disabilitare le regole di linting
 
 ---
 
@@ -278,6 +280,35 @@ const calculateCost = (reads: number): number => {
 - password (SEMPRE!)
 - uid (opzionale, redatto se in log pubblici)
 ```
+
+---
+
+## 🛡️ **§1.8 No `any` - STRICT TYPING**
+
+**REGOLA**: L'uso del tipo `any` è categoricamente VIETATO.
+
+```typescript
+// ❌ VIETATO
+const data: any = await fetchData();
+
+// ✅ CORRETTO - Interfaccia specifica
+interface UserData { id: string; name: string; }
+const data: UserData = await fetchData();
+
+// ✅ CORRETTO - Se il tipo è ignoto
+const data: unknown = await fetchData();
+if (typeof data === 'string') { ... }
+```
+
+**Motivo**: Lavoriamo con dati sanitari. Un errore di tipo può causare malfunzionamenti critici in situazioni di emergenza.
+
+---
+
+## 🚫 **§1.9 No `eslint-disable` - CODE QUALITY**
+
+**REGOLA**: È VIETATO l'uso di commenti `eslint-disable`.
+
+**Motivo**: Le regole di linting sono lì per proteggere l'integrità del codice. Se una regola viene violata, va risolta la causa, non nascosto l'avviso.
 
 ---
 
