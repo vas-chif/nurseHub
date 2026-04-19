@@ -6,5 +6,5 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "exclude": ["src-pwa"]
+  "exclude": ["src-pwa", "tempfolder"]
 }

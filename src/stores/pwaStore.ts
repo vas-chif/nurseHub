@@ -19,9 +19,6 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useSecureLogger } from '../utils/secureLogger';
 
-/**
- * Interface for the beforeinstallprompt event
- */
 export interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   readonly userChoice: Promise<{
@@ -35,32 +32,28 @@ export const usePwaStore = defineStore('pwa', () => {
   const logger = useSecureLogger();
   const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null);
   
-  const isInstalled = ref(false);
-  const internalSafari = ref(false);
-  const isDismissed = ref(false); // true finché non scade il cooldown
-  const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minuti
+  // Initialize state from localStorage
+  const isInstalled = ref(localStorage.getItem('pwa_installed') === 'true');
+  const isSafari = ref(false);
+  const isDismissed = ref(false); 
+  const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+  const STORAGE_KEY_DISMISS = 'pwa_dismissed_until';
 
-  /**
-   * Detects if the app is already running in standalone mode (installed)
-   */
-  const checkStandalone = () => {
-    const nav = window.navigator as Navigator & { standalone?: boolean };
-    return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
-  };
-
-  /**
-   * Detects if the browser is Safari on iOS/macOS
-   */
-  const checkSafari = () => {
-    const ua = window.navigator.userAgent;
-    const isIPad = !!ua.match(/iPad/i);
-    const isIPhone = !!ua.match(/iPhone/i);
-    const isMac = !!ua.match(/Macintosh/i);
-    const isSafariBrowser = !!ua.match(/Safari/i) && !ua.match(/CriOS/i) && !ua.match(/FxiOS/i);
-    return (isIPad || isIPhone || isMac) && isSafariBrowser;
-  };
-
-  const isSafari = computed(() => internalSafari.value);
+  // Check on boot if we are still in cooldown
+  const storedDismiss = localStorage.getItem(STORAGE_KEY_DISMISS);
+  if (storedDismiss) {
+    const dismissUntil = parseInt(storedDismiss, 10);
+    if (Date.now() < dismissUntil) {
+      isDismissed.value = true;
+      // Setup timeout to clear it when time expires
+      setTimeout(() => {
+        isDismissed.value = false;
+        localStorage.removeItem(STORAGE_KEY_DISMISS);
+      }, dismissUntil - Date.now());
+    } else {
+      localStorage.removeItem(STORAGE_KEY_DISMISS);
+    }
+  }
 
   const isInstallable = computed(() => {
     // Se è già stato scartato (cooldown attivo) o è già installato, non mostrare nulla
@@ -74,14 +67,7 @@ export const usePwaStore = defineStore('pwa', () => {
   });
 
   function setSafari(status: boolean) {
-    internalSafari.value = status;
-  }
-
-  function setInstalled(status: boolean) {
-    isInstalled.value = status;
-    if (status) {
-      deferredPrompt.value = null;
-    }
+    isSafari.value = status;
   }
 
   function setDeferredPrompt(e: BeforeInstallPromptEvent) {
@@ -89,33 +75,27 @@ export const usePwaStore = defineStore('pwa', () => {
     deferredPrompt.value = e;
   }
 
-  /**
-   * Initializes the PWA event listeners
-   */
-  function init() {
-    // Auto-inizializza stato browser
-    setSafari(checkSafari());
-    setInstalled(checkStandalone());
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    });
-
-    window.addEventListener('appinstalled', () => {
-      logger.info('[PWA_STORE] App installata con successo');
-      setInstalled(true);
-    });
-  } /*end init*/
-
   function dismiss() {
     isDismissed.value = true;
+    const dismissUntil = Date.now() + DISMISS_COOLDOWN_MS;
+    localStorage.setItem(STORAGE_KEY_DISMISS, dismissUntil.toString());
+    
     logger.info('[PWA_STORE] Banner scartato, ricomparirà tra 10 minuti');
+    
     setTimeout(() => {
       isDismissed.value = false;
+      localStorage.removeItem(STORAGE_KEY_DISMISS);
       logger.info('[PWA_STORE] Cooldown scaduto, banner pronto a ricomparire');
     }, DISMISS_COOLDOWN_MS);
-  } /*end dismiss*/
+  }
+
+  function setInstalled(status: boolean) {
+    isInstalled.value = status;
+    if (status) {
+      deferredPrompt.value = null;
+      localStorage.setItem('pwa_installed', 'true');
+    }
+  }
 
   async function install() {
     if (!deferredPrompt.value) {
@@ -138,7 +118,7 @@ export const usePwaStore = defineStore('pwa', () => {
       logger.error('[PWA_STORE] Errore durante l\'installazione:', error);
       return false;
     }
-  } /*end install*/
+  }
 
   return {
     deferredPrompt,
@@ -148,9 +128,9 @@ export const usePwaStore = defineStore('pwa', () => {
     setDeferredPrompt,
     setInstalled,
     setSafari,
-    init,
     dismiss,
-    install,
+    install
   };
-}); /*end usePwaStore*/
+});
+
 

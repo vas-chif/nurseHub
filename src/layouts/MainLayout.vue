@@ -7,7 +7,6 @@ import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import type { SystemConfiguration } from '../types/models';
-import { usePwaStore } from 'src/stores/pwaStore';
 import PwaInstallBanner from 'src/components/PwaInstallBanner.vue';
 
 const router = useRouter();
@@ -15,12 +14,10 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notificationStore = useNotificationStore();
 const scheduleStore = useScheduleStore();
-const pwaStore = usePwaStore();
 const $q = useQuasar();
 
 // Load configurations on mount
 onMounted(async () => {
-  pwaStore.init();
   scheduleStore.init();
   // Check for existing notification permission and refresh token if granted
   if (authStore.isAdmin) {

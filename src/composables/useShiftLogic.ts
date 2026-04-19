@@ -1,9 +1,10 @@
-import { REPLACEMENT_SCENARIOS } from '../config/sheets';
+import { useScenarioStore } from '../stores/scenarioStore';
 import type {
   ShiftCode,
   ComplianceResult,
   CompatibleScenario,
   ReplacementScenario,
+  ReplacementRole,
 } from '../types/models';
 
 export function useShiftLogic() {
@@ -28,7 +29,7 @@ export function useShiftLogic() {
    * given a specific operator's current shift.
    *
    * @param scenarios Optional — pass Firestore-loaded scenarios to use live data.
-   *                  Falls back to hardcoded REPLACEMENT_SCENARIOS if omitted.
+   *                  Falls back to current scenarios in scenarioStore if omitted.
    */
   function getCompatibleScenarios(
     targetShift: ShiftCode,
@@ -38,8 +39,8 @@ export function useShiftLogic() {
     scenarios?: ReplacementScenario[],
   ): CompatibleScenario[] {
     const validScenarios: CompatibleScenario[] = [];
-    const sourceScenarios = scenarios ?? REPLACEMENT_SCENARIOS;
-    const filtered = sourceScenarios.filter((s) => s.targetShift === targetShift);
+    const sourceScenarios = scenarios ?? useScenarioStore().scenarios;
+    const filtered = sourceScenarios.filter((s: ReplacementScenario) => s.targetShift === targetShift);
 
     let nextShift: ShiftCode = 'R';
     if (reqDate && operatorSchedule) {
@@ -51,7 +52,7 @@ export function useShiftLogic() {
     }
 
     for (const scenario of filtered) {
-      scenario.roles.forEach((role, index) => {
+      scenario.roles.forEach((role: ReplacementRole, index: number) => {
         let isMatch = false;
 
         if (role.isNextDay) {

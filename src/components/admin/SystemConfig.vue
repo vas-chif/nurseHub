@@ -536,12 +536,13 @@ import { useQuasar } from 'quasar';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
+import { useScenarioStore } from '../../stores/scenarioStore';
 import { googleSheetsService, syncService } from '../../services';
-import { REPLACEMENT_SCENARIOS } from '../../config/sheets';
 import type { SystemConfiguration, ReplacementScenario, ReplacementRole } from '../../types/models';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const scenarioStore = useScenarioStore();
 
 // Config state
 const configurations = ref<SystemConfiguration[]>([]);
@@ -755,17 +756,8 @@ async function pasteUrl(config: SystemConfiguration, type: 'spreadsheet' | 'gas'
 async function loadScenarios(configId: string) {
   scenariosLoading[configId] = true;
   try {
-    const colRef = collection(db, 'systemConfigurations', configId, 'replacementScenarios');
-    const snap = await getDocs(colRef);
-
-    if (snap.empty) {
-      // Auto-seed from defaults on first load
-      await doSeedScenarios(configId);
-    } else {
-      scenariosByConfig[configId] = snap.docs.map(
-        (d) => ({ id: d.id, ...d.data() }) as ReplacementScenario,
-      );
-    }
+    await scenarioStore.loadScenarios(configId);
+    scenariosByConfig[configId] = [...scenarioStore.scenarios];
     scenariosLoaded[configId] = true;
   } catch (e) {
     console.error('Error loading scenarios', e);
@@ -775,33 +767,20 @@ async function loadScenarios(configId: string) {
   }
 }
 
-async function doSeedScenarios(configId: string) {
-  for (const scenario of REPLACEMENT_SCENARIOS) {
-    const scenarioRef = doc(
-      db,
-      'systemConfigurations',
-      configId,
-      'replacementScenarios',
-      scenario.id,
-    );
-    await setDoc(scenarioRef, scenario);
-  }
-  scenariosByConfig[configId] = [...REPLACEMENT_SCENARIOS];
-}
-
 function seedDefaultScenarios(configId: string) {
   $q.dialog({
     title: 'Ripristina Scenari Default',
-    message: `Sovrascrivere TUTTI gli scenari con i ${REPLACEMENT_SCENARIOS.length} predefiniti?`,
+    message: `Vuoi sovrascrivere tutti gli scenari con i 13 predefiniti approvati nel sistema?`,
     cancel: true,
     persistent: true,
   }).onOk(() => {
     void (async () => {
       try {
-        await doSeedScenarios(configId);
+        await scenarioStore.seedDefaultScenarios(configId);
+        await loadScenarios(configId); // Reload locally
         $q.notify({
           type: 'positive',
-          message: `${REPLACEMENT_SCENARIOS.length} scenari caricati!`,
+          message: `Scenari ripristinati correttamente!`,
         });
       } catch (e) {
         console.error(e);
