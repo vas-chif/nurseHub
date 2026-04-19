@@ -4,20 +4,9 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import { usePwaStore, type BeforeInstallPromptEvent } from './stores/pwaStore';
+import { usePwaStore } from './stores/pwaStore';
 
 const pwaStore = usePwaStore();
-
-// Capture the PWA install prompt event as early as possible
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  pwaStore.setDeferredPrompt(e as BeforeInstallPromptEvent);
-});
-
-// Capture successful installation
-window.addEventListener('appinstalled', () => {
-  pwaStore.setInstalled(true);
-});
 
 onMounted(() => {
   // Safari and Standalone detection

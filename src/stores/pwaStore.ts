@@ -28,10 +28,30 @@ export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+// Capture events globally before any Vue code runs to prevent race conditions
+let capturedDeferredPrompt: BeforeInstallPromptEvent | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    capturedDeferredPrompt = e as BeforeInstallPromptEvent;
+  });
+}
+
 export const usePwaStore = defineStore('pwa', () => {
   const logger = useSecureLogger();
-  const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null);
+  const deferredPrompt = ref<BeforeInstallPromptEvent | null>(capturedDeferredPrompt);
   
+  // Also attach listener inside in case the event fires later
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    });
+    window.addEventListener('appinstalled', () => {
+      setInstalled(true);
+    });
+  }
+
   // Initialize state from localStorage
   const isInstalled = ref(localStorage.getItem('pwa_installed') === 'true');
   const isSafari = ref(false);
