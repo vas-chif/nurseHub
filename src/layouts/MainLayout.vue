@@ -7,7 +7,6 @@ import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import type { SystemConfiguration } from '../types/models';
-import PwaInstallBanner from 'src/components/PwaInstallBanner.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -205,7 +204,6 @@ async function handleConfigChange(configId: string) {
 
     <q-page-container>
       <router-view />
-      <PwaInstallBanner />
     </q-page-container>
 
     <q-footer bordered class="bg-white text-primary">

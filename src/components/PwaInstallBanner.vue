@@ -40,33 +40,14 @@ const dismiss = () => {
       </div>
 
       <template v-slot:action>
-        <q-btn 
-          flat 
-          dense
-          icon="help_outline"
-          class="q-mr-md"
-          @click="showHelp = true"
-          v-if="pwaStore.isSafari && !pwaStore.deferredPrompt"
-        >
+        <q-btn flat dense icon="help_outline" class="q-mr-md" @click="showHelp = true"
+          v-if="pwaStore.isSafari && !pwaStore.deferredPrompt">
           <q-tooltip>Come installare su Safari?</q-tooltip>
         </q-btn>
-        
-        <q-btn 
-          flat 
-          label="Più tardi" 
-          color="white" 
-          class="q-mr-sm text-capitalize" 
-          @click="dismiss" 
-        />
-        <q-btn 
-          unelevated 
-          label="Installa Ora" 
-          color="white" 
-          text-color="primary" 
-          icon="downloading"
-          class="install-btn text-weight-bold q-px-md"
-          @click="installApp"
-        />
+
+        <q-btn flat label="Più tardi" color="white" class="q-mr-sm text-capitalize" @click="dismiss" />
+        <q-btn unelevated label="Installa Ora" color="white" text-color="primary" icon="downloading"
+          class="install-btn text-weight-bold q-px-md" @click="installApp" />
       </template>
     </q-banner>
 
@@ -87,17 +68,21 @@ const dismiss = () => {
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">2</q-avatar>
-              <div class="text-body2">Conferma l'installazione nel popup del browser (solitamente in alto a destra).</div>
+              <div class="text-body2">Conferma l'installazione nel popup del browser (solitamente in alto a destra).
+              </div>
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">3</q-avatar>
-              <div class="text-body2">La Dashboard verrà aggiunta alle tue applicazioni e potrai avviarla dal desktop o dal menu start.</div>
+              <div class="text-body2">La Dashboard verrà aggiunta alle tue applicazioni e potrai avviarla dal desktop o
+                dal
+                menu start.</div>
             </div>
-            
+
             <q-separator class="q-my-sm" />
-            
+
             <div class="text-caption text-grey-7 italic">
-              Nota: Se non vedi il banner, assicurati di usare Chrome, Edge o Safari e di non essere in modalità Incognito.
+              Nota: Se non vedi il banner, assicurati di usare Chrome, Edge o Safari e di non essere in modalità
+              Incognito.
             </div>
           </div>
         </q-card-section>
@@ -123,13 +108,13 @@ const dismiss = () => {
 }
 
 .pwa-premium-banner {
-  background: linear-gradient(135deg, $primary 0%, #0d47a1 100%);
+  background: linear-gradient(135deg, $primary 0%, #0c81cd 100%);
   border-radius: 16px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   padding: 8px 16px;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -137,7 +122,7 @@ const dismiss = () => {
     left: -50%;
     width: 200%;
     height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
     pointer-events: none;
   }
 }
@@ -146,7 +131,7 @@ const dismiss = () => {
   border-radius: 12px;
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  
+
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
@@ -163,6 +148,7 @@ const dismiss = () => {
     transform: translate(-50%, 120px);
     opacity: 0;
   }
+
   100% {
     transform: translate(-50%, 0);
     opacity: 1;
@@ -174,12 +160,12 @@ const dismiss = () => {
   .pwa-banner-container {
     bottom: 20px;
   }
-  
+
   .pwa-premium-banner {
     flex-direction: column;
     align-items: center;
     text-align: center;
-    
+
     .q-banner__actions {
       margin-top: 12px;
       width: 100%;

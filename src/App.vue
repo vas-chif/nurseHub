@@ -1,10 +1,12 @@
 <template>
   <router-view />
+  <PwaInstallBanner />
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { usePwaStore } from './stores/pwaStore';
+import PwaInstallBanner from './components/PwaInstallBanner.vue';
 
 const pwaStore = usePwaStore();
 
