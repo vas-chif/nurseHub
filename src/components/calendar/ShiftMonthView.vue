@@ -1,15 +1,31 @@
+/**
+ * @file ShiftMonthView.vue
+ * @description Monthly calendar view for user shifts.
+ * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-20
+ */
 <template>
   <div class="shift-month-view">
     <!-- Header Controls -->
-    <div class="row justify-between items-center q-mb-md">
-      <q-btn flat round icon="chevron_left" @click="prevMonth" />
-      <div class="text-h6 text-capitalize">{{ currentMonthLabel }}</div>
-      <q-btn flat round icon="chevron_right" @click="nextMonth" />
+    <div class="row justify-between items-center q-mb-lg bg-white q-pa-sm rounded-borders shadow-1">
+      <q-btn flat round dense size="sm" icon="chevron_left" color="grey-7" @click="prevMonth" />
+
+      <div class="row items-center no-wrap q-gutter-sm">
+        <div class="text-h6 text-weight-bold text-primary">
+          {{ currentMonthLabel.split(' ')[0] }}
+          <span class="text-weight-light text-grey-8">{{ currentMonthLabel.split(' ')[1] }}</span>
+        </div>
+
+        <!-- Componente Centralizzato Sincronizzazione -->
+        <GlobalSyncBtn size="sm" />
+      </div>
+
+      <q-btn flat round dense size="sm" icon="chevron_right" color="grey-7" @click="nextMonth" />
     </div>
 
     <!-- Calendar Grid -->
     <div class="calendar-grid">
-      <!-- Days Header -->
       <div
         v-for="day in weekDays"
         :key="day"
@@ -18,7 +34,6 @@
         {{ day }}
       </div>
 
-      <!-- Days Cells -->
       <div
         v-for="(dateObj, index) in calendarDays"
         :key="index"
@@ -49,176 +64,79 @@ import { ref, computed } from 'vue';
 import { date as qDate } from 'quasar';
 import type { ShiftCode } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
+import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 
 const authStore = useAuthStore();
 
 interface CalendarDay {
   date: Date;
-  dateStr: string; // YYYY-MM-DD
+  dateStr: string;
   day: number;
   isCurrentMonth: boolean;
   shift?: ShiftCode | undefined;
 }
 
 const currentDate = ref(new Date());
-
 const weekDays = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
 const currentMonthLabel = computed(() => {
   return qDate.formatDate(currentDate.value, 'MMMM YYYY', {
-    months: [
-      'Gennaio',
-      'Febbraio',
-      'Marzo',
-      'Aprile',
-      'Maggio',
-      'Giugno',
-      'Luglio',
-      'Agosto',
-      'Settembre',
-      'Ottobre',
-      'Novembre',
-      'Dicembre',
-    ],
+    months: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
   });
 });
 
 const calendarDays = computed<CalendarDay[]>(() => {
   const year = currentDate.value.getFullYear();
   const month = currentDate.value.getMonth();
-
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
 
-  // Adjust for Monday start (0=Sun, 1=Mon in JS, we want 0=Mon)
   let startDay = firstDayOfMonth.getDay() - 1;
   if (startDay < 0) startDay = 6;
 
   const days: CalendarDay[] = [];
-
-  // Helper to get shift
   const getShift = (d: Date): ShiftCode | undefined => {
-    if (!authStore.currentOperator || !authStore.currentOperator.schedule) return undefined;
-    const key = qDate.formatDate(d, 'YYYY-MM-DD');
-    return authStore.currentOperator.schedule[key];
+    if (!authStore.currentOperator?.schedule) return undefined;
+    return authStore.currentOperator.schedule[qDate.formatDate(d, 'YYYY-MM-DD')];
   };
 
-  // Previous month padding
   for (let i = 0; i < startDay; i++) {
     const d = qDate.subtractFromDate(firstDayOfMonth, { days: startDay - i });
-    days.push({
-      date: d,
-      dateStr: qDate.formatDate(d, 'YYYY-MM-DD'),
-      day: d.getDate(),
-      isCurrentMonth: false,
-      shift: getShift(d),
-    });
+    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: d.getDate(), isCurrentMonth: false, shift: getShift(d) });
   }
-
-  // Current month
   for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
     const d = new Date(year, month, i);
-    days.push({
-      date: d,
-      dateStr: qDate.formatDate(d, 'YYYY-MM-DD'),
-      day: i,
-      isCurrentMonth: true,
-      shift: getShift(d),
-    });
+    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: i, isCurrentMonth: true, shift: getShift(d) });
   }
-
-  // Next month padding
   const remaining = 42 - days.length;
   for (let i = 1; i <= remaining; i++) {
     const d = qDate.addToDate(lastDayOfMonth, { days: i });
-    days.push({
-      date: d,
-      dateStr: qDate.formatDate(d, 'YYYY-MM-DD'),
-      day: d.getDate(),
-      isCurrentMonth: false,
-      shift: getShift(d),
-    });
+    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: d.getDate(), isCurrentMonth: false, shift: getShift(d) });
   }
-
   return days;
 });
 
-function prevMonth() {
-  currentDate.value = qDate.subtractFromDate(currentDate.value, { month: 1 });
-}
-
-function nextMonth() {
-  currentDate.value = qDate.addToDate(currentDate.value, { month: 1 });
-}
-
-function isToday(d: Date): boolean {
-  const today = new Date();
-  return qDate.isSameDate(d, today, 'day');
-}
+function prevMonth() { currentDate.value = qDate.subtractFromDate(currentDate.value, { month: 1 }); }
+function nextMonth() { currentDate.value = qDate.addToDate(currentDate.value, { month: 1 }); }
+function isToday(d: Date): boolean { return qDate.isSameDate(d, new Date(), 'day'); }
 
 function getCellClass(day: CalendarDay) {
-  const classes = [];
-  if (!day.isCurrentMonth) {
-    classes.push('bg-grey-1 text-grey-6'); // Darken padding days slightly
-  } else {
-    classes.push('bg-white');
-  }
-
-  if (isToday(day.date)) {
-    classes.push('today-cell');
-  }
-
+  const classes = [day.isCurrentMonth ? 'bg-white' : 'bg-grey-1 text-grey-6'];
+  if (isToday(day.date)) classes.push('today-cell');
   return classes.join(' ');
 }
 
 function getShiftColor(code: ShiftCode): string {
-  switch (code) {
-    case 'M':
-      return 'amber-8';
-    case 'P':
-      return 'orange-8';
-    case 'N':
-      return 'blue-10';
-    case 'R':
-      return 'grey-5';
-    case 'A':
-      return 'red-5';
-    case 'S':
-      return 'green-6';
-    case 'MP':
-      return 'purple-6';
-    default:
-      return 'primary';
-  }
+  const map: Record<string, string> = { M: 'amber-8', P: 'orange-8', N: 'blue-10', R: 'grey-5', A: 'red-5', S: 'green-6', MP: 'purple-6' };
+  return map[code] || 'primary';
 }
 
-function onDayClick(day: CalendarDay) {
-  // Can trigger details or day view
-  console.log('Clicked', day);
-}
+function onDayClick(day: CalendarDay) { console.log('Clicked', day); }
 </script>
 
 <style scoped>
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  background-color: #e0e0e0;
-  border: 1px solid #e0e0e0;
-  padding: 1px;
-}
-
-.calendar-cell {
-  min-height: 80px;
-  border-radius: 4px;
-}
-
-.today-cell {
-  border: 2px solid var(--q-primary);
-  font-weight: bold;
-}
-
-.dimmed-badge {
-  opacity: 0.6;
-}
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background-color: #e0e0e0; border: 1px solid #e0e0e0; padding: 1px; }
+.calendar-cell { min-height: 80px; border-radius: 4px; }
+.today-cell { border: 2px solid var(--q-primary); font-weight: bold; }
+.dimmed-badge { opacity: 0.6; }
 </style>

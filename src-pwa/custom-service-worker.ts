@@ -4,7 +4,12 @@
  * quasar.config file > pwa > workboxMode is set to "InjectManifest"
  */
 
+// Disabilita i log verbose di Workbox sia in dev che in produzione
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(self as any).__WB_DISABLE_DEV_LOGS = true;
+
 import { clientsClaim } from 'workbox-core';
+
 import {
   precacheAndRoute,
   cleanupOutdatedCaches,
