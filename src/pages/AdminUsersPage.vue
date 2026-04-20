@@ -168,10 +168,12 @@ import { useConfigStore } from '../stores/configStore';
 import { operatorsService } from '../services/OperatorsService';
 import type { User, SystemConfiguration, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import { useAuthStore } from '../stores/authStore';
 
 const logger = useSecureLogger();
 const $q = useQuasar();
 const configStore = useConfigStore();
+const authStore = useAuthStore();
 
 const activeTab = ref('pending');
 const loading = ref(false);
@@ -290,6 +292,8 @@ async function toggleAdminRole(user: User) {
   const newRole = user.role === 'admin' ? 'user' : 'admin';
   try {
     await userService.updateUserRole(user.uid, newRole);
+    // Phase 25 (§1.10): Force JWT refresh so the current admin session gets updated claims
+    await authStore.forceTokenRefresh();
     $q.notify({ type: 'positive', message: `Ruolo sistema aggiornato a ${newRole}` });
     await loadUsers();
   } catch (error) {

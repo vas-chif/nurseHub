@@ -506,5 +506,52 @@ allow write: if isAdmin();
 
 ---
 
-**Ultimo aggiornamento**: 2026-02-12
-**Versione**: 2.0.0
+**Ultimo aggiornamento**: 2026-04-20
+**Versione**: 2.1.0
+
+---
+
+## 🔐 **§1.10 JWT-Based Authorization (Custom Claims) — OBBLIGATORIO**
+
+> **Implementato nella Phase 25 — Vigore immediato su tutti i nuovi sviluppi.**
+
+### **Principi Fondamentali**
+
+1. **Source of Truth per i Ruoli**: Il ruolo `admin` o `user` DEVE risiedere nei **Custom Claims** del Firebase JWT, NON solo su Firestore.
+2. **Sync Policy Automatica**: Ogni cambio del campo `role` su Firestore (tramite `userService.updateUserRole()`) DEVE propagarsi al JWT tramite la Cloud Function `setClaimsOnRoleChange` nella cartella `api/`.
+3. **Frontend JWT-First**: Il computed `isAdmin` nell'`authStore` DEVE leggere il ruolo da `getIdTokenResult()`, usando Firestore come fallback solo se il claim non è presente.
+4. **Firestore Rules JWT-First**: La funzione `isAdmin()` nelle security rules DEVE usare `request.auth.token.role == 'admin'` (nessuna lettura Firestore = zero costi).
+5. **Refresh Obbligatorio**: Dopo ogni modifica di ruolo, il frontend DEVE forzare il refresh del token JWT con `getIdToken(true)` per garantire che i nuovi permessi siano immediatamente attivi senza logout.
+
+### **Regola Anti-Pattern**
+
+```typescript
+// ❌ VIETATO: Leggere il ruolo solo da Firestore in prod
+const isAdmin = computed(() => currentUser.value?.role === 'admin');
+
+// ✅ OBBLIGATORIO: Leggere il ruolo dal JWT, fallback su Firestore
+const isAdmin = computed(() => claimRole.value === 'admin' || currentUser.value?.role === 'admin');
+```
+
+### **Firestore Rules**
+
+```javascript
+// ❌ VIETATO: Leggere da Firestore per determinare admin (costo per ogni operazione)
+function isAdmin() {
+  return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+}
+
+// ✅ OBBLIGATORIO: Leggere dal token JWT (costo zero)
+function isAdmin() {
+  return request.auth.token.role == 'admin';
+}
+```
+
+### **Script di Sincronizzazione Iniziale**
+
+Quando si aggiunge questa feature, eseguire una volta:
+```bash
+node api/migrate-claims.js
+```
+Questo script legge tutti gli utenti da Firestore e scrive il loro `role` come Custom Claim nel JWT, garantendo la retrocompatibilità con gli utenti già registrati.
+

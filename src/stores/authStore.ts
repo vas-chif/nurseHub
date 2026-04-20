@@ -1,7 +1,18 @@
 /**
  * @file authStore.ts
- * @description Pinia store for authentication state and user management
+ * @description Pinia store for authentication state and user management.
  * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-20
+ * @notes
+ * - Phase 25: JWT-First Authorization (§1.10). Role is read from Custom Claims.
+ * - Firestore `role` field kept as backup/audit trail.
+ * - isAdmin computed: JWT claim (primary) > Firestore field (fallback).
+ * - After role change: getIdToken(true) forces immediate JWT refresh.
+ * @dependencies
+ * - firebase/auth
+ * - src/services/UserService.ts
+ * - src/services/OperatorsService.ts
  */
 
 import { defineStore } from 'pinia';
@@ -34,13 +45,56 @@ export const useAuthStore = defineStore('auth', () => {
 
   const authUser = ref<FirebaseUser | null>(null);
 
-  // Computed
+  /**
+   * Phase 25 (§1.10): Role from JWT Custom Claim.
+   * Populated after getIdTokenResult() on auth state change.
+   * Primary source for isAdmin computed.
+   */
+  const claimRole = ref<'admin' | 'user' | null>(null);
+
+  // --- Computed ---
+
   const isAuthenticated = computed(() => authUser.value !== null);
-  const userRole = computed(() => currentUser.value?.role || 'user');
+
+  /**
+   * Phase 25 (§1.10): JWT-First — claim is primary, Firestore role is fallback.
+   * This guarantees immediate reflection of role changes after token refresh.
+   */
+  const userRole = computed((): 'admin' | 'user' => {
+    // Primary: JWT Custom Claim
+    if (claimRole.value !== null) return claimRole.value;
+    // Fallback: Firestore document (used on first render before claims resolve)
+    return currentUser.value?.role ?? 'user';
+  });
+
   const isAdmin = computed(() => userRole.value === 'admin');
   const isVerified = computed(() => currentUser.value?.isVerified || false);
 
-  // Actions
+  // --- Private helpers ---
+
+  /**
+   * Reads the JWT ID token and extracts the `role` Custom Claim.
+   * Falls back gracefully if getIdTokenResult fails.
+   */
+  async function refreshClaimRole(firebaseUser: FirebaseUser): Promise<void> {
+    try {
+      const tokenResult = await firebaseUser.getIdTokenResult();
+      const roleClaim = tokenResult.claims['role'];
+      if (roleClaim === 'admin' || roleClaim === 'user') {
+        claimRole.value = roleClaim;
+      } else {
+        // No claim yet (new user or pre-migration): rely on Firestore fallback
+        claimRole.value = null;
+      }
+      logger.info('JWT claim role loaded', { role: claimRole.value ?? 'fallback-to-firestore' });
+    } catch (err) {
+      logger.warn('Failed to read JWT claim, falling back to Firestore role', err);
+      claimRole.value = null;
+    }
+  }
+
+  // --- Actions ---
+
   async function login(email: string, password: string): Promise<void> {
     loading.value = true;
     error.value = null;
@@ -53,6 +107,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error('EMAIL_NOT_VERIFIED');
       }
 
+      // Phase 25: Load JWT claim immediately on login
+      await refreshClaimRole(userCredential.user);
       await loadUserProfile(userCredential.user.uid);
     } catch (err) {
       error.value = (err as Error).message;
@@ -91,7 +147,6 @@ export const useAuthStore = defineStore('auth', () => {
       // FORCE sign out any existing user to prevent auth conflicts
       try {
         await signOut(auth);
-        logger.info('Signed out any existing user');
       } catch {
         // Ignore errors if no user was signed in
       }
@@ -104,13 +159,12 @@ export const useAuthStore = defineStore('auth', () => {
       await sendEmailVerification(userCredential.user);
       logger.info('Verification email sent');
 
-      // Wait for auth state to propagate to Firestore client (500ms)
-      // This ensures request.auth is populated when creating document
+      // Wait for auth state to propagate (500ms)
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       logger.info('Creating Firestore user document');
 
-      // Create Firestore user document with operator matching
+      // Create Firestore user document (role: 'user' — no claim written yet, happens via migrate or first role change)
       const result = await userService.createUserDocument(
         userCredential.user.uid,
         email,
@@ -124,9 +178,7 @@ export const useAuthStore = defineStore('auth', () => {
         needsApproval: result.needsApproval,
       });
 
-      // Load the newly created user profile
       await loadUserProfile(userCredential.user.uid);
-
       return { needsApproval: result.needsApproval };
     } catch (err) {
       error.value = (err as Error).message;
@@ -145,6 +197,7 @@ export const useAuthStore = defineStore('auth', () => {
       currentUser.value = null;
       currentOperator.value = null;
       selectedOperatorIds.value = [];
+      claimRole.value = null;
     } catch (err) {
       error.value = (err as Error).message;
       throw err;
@@ -159,7 +212,6 @@ export const useAuthStore = defineStore('auth', () => {
       if (user) {
         currentUser.value = user;
 
-        // If user is verified and linked to an operator, load operator data
         if (user.isVerified && user.operatorId && user.configId) {
           const operator = await operatorsService.getOperatorById(user.configId, user.operatorId);
           if (operator) {
@@ -168,8 +220,24 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
     } catch (err) {
-      console.error('Error loading user profile:', err);
+      logger.error('Error loading user profile', err);
       error.value = (err as Error).message;
+    }
+  }
+
+  /**
+   * Phase 25 (§1.10): Forces a JWT refresh after an admin role change.
+   * Must be called by UserService after /api/update-role succeeds.
+   */
+  async function forceTokenRefresh(): Promise<void> {
+    if (!authUser.value) return;
+    try {
+      // Force Firebase to fetch a fresh JWT with updated claims
+      await authUser.value.getIdToken(true);
+      await refreshClaimRole(authUser.value);
+      logger.info('JWT token refreshed, new claim role:', { role: claimRole.value });
+    } catch (err) {
+      logger.error('Failed to force token refresh', err);
     }
   }
 
@@ -184,20 +252,24 @@ export const useAuthStore = defineStore('auth', () => {
       onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
         authUser.value = firebaseUser;
         if (firebaseUser) {
-          void loadUserProfile(firebaseUser.uid).finally(() => {
-            isInitialized.value = true;
-            resolve();
+          // Phase 25: Read JWT claim before loading Firestore profile
+          void refreshClaimRole(firebaseUser).then(() => {
+            void loadUserProfile(firebaseUser.uid).finally(() => {
+              isInitialized.value = true;
+              resolve();
+            });
           });
         } else {
           currentUser.value = null;
           currentOperator.value = null;
           selectedOperatorIds.value = [];
+          claimRole.value = null;
           isInitialized.value = true;
           resolve();
         }
       });
     });
-  } /*end init*/
+  }
 
   return {
     // State
@@ -208,6 +280,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     isInitialized,
+    claimRole,
     // Computed
     isAuthenticated,
     userRole,
@@ -220,6 +293,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     loadUserProfile,
     setSelectedOperators,
+    forceTokenRefresh,
     init,
   };
 });

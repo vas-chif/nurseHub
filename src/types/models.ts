@@ -260,3 +260,12 @@ export interface ShiftSwap {
   // Phase 22: Soft Delete
   deletedByCreator?: boolean; // True if the creator deleted it from their view
 }
+
+// --- Phase 25: Global Sync Cooldown ---
+
+export interface SyncStatus {
+  lastSyncTimestamp: number; // Unix ms of last successful full sync
+  lastSyncByUid: string;     // UID of who triggered it
+  lastSyncByName: string;    // De-normalized name for audit trail
+}
+

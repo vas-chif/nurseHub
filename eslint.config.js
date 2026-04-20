@@ -15,7 +15,7 @@ export default defineConfigWithVueTs(
      *
      * ESLint requires "ignores" key to be the only one in this object
      */
-    ignores: ['**/src/dataconnect-generated/**'],
+    ignores: ['**/src/dataconnect-generated/**', 'api/**'],
   },
 
   pluginQuasar.configs.recommended(),

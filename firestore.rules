@@ -5,10 +5,12 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    // Phase 25 (§1.10): JWT-First — reads role from Custom Claim (zero Firestore reads).
+    // Falls back gracefully: if claim is missing (pre-migration users), deny by default.
+    // After running api/migrate-claims.js all users will have the claim set.
     function isAdmin() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isAuthenticated() && request.auth.token.get('role', 'user') == 'admin';
     }
 
     function isOperatorOwner(operatorId) {
@@ -65,6 +67,12 @@ service cloud.firestore {
       }
     }
 
+    // system/syncStatus: readable & writable by any authenticated user (global sync cooldown)
+    match /system/syncStatus {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Other system documents: admin only
     match /system/{configId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();

@@ -293,13 +293,48 @@ export class UserService {
   }
 
   /**
-   * Updates a user's role (admin action)
+   * Updates a user's role (admin action).
+   * Phase 25 (§1.10): Also calls /api/update-role to set JWT Custom Claim,
+   * then forces the current session's token to refresh.
    */
   async updateUserRole(uid: string, newRole: 'user' | 'admin'): Promise<void> {
+    // 1. Update Firestore (source of truth for audit / fallback)
     await updateDoc(doc(this.usersCollection, uid), {
       role: newRole,
       updatedAt: Date.now(),
     });
+    logger.info('Role updated in Firestore', { uid, newRole });
+
+    // 2. Call Vercel API to set JWT Custom Claim (requires firebase-admin)
+    try {
+      const { auth } = await import('../boot/firebase');
+      const callerIdToken = await auth.currentUser?.getIdToken();
+
+      if (!callerIdToken) {
+        logger.warn('updateUserRole: no callerIdToken available, skipping claim update');
+        return;
+      }
+
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/update-role`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
+        },
+        body: JSON.stringify({ targetUid: uid, newRole, callerIdToken }),
+      });
+
+      if (!response.ok) {
+        const errBody = (await response.json()) as { error?: string };
+        logger.error('Failed to set JWT claim via API', { status: response.status, error: errBody.error });
+      } else {
+        logger.info('JWT Custom Claim updated via API', { uid, newRole });
+      }
+    } catch (err) {
+      // Non-blocking: Firestore role is already updated. JWT will sync on next login.
+      logger.error('update-role API call failed (non-blocking)', err);
+    }
   }
 
   /**
