@@ -6,7 +6,8 @@ import { useScheduleStore } from '../stores/scheduleStore';
 import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
-import type { SystemConfiguration } from '../types/models';
+import { requestNotificationPermission } from '../services/NotificationService';
+import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -15,13 +16,35 @@ const notificationStore = useNotificationStore();
 const scheduleStore = useScheduleStore();
 const $q = useQuasar();
 
+let unsubs: (() => void)[] = [];
+
 // Load configurations on mount
 onMounted(async () => {
   scheduleStore.init();
-  // Check for existing notification permission and refresh token if granted
+
+  if (authStore.currentUser?.uid) {
+    // 1. Request FCM Permission
+    void requestNotificationPermission(authStore.currentUser.uid);
+
+    // 2. Start In-App Notification Listener
+    const unsubInApp = notificationStore.initInAppListener(authStore.currentUser.uid, (n: AppNotification) => {
+      $q.notify({
+        message: n.message,
+        color: 'secondary',
+        icon: 'notifications_active',
+        position: 'top',
+        timeout: 5000,
+        actions: [
+          { label: 'Chiudi', color: 'white' }
+        ]
+      });
+    });
+    unsubs.push(unsubInApp);
+  }
+
+  // Admin notification listener
   if (authStore.isAdmin) {
     await configStore.loadConfigurations();
-    // Admin notification listener
     notificationStore.initAdminListener(() => {
       if (router.currentRoute.value.path !== '/admin/requests') {
         $q.notify({
@@ -93,6 +116,8 @@ watch(
 
 onUnmounted(() => {
   notificationStore.stopListeners();
+  unsubs.forEach((unsub) => unsub());
+  unsubs = [];
 });
 
 async function logout() {
@@ -158,6 +183,54 @@ async function handleConfigChange(configId: string) {
             </q-item>
           </template>
         </q-select>
+
+        <!-- In-App Notifications Badge -->
+        <q-btn flat round dense icon="notifications" class="q-mr-sm">
+          <q-badge v-if="notificationStore.unreadCount > 0" color="red" floating>
+            {{ notificationStore.unreadCount }}
+          </q-badge>
+          <q-menu>
+            <q-list style="min-width: 300px">
+              <div class="row items-center justify-between q-pa-sm">
+                <div class="text-subtitle2">Notifiche</div>
+                <q-btn
+                  v-if="notificationStore.unreadCount > 0"
+                  flat
+                  dense
+                  color="primary"
+                  label="Segna tutte come lette"
+                  size="xs"
+                  @click="notificationStore.resetUnread()"
+                />
+              </div>
+              <q-separator />
+
+              <template v-if="notificationStore.notifications.length > 0">
+                <q-item
+                  v-for="n in notificationStore.notifications"
+                  :key="n.id"
+                >
+                  <q-item-section avatar>
+                    <q-icon
+                      :name="n.type === 'NEW_OPPORTUNITY' ? 'campaign' : 'notifications'"
+                      :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'"
+                    />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label lines="2">{{ n.message }}</q-item-label>
+                    <q-item-label caption>{{ new Date(n.createdAt).toLocaleTimeString() }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+
+              <q-item v-else>
+                <q-item-section class="text-grey text-caption text-center q-pa-md">
+                  Nessuna nuova notifica
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
 
         <q-btn-dropdown
           class="q-mr-md"

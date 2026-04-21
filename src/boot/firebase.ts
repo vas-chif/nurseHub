@@ -3,19 +3,7 @@
  * @description Firebase initialization boot file
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-02-12
- * @example
- * // Auto-imported by Quasar boot system
- * // Provides global db and auth instances
- * import { db, auth } from 'src/boot/firebase';
- * @notes
- * - Uses smartEnvironment for type-safe config access
- * - Validates all Firebase env vars at startup
- * - Initializes IMMEDIATELY to prevent undefined errors
- * - Exports db and auth as initialized singletons
- * @dependencies
- * - firebase/app, firebase/firestore, firebase/auth
- * - smartEnvironment (config validation)
+ * @modified 2026-04-20
  */
 import { boot } from 'quasar/wrappers';
 import { initializeApp } from 'firebase/app';
@@ -32,10 +20,11 @@ import {
   browserLocalPersistence,
   type Auth,
 } from 'firebase/auth';
-import { getMessaging, type Messaging, isSupported } from 'firebase/messaging';
+import { getMessaging, type Messaging, isSupported, onMessage } from 'firebase/messaging';
 import type { App } from 'vue';
 import { smartEnv } from 'src/config/smartEnvironment';
 import { useSecureLogger } from 'src/utils/secureLogger';
+import { Notify } from 'quasar';
 
 const logger = useSecureLogger();
 
@@ -43,7 +32,6 @@ const logger = useSecureLogger();
 const firebaseConfig = smartEnv.getFirebaseConfig();
 
 // Initialize Firebase IMMEDIATELY (not in boot callback!)
-// This prevents "Cannot read properties of undefined (reading 'app')" errors
 logger.info('Initializing Firebase', { projectId: firebaseConfig.projectId });
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -64,6 +52,7 @@ if (typeof window !== 'undefined') {
       logger.error('Auth persistence error', err);
     });
 }
+
 let messaging: Messaging | null = null;
 
 // Messaging only works in the browser
@@ -73,6 +62,20 @@ if (typeof window !== 'undefined') {
       if (supported) {
         messaging = getMessaging(firebaseApp);
         logger.info('Firebase Messaging initialized');
+
+        // Handle messages when app is in FOREGROUND
+        onMessage(messaging, (payload) => {
+          logger.info('Foreground message received', payload);
+          Notify.create({
+            message: payload.notification?.title || 'NurseHub Update',
+            caption: payload.notification?.body || '',
+            color: 'primary',
+            icon: 'notifications_active',
+            position: 'top',
+            timeout: 10000,
+            actions: [{ label: 'OK', color: 'white' }]
+          });
+        });
       } else {
         logger.warn('Firebase Messaging not supported in this browser');
       }

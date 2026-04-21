@@ -4,9 +4,51 @@
  * @author Nurse Hub Team
  */
 
-import { collection, doc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore';
-import { db } from '../boot/firebase';
+import { collection, doc, setDoc, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db, messaging } from '../boot/firebase';
+import { getToken } from 'firebase/messaging';
 import type { Notification, NotificationType, ShiftRequest, ShiftSwap } from '../types/models';
+import { useSecureLogger } from '../utils/secureLogger';
+
+const logger = useSecureLogger();
+
+/**
+ * Request permission for notifications and register FCM token
+ */
+export async function requestNotificationPermission(userId: string): Promise<void> {
+  if (!messaging) {
+    logger.warn('Messaging not supported, skipping permission request');
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      const token = await getToken(messaging, {
+        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+      });
+
+      if (token) {
+        await registerFCMToken(userId, token);
+        logger.info('FCM Token registered successfully');
+      }
+    } else {
+      logger.warn('Notification permission denied');
+    }
+  } catch (error) {
+    logger.error('Error requesting notification permission', error);
+  }
+}
+
+/**
+ * Save FCM token to user document
+ */
+export async function registerFCMToken(userId: string, token: string): Promise<void> {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    fcmTokens: arrayUnion(token),
+  });
+}
 
 /**
  * Create a new notification for a user and trigger a Web Push via Vercel

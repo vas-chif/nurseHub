@@ -9,11 +9,12 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
-import type { ShiftRequest } from '../types/models';
+import type { ShiftRequest, Notification as AppNotification } from '../types/models';
 
 export const useNotificationStore = defineStore('notification', () => {
   const unreadCount = ref(0);
   const pendingRequestsCount = ref(0);
+  const notifications = ref<AppNotification[]>([]);
   let unsubscribe: Unsubscribe | null = null;
 
   function incrementUnread() {
@@ -84,6 +85,40 @@ export const useNotificationStore = defineStore('notification', () => {
     });
   }
 
+  /**
+   * Global listener for In-App notifications
+   */
+  function initInAppListener(userId: string, onNewNotification?: (n: AppNotification) => void) {
+    // Note: We use a separate unsubscribe for in-app notifications
+    // to allow it to run alongside admin/user request listeners
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userId),
+      where('read', '==', false),
+      orderBy('createdAt', 'desc'),
+    );
+
+    let isInitial = true;
+
+    const unsubNotif = onSnapshot(q, (snapshot) => {
+      unreadCount.value = snapshot.size;
+      notifications.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification));
+
+      if (!isInitial) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            if (onNewNotification) {
+              onNewNotification({ id: change.doc.id, ...change.doc.data() } as AppNotification);
+            }
+          }
+        });
+      }
+      isInitial = false;
+    });
+
+    return unsubNotif; // Return to be managed by the component
+  }
+
   function stopListeners() {
     if (unsubscribe) {
       unsubscribe();
@@ -94,11 +129,13 @@ export const useNotificationStore = defineStore('notification', () => {
   return {
     unreadCount,
     pendingRequestsCount,
+    notifications,
     incrementUnread,
     resetUnread,
     setPendingRequestsCount,
     initAdminListener,
     initUserListener,
+    initInAppListener,
     stopListeners,
   };
 });

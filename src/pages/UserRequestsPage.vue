@@ -834,6 +834,7 @@ async function submitRequest() {
         creatorName,
         absentOperatorId: targetOperatorId,
         absentOperatorName,
+        configId: configStore.activeConfigId || '',
         createdAt: Date.now(),
         requestNote: formData.value.note,
         ...(inputMode.value === 'TIME' && formData.value.startTime

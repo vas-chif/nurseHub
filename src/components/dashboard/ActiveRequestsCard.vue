@@ -1,26 +1,14 @@
 <template>
   <div class="q-mt-md">
     <q-card flat bordered class="bg-white">
-      <q-tabs
-        v-model="activeTab"
-        dense
-        class="text-grey"
-        active-color="primary"
-        indicator-color="primary"
-        align="justify"
-        narrow-indicator
-      >
+      <q-tabs v-model="activeTab" dense class="text-grey" active-color="primary" indicator-color="primary"
+        align="justify" narrow-indicator>
         <q-tab name="opportunities">
           <div class="row items-center no-wrap">
             <q-icon name="campaign" class="q-mr-sm" />
             <div>Opportunità</div>
-            <q-badge
-              v-if="urgentRequests.length + otherRequests.length > 0"
-              color="red"
-              floating
-              rounded
-              class="q-ml-xs"
-            >
+            <q-badge v-if="urgentRequests.length + otherRequests.length > 0" color="red" floating rounded
+              class="q-ml-xs">
               {{ urgentRequests.length + otherRequests.length }}
             </q-badge>
           </div>
@@ -58,14 +46,8 @@
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-btn
-                    unelevated
-                    size="sm"
-                    color="negative"
-                    label="Rispondi"
-                    icon="add_task"
-                    @click="openOfferDialog(req)"
-                  />
+                  <q-btn unelevated size="sm" color="negative" label="Rispondi" icon="add_task"
+                    @click="openOfferDialog(req)" />
                 </q-item-section>
               </q-item>
             </q-list>
@@ -75,27 +57,14 @@
           <div class="q-pa-sm">
             <div class="row items-center justify-between q-px-sm q-py-xs">
               <div class="text-subtitle2 text-primary">🤝 Altre Proposte</div>
-              <q-btn
-                flat
-                round
-                dense
-                color="primary"
-                icon="refresh"
-                :loading="loading"
-                @click="fetchRequests"
-              >
-                <q-tooltip>Aggiorna</q-tooltip>
-              </q-btn>
             </div>
 
             <div v-if="loading" class="row justify-center q-pa-md">
               <q-spinner color="primary" size="2em" />
             </div>
 
-            <div
-              v-else-if="otherRequests.length === 0 && urgentRequests.length === 0"
-              class="text-center text-grey q-pa-md text-caption"
-            >
+            <div v-else-if="otherRequests.length === 0 && urgentRequests.length === 0"
+              class="text-center text-grey q-pa-md text-caption">
               Nessun turno disponibile al momento.
             </div>
 
@@ -119,14 +88,8 @@
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-btn
-                    unelevated
-                    size="sm"
-                    color="primary"
-                    label="Offriti"
-                    icon="add_task"
-                    @click="openOfferDialog(req)"
-                  />
+                  <q-btn unelevated size="sm" color="primary" label="Offriti" icon="add_task"
+                    @click="openOfferDialog(req)" />
                 </q-item-section>
               </q-item>
             </q-list>
@@ -144,11 +107,8 @@
           <q-list v-else separator>
             <q-item v-for="req in myHistoryRequests" :key="req.id" class="q-py-md">
               <q-item-section avatar>
-                <q-avatar
-                  :icon="getMyOfferIcon(req)"
-                  :color="getMyOfferAvatarColor(req)"
-                  :text-color="getMyOfferAvatarTextColor(req)"
-                />
+                <q-avatar :icon="getMyOfferIcon(req)" :color="getMyOfferAvatarColor(req)"
+                  :text-color="getMyOfferAvatarTextColor(req)" />
               </q-item-section>
               <q-item-section>
                 <q-item-label class="text-weight-bold">
@@ -205,13 +165,10 @@
             <div class="q-mb-md">
               <div class="text-subtitle2 q-mb-xs">Il tuo turno attuale:</div>
               <div class="row q-gutter-xs justify-center no-wrap">
-                <div
-                  v-for="day in surroundingShifts"
-                  :key="day.date"
+                <div v-for="day in surroundingShifts" :key="day.date"
                   class="flex column items-center q-pa-xs rounded-borders"
                   :class="day.isTarget ? 'bg-primary-1 border-primary' : 'bg-grey-2'"
-                  style="min-width: 60px; border: 1px solid transparent"
-                >
+                  style="min-width: 60px; border: 1px solid transparent">
                   <div class="text-caption text-weight-bold">{{ day.label }}</div>
                   <q-badge :color="getShiftColor(day.shift)" size="md">{{ day.shift }}</q-badge>
                 </div>
@@ -220,14 +177,8 @@
 
             <div class="text-subtitle2 q-mb-sm">Come vuoi coprire questo turno?</div>
             <q-list bordered separator>
-              <q-item
-                v-for="scenario in compatibleScenarios"
-                :key="scenario.scenarioId + scenario.roleIndex"
-                tag="label"
-                v-ripple
-                :active="selectedScenario === scenario"
-                active-class="bg-blue-1"
-              >
+              <q-item v-for="scenario in compatibleScenarios" :key="scenario.scenarioId + scenario.roleIndex"
+                tag="label" v-ripple :active="selectedScenario === scenario" active-class="bg-blue-1">
                 <q-item-section avatar>
                   <q-radio v-model="selectedScenario" :val="scenario" />
                 </q-item-section>
@@ -242,14 +193,8 @@
 
         <q-card-actions align="right" class="q-pb-md q-pr-md">
           <q-btn flat label="Annulla" color="grey" v-close-popup />
-          <q-btn
-            unelevated
-            label="Invia"
-            color="primary"
-            :disable="!selectedScenario"
-            @click="submitOffer"
-            :loading="isSubmitting"
-          />
+          <q-btn unelevated label="Invia" color="primary" :disable="!selectedScenario" @click="submitOffer"
+            :loading="isSubmitting" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -257,24 +202,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import {
   collection,
   query,
   where,
-  getDocs,
+  onSnapshot,
   updateDoc,
   doc,
   arrayUnion,
   orderBy,
+  type Unsubscribe
 } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useShiftLogic } from '../../composables/useShiftLogic';
-import type { ShiftRequest, ShiftCode, CompatibleScenario, Operator } from '../../types/models';
+import { useScenarioStore } from '../../stores/scenarioStore';
+import type { ShiftRequest, ShiftCode, CompatibleScenario } from '../../types/models';
 import { useQuasar, date as qDate } from 'quasar';
 
 const authStore = useAuthStore();
+const scenarioStore = useScenarioStore();
 const { getCompatibleScenarios } = useShiftLogic();
 const $q = useQuasar();
 
@@ -282,6 +230,8 @@ const activeTab = ref('opportunities');
 const requests = ref<ShiftRequest[]>([]); // Open Opportunities
 const historyRequests = ref<ShiftRequest[]>([]); // My History
 const loading = ref(true);
+let opportunitiesUnsub: Unsubscribe | null = null;
+let historyUnsub: Unsubscribe | null = null;
 
 // Dialog State
 const offerDialog = ref({
@@ -292,6 +242,7 @@ const loadingCompatibility = ref(false);
 const compatibleScenarios = ref<CompatibleScenario[]>([]);
 const selectedScenario = ref<CompatibleScenario | null>(null);
 const isSubmitting = ref(false);
+
 const surroundingShifts = computed(() => {
   if (!offerDialog.value.req || !authStore.currentOperator) return [];
   const targetDateStr = offerDialog.value.req.date;
@@ -328,47 +279,66 @@ const otherRequests = computed(() => {
 
 const myHistoryRequests = computed(() => historyRequests.value);
 
+function stopDashboardListeners() {
+  if (opportunitiesUnsub) opportunitiesUnsub();
+  if (historyUnsub) historyUnsub();
+}
+
+onMounted(() => {
+  void initDashboardListeners();
+});
+
+onUnmounted(() => {
+  stopDashboardListeners();
+});
+
 watch(
   () => authStore.currentOperator,
-  (newOp: Operator | null) => {
-    if (newOp) {
-      void fetchRequests();
-    }
-  },
+  () => {
+    void initDashboardListeners();
+  }
 );
 
 watch(activeTab, () => {
-  void fetchRequests();
+  void initDashboardListeners();
 });
 
-onMounted(async () => {
-  await fetchRequests();
-});
-
-async function fetchRequests() {
+async function initDashboardListeners() {
   const myOpId = authStore.currentOperator?.id;
-  if (!myOpId) return;
+  const activeConfigId = authStore.currentUser?.configId;
 
+  if (!myOpId || !activeConfigId) return;
+
+  stopDashboardListeners();
   loading.value = true;
-  try {
-    // 1. Fetch Opportunities (OPEN requests)
-    if (activeTab.value === 'opportunities') {
-      const q = query(collection(db, 'shiftRequests'), where('status', '==', 'OPEN'));
-      const snapshot = await getDocs(q);
+
+  // Assicurati che gli scenari siano caricati prima di fare qualsiasi calcolo
+  await scenarioStore.loadScenarios(activeConfigId);
+
+  // 1. REAL-TIME Opportunities (OPEN requests)
+  if (activeTab.value === 'opportunities') {
+    const q = query(
+      collection(db, 'shiftRequests'),
+      where('status', '==', 'OPEN')
+    );
+
+    opportunitiesUnsub = onSnapshot(q, (snapshot) => {
       const loaded: ShiftRequest[] = [];
+      const { isRequestExpired } = useShiftLogic();
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as ShiftRequest;
-        // Filter: Not mine, and I haven't offered yet
-        const isMine = myOpId ? data.absentOperatorId === myOpId : false;
-        // Check new field OR legacy array scan (client side check for safety)
-        const alreadyOffered =
-          data.offeringOperatorIds?.includes(myOpId) ||
-          data.offers?.some((o) => o.operatorId === myOpId) ||
-          false;
+
+        // Filtro Reparto lato client per evitare problemi di indici Firestore
+        if (data.configId && data.configId !== activeConfigId) return;
+
+        // Salta se scaduta
+        if (isRequestExpired(data.date, data.originalShift)) return;
+
+        const isMine = data.absentOperatorId === myOpId;
+        const alreadyOffered = data.offeringOperatorIds?.includes(myOpId) || false;
 
         if (!isMine && !alreadyOffered) {
-          // New Filter: Check if the user is actually compatible for this shift
           const opShift = authStore.currentOperator?.schedule?.[data.date] || 'R';
           const compatible = getCompatibleScenarios(
             data.originalShift,
@@ -378,36 +348,35 @@ async function fetchRequests() {
           );
 
           if (compatible && compatible.length > 0) {
-            const item = { ...data };
-            item.id = docSnap.id;
-            loaded.push(item);
+            loaded.push({ ...data, id: docSnap.id });
           }
         }
       });
       requests.value = loaded;
-    }
+      loading.value = false;
+    }, (err) => {
+      console.error('Opportunities listener error:', err);
+      loading.value = false;
+    });
+  }
 
-    // 2. Fetch History (My offers)
-    // We try to use the new field efficient query.
-    if (activeTab.value === 'history') {
-      // Primary query: explicit offeringOperatorIds (new requests)
-      // For existing history, we might miss them if we didn't migrate.
-      // Assuming 'offeringOperatorIds' is populated from now on.
-      const qHistory = query(
-        collection(db, 'shiftRequests'),
-        where('offeringOperatorIds', 'array-contains', myOpId),
-        orderBy('createdAt', 'desc'),
-      );
-      const histSnap = await getDocs(qHistory);
+  // 2. REAL-TIME History (My offers)
+  if (activeTab.value === 'history') {
+    const qHistory = query(
+      collection(db, 'shiftRequests'),
+      where('offeringOperatorIds', 'array-contains', myOpId),
+      orderBy('createdAt', 'desc')
+    );
+
+    historyUnsub = onSnapshot(qHistory, (snapshot) => {
       const loadedHist: ShiftRequest[] = [];
-      histSnap.forEach((d) => loadedHist.push({ id: d.id, ...d.data() } as ShiftRequest));
-
+      snapshot.forEach((d) => loadedHist.push({ id: d.id, ...d.data() } as ShiftRequest));
       historyRequests.value = loadedHist;
-    }
-  } catch (e) {
-    console.error('Error fetching requests', e);
-  } finally {
-    loading.value = false;
+      loading.value = false;
+    }, (err) => {
+      console.error('History listener error:', err);
+      loading.value = false;
+    });
   }
 }
 
@@ -447,15 +416,14 @@ async function submitOffer() {
 
     await updateDoc(reqRef, {
       offers: arrayUnion(offer),
-      offeringOperatorIds: arrayUnion(authStore.currentOperator.id), // Add to lookup array
+      offeringOperatorIds: arrayUnion(authStore.currentOperator.id),
     });
 
-    // Phase 19: trigger push notifications to Admins for the new volunteer offer
-    const { notifyAdmins } = await import('../../services/NotificationService');
     const configStore = await import('../../stores/configStore').then((m) => m.useConfigStore());
     const activeConfigId = configStore.activeConfigId;
     if (activeConfigId) {
-      const msg = `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date} (${selectedScenario.value.scenarioLabel})`;
+      const { notifyAdmins } = await import('../../services/NotificationService');
+      const msg = `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date}`;
       notifyAdmins(msg, offerDialog.value.req.id, activeConfigId).catch(console.error);
     }
 
@@ -465,7 +433,6 @@ async function submitOffer() {
     });
 
     offerDialog.value.show = false;
-    await fetchRequests();
   } catch (e) {
     console.error(e);
     $q.notify({ type: 'negative', message: "Errore durante l'invio" });
@@ -484,32 +451,18 @@ function formatDate(dateStr: string) {
 function formatDateLong(dt: string) {
   return qDate.formatDate(dt, 'DD MMMM YYYY', {
     months: [
-      'Gennaio',
-      'Febbraio',
-      'Marzo',
-      'Aprile',
-      'Maggio',
-      'Giugno',
-      'Luglio',
-      'Agosto',
-      'Settembre',
-      'Ottobre',
-      'Novembre',
-      'Dicembre',
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
     ],
   });
 }
 
 function getShiftColor(code: ShiftCode): string {
   switch (code) {
-    case 'M':
-      return 'amber-8';
-    case 'P':
-      return 'orange-8';
-    case 'N':
-      return 'blue-10';
-    default:
-      return 'grey';
+    case 'M': return 'amber-8';
+    case 'P': return 'orange-8';
+    case 'N': return 'blue-10';
+    default: return 'grey';
   }
 }
 
@@ -517,11 +470,8 @@ function formatFullDate(ts: number | string | undefined) {
   if (!ts) return '';
   const d = new Date(ts);
   return d.toLocaleString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   });
 }
 
@@ -546,7 +496,6 @@ function getMyOfferStatusLabel(req: ShiftRequest) {
 
   if (req.status === 'CLOSED') {
     const myOffer = getMyOffer(req);
-    // Use the acceptedOfferId explicitly if available
     if (myOffer && req.acceptedOfferId === myOffer.id) {
       return 'Approvata - Assegnato a te';
     } else {

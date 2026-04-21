@@ -44,3 +44,6 @@ tempfolder/
 
 #test files
 test-duplicates.js
+
+# Backend credentials
+api/service-account.json

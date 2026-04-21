@@ -26,19 +26,25 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Phase 25: Users can update their profile but NOT their role or approval status
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId']))
+      );
     }
 
     // Shift Requests
     match /shiftRequests/{requestId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
+      allow create: if isAuthenticated();
+      // Only Admin can update/approve shift requests
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource != null && (resource.data.creatorId == request.auth.uid || resource.data.userId == request.auth.uid));
     }
     
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated();
     }
@@ -82,7 +88,12 @@ service cloud.firestore {
     match /shiftSwaps/{swapId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      // Hardening: Only Admin can approve/finalize swaps.
+      // Involved parties can only update the status to 'ACCEPTED' or 'CANCELLED'.
+      allow update: if isAdmin() || (isAuthenticated() && (
+        (isOperatorOwner(resource.data.targetOperatorId) && request.resource.data.status == 'ACCEPTED') ||
+        (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED')
+      ));
       allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }
   }

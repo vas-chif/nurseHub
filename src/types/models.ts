@@ -62,6 +62,7 @@ export interface ShiftRequest {
   status: RequestStatus;
   creatorId: string;
   creatorName?: string;
+  configId?: string; // Phase 10.2: Link to department
   createdAt: number;
 
   // Optional: tracking chi manca
