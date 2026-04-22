@@ -3,28 +3,42 @@
  * @description Vercel Serverless API endpoint: updates a user's Custom Claim (JWT role)
  * when an admin promotes or demotes them. Called by UserService.updateUserRole().
  * @author Nurse Hub Team
- * @created 2026-04-20
+ * @created 2026-04-21
  * @notes
- * - Authenticated via VERCEL_API_SECRET header (same pattern as send-notification.js)
- * - Validates the caller is an admin via Firebase Admin SDK token verification
- * - After writing the claim, the user's next getIdToken(true) will reflect the new role
+ * - Authenticated via VERCEL_API_SECRET header
+ * - Updates both Custom Claims and Firestore for consistency
  * @dependencies
- * - firebase-admin (via set-claims.js)
- * - VERCEL_API_SECRET env variable
- * - FIREBASE_SERVICE_ACCOUNT env variable (JSON string)
+ * - firebase-admin
  */
 'use strict';
 
-const { setUserClaim, admin } = require('./set-claims');
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+  } catch (error) {
+    console.error('Firebase Admin init error:', error);
+  }
+}
+
+const auth = getAuth();
+const db = getFirestore();
 
 export default async function handler(req, res) {
-  // CORS headers
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Content-Type, Authorization',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
   );
 
   if (req.method === 'OPTIONS') {
@@ -36,48 +50,36 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Security: verify shared secret
+  // Security Check: VERCEL_API_SECRET
   const authHeader = req.headers.authorization;
   if (authHeader !== `Bearer ${process.env.VERCEL_API_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { targetUid, newRole, callerIdToken } = req.body;
-
-  // Validate inputs (§1.8 no `any` — validate rigorously)
-  if (!targetUid || !newRole || (newRole !== 'admin' && newRole !== 'user')) {
-    return res.status(400).json({ error: 'Missing or invalid targetUid / newRole' });
-  }
-
-  if (!callerIdToken) {
-    return res.status(400).json({ error: 'Missing callerIdToken' });
-  }
-
   try {
-    // Verify the caller is a real admin (double security: check JWT claim OR Firestore role)
-    const decodedToken = await admin.auth().verifyIdToken(callerIdToken);
-    const callerIsAdmin =
-      decodedToken.role === 'admin' ||
-      (await admin
-        .firestore()
-        .collection('users')
-        .doc(decodedToken.uid)
-        .get()
-        .then((snap) => snap.data()?.role === 'admin'));
+    const { uid, role } = req.body;
 
-    if (!callerIsAdmin) {
-      return res.status(403).json({ error: 'Caller is not an admin' });
+    if (!uid || !role) {
+      return res.status(400).json({ error: 'Missing uid or role' });
     }
 
-    // Set the custom claim
-    await setUserClaim(targetUid, newRole);
+    // 1. Update Custom Claims (JWT)
+    await auth.setCustomUserClaims(uid, { role });
 
-    return res.status(200).json({
-      success: true,
-      message: `Custom claim 'role=${newRole}' set for uid=${targetUid}`,
+    // 2. Update Firestore user document for consistency
+    await db.collection('users').doc(uid).update({
+      role: role,
+      updatedAt: Date.now()
     });
-  } catch (err) {
-    console.error('[update-role] Error:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+
+    console.log(`Successfully updated role to ${role} for user ${uid}`);
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: `Ruolo aggiornato a ${role} con successo.` 
+    });
+  } catch (error) {
+    console.error('Error updating role:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }

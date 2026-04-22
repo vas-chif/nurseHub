@@ -27,9 +27,15 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
       // Phase 25: Users can update their profile but NOT their role or approval status
+      // ALLOW linking operatorId/configId ONLY IF they are currently null (first-time sync)
       allow update: if isAuthenticated() && (
         isAdmin() || 
-        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId']))
+        (request.auth.uid == userId && (
+          // Standard update: role, isApproved, operatorId, configId are protected
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId']) ||
+          // Linking exception: allow setting operatorId and configId if they don't exist yet
+          (resource.data.get('operatorId', null) == null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt']))
+        ))
       );
     }
 
@@ -37,8 +43,11 @@ service cloud.firestore {
     match /shiftRequests/{requestId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Only Admin can update/approve shift requests
-      allow update: if isAdmin();
+      // Allow update if admin OR if a user is adding an offer (only modifying offers and offeringOperatorIds)
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'offeringOperatorIds'])
+      );
       allow delete: if isAdmin() || (isAuthenticated() && resource != null && (resource.data.creatorId == request.auth.uid || resource.data.userId == request.auth.uid));
     }
     
@@ -63,7 +72,13 @@ service cloud.firestore {
       match /operators/{operatorId} {
         allow read: if true;
         // Allow update if admin OR if the authenticated user is the legitimate owner
-        allow update: if isAdmin() || isOperatorOwner(operatorId);
+        // OR if the operator is "orphan" (no userId) and the user is claiming it with their own UID
+        allow update: if isAdmin() || isOperatorOwner(operatorId) || (
+          isAuthenticated() && 
+          (!('userId' in resource.data) || resource.data.userId == null) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId']) &&
+          request.resource.data.userId == request.auth.uid
+        );
         allow create: if isAdmin();
       }
 
@@ -89,9 +104,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       // Hardening: Only Admin can approve/finalize swaps.
-      // Involved parties can only update the status to 'ACCEPTED' or 'CANCELLED'.
+      // Involved parties can only update the status to 'PENDING_ADMIN' (accepting) or 'CANCELLED' (by creator).
       allow update: if isAdmin() || (isAuthenticated() && (
-        (isOperatorOwner(resource.data.targetOperatorId) && request.resource.data.status == 'ACCEPTED') ||
+        // Allow accepting an OPEN swap: status must become PENDING_ADMIN, and counterpartId must be the current user
+        (resource.data.status == 'OPEN' && request.resource.data.status == 'PENDING_ADMIN' && request.resource.data.counterpartId == request.auth.uid) ||
+        // Allow creator to cancel
         (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED')
       ));
       allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);

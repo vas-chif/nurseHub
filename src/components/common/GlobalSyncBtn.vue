@@ -54,6 +54,7 @@ import { useQuasar } from 'quasar';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useSyncStore } from '../../stores/syncStore';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { SyncService } from '../../services/SyncService';
 import { GoogleSheetsService } from '../../services/GoogleSheetsService';
 import { DEFAULT_SHEETS_CONFIG } from '../../config/sheets';
@@ -72,6 +73,7 @@ const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const syncStore = useSyncStore();
+const scheduleStore = useScheduleStore();
 const syncing = ref(false);
 
 // Reactive tick for timer re-evaluation
@@ -88,13 +90,18 @@ onUnmounted(() => {
 });
 
 async function handleSync() {
-  if (!authStore.currentUser?.operatorId || !authStore.currentUser?.configId) {
-    $q.notify({ type: 'warning', message: 'Profilo non ancora collegato a un operatore.' });
+  const configId = authStore.currentUser?.configId || configStore.activeConfigId;
+  if (!configId) {
+    $q.notify({ type: 'warning', message: 'Configurazione non trovata.' });
     return;
   }
 
   if (!syncStore.canSync) {
-    $q.notify({ type: 'info', message: `Riprova tra ${syncStore.cooldownLabel}.`, timeout: 3000 });
+    $q.notify({
+      type: 'info',
+      message: `Sincronizzazione globale in cooldown. Riprova tra ${syncStore.cooldownLabel}.`,
+      timeout: 3000
+    });
     return;
   }
 
@@ -108,23 +115,28 @@ async function handleSync() {
     const sheetsService = new GoogleSheetsService(appConfig);
     const svcSync = new SyncService(sheetsService);
 
-    await svcSync.syncIndividualOperator(
-      authStore.currentUser.configId,
-      authStore.currentUser.operatorId
-    );
+    // Phase 25: Full sync for the active configuration
+    logger.info('Starting global sync for config', { configId });
+    await svcSync.syncOperatorsFromSheets(configId);
 
+    // Record the global sync event
     await syncStore.recordSync();
 
     $q.notify({
       type: 'positive',
-      message: 'Sincronizzazione completata!',
-      timeout: 2000
+      message: 'Sincronizzazione Google Sheets -> Firebase completata con successo!',
+      icon: 'cloud_done',
+      timeout: 3000
     });
+
+    // Refresh schedule store data immediately for the current user
+    await scheduleStore.loadOperators(configId, true);
+
   } catch (err) {
     logger.error('GlobalSyncBtn error:', err);
     $q.notify({
       type: 'negative',
-      message: 'Errore durante la sincronizzazione.'
+      message: 'Errore durante la sincronizzazione globale.'
     });
   } finally {
     syncing.value = false;

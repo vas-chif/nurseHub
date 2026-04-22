@@ -101,6 +101,12 @@ async function refreshRoster() {
   }
 }
 
+function changeDate(days: number) {
+  const current = new Date(selectedDate.value);
+  const newDate = date.addToDate(current, { days });
+  selectedDate.value = date.formatDate(newDate, 'YYYY-MM-DD');
+}
+
 // Initial load if required
 onMounted(() => {
   if (scheduleStore.operators.length === 0) {
@@ -110,13 +116,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <q-expansion-item
-    header-class="bg-primary text-white text-weight-bold"
-    v-model="expanded"
-    label="Chi c'è in turno"
-    icon="groups"
-    expand-icon-class="text-white"
-  >
+  <q-expansion-item header-class="bg-primary text-white text-weight-bold" v-model="expanded" label="Chi c'è in turno"
+    icon="groups" expand-icon-class="text-white">
     <q-card flat bordered class="q-mt-sm">
       <q-card-section class="row items-center justify-between bg-primary text-white q-py-sm">
         <div>
@@ -129,20 +130,17 @@ onMounted(() => {
               </q-date>
             </q-popup-proxy>
           </q-btn>
-          <q-btn
-            flat
-            dense
-            round
-            icon="refresh"
-            title="Aggiorna presenze"
-            :loading="loading"
-            @click="refreshRoster"
-          />
+          <q-btn flat dense round icon="refresh" title="Aggiorna presenze" :loading="loading" @click="refreshRoster" />
         </div>
       </q-card-section>
 
-      <q-card-section class="q-pa-sm bg-grey-2 text-center text-caption text-weight-bold">
-        {{ formattedSelectedDate }}
+      <q-card-section
+        class="q-pa-sm bg-grey-2 text-center text-caption text-weight-bold row items-center justify-center q-gutter-x-md">
+        <q-btn flat dense round icon="chevron_left" color="primary" @click="changeDate(-1)" />
+        <q-space />
+        <div class="text-subtitle2">{{ formattedSelectedDate }}</div>
+        <q-space />
+        <q-btn flat dense round icon="chevron_right" color="primary" @click="changeDate(1)" />
       </q-card-section>
 
       <q-card-section class="q-pa-md">
@@ -155,10 +153,13 @@ onMounted(() => {
           <!-- Mattina -->
           <div class="col-12 col-md-4">
             <q-card flat class="bg-amber-1 border-amber">
-              <q-card-section class="q-pb-xs">
+              <q-card-section class="q-pb-xs row items-center justify-between">
                 <div class="text-subtitle2 text-black">
                   <q-badge color="amber-8" class="q-mr-sm">M</q-badge> Mattina
                 </div>
+                <q-badge outline color="amber-9" class="text-weight-bold">
+                  {{ shifts.M.length }}
+                </q-badge>
               </q-card-section>
               <q-card-section class="q-pt-none">
                 <div v-if="shifts.M.length === 0" class="text-caption text-grey text-italic">
@@ -174,10 +175,13 @@ onMounted(() => {
           <!-- Pomeriggio -->
           <div class="col-12 col-md-4">
             <q-card flat class="bg-orange-1 border-orange">
-              <q-card-section class="q-pb-xs">
+              <q-card-section class="q-pb-xs row items-center justify-between">
                 <div class="text-subtitle2 text-black">
                   <q-badge color="orange-8" class="q-mr-sm">P</q-badge> Pomeriggio
                 </div>
+                <q-badge outline color="orange-9" class="text-weight-bold">
+                  {{ shifts.P.length }}
+                </q-badge>
               </q-card-section>
               <q-card-section class="q-pt-none">
                 <div v-if="shifts.P.length === 0" class="text-caption text-grey text-italic">
@@ -193,10 +197,13 @@ onMounted(() => {
           <!-- Notte -->
           <div class="col-12 col-md-4">
             <q-card flat class="bg-blue-1 border-blue">
-              <q-card-section class="q-pb-xs">
+              <q-card-section class="q-pb-xs row items-center justify-between">
                 <div class="text-subtitle2 text-black">
                   <q-badge color="blue-10" class="q-mr-sm">N</q-badge> Notte
                 </div>
+                <q-badge outline color="blue-10" class="text-weight-bold">
+                  {{ shifts.N.length }}
+                </q-badge>
               </q-card-section>
               <q-card-section class="q-pt-none">
                 <div v-if="shifts.N.length === 0" class="text-caption text-grey text-italic">
@@ -218,9 +225,11 @@ onMounted(() => {
 .border-amber {
   border: 1px solid #ffca28;
 }
+
 .border-orange {
   border: 1px solid #fb8c00;
 }
+
 .border-blue {
   border: 1px solid #1565c0;
 }

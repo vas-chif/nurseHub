@@ -18,6 +18,7 @@ import { ref, computed } from 'vue';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from './authStore';
+import { useScheduleStore } from './scheduleStore';
 import { useSecureLogger } from '../utils/secureLogger';
 import type { SyncStatus } from '../types/models';
 
@@ -105,6 +106,30 @@ export const useSyncStore = defineStore('sync', () => {
     }
   }
 
+  /**
+   * Compares global sync status with local store age and forces refresh if needed.
+   * Prevents stale data when another user triggers a sync.
+   */
+  async function checkAndRefresh(): Promise<void> {
+    const authStore = useAuthStore();
+    const scheduleStore = useScheduleStore();
+    const configId = authStore.currentUser?.configId || scheduleStore.activeConfigId;
+
+    if (!configId) return;
+
+    await loadSyncStatus();
+
+    if (lastSyncTimestamp.value && scheduleStore.lastUpdated) {
+      if (lastSyncTimestamp.value > scheduleStore.lastUpdated) {
+        logger.info('Global sync detected, refreshing local data...', {
+          global: lastSyncTimestamp.value,
+          local: scheduleStore.lastUpdated,
+        });
+        await scheduleStore.loadOperators(configId, true);
+      }
+    }
+  }
+
   return {
     lastSyncTimestamp,
     lastSyncByName,
@@ -114,5 +139,6 @@ export const useSyncStore = defineStore('sync', () => {
     cooldownLabel,
     loadSyncStatus,
     recordSync,
+    checkAndRefresh,
   };
 });

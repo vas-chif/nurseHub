@@ -2,6 +2,7 @@
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useSyncStore } from '../stores/syncStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch } from 'vue';
@@ -14,6 +15,7 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notificationStore = useNotificationStore();
 const scheduleStore = useScheduleStore();
+const syncStore = useSyncStore();
 const $q = useQuasar();
 
 let unsubs: (() => void)[] = [];
@@ -52,7 +54,7 @@ onMounted(async () => {
           caption: `Da un operatore`,
           color: 'primary',
           icon: 'notifications',
-          position: 'top-right',
+          position: 'top',
           actions: [
             {
               label: 'Vedi',
@@ -74,7 +76,7 @@ onMounted(async () => {
           caption: `La tua richiesta del ${req.date} è ora ${req.status}`,
           color: req.status === 'CLOSED' ? 'positive' : 'warning',
           icon: 'update',
-          position: 'bottom-right',
+          position: 'top',
           actions: [
             {
               label: 'Vedi',
@@ -89,6 +91,28 @@ onMounted(async () => {
     });
   }
 });
+
+function handleSwipe({ direction }: { direction: 'left' | 'right' | 'up' | 'down' }) {
+  // Configurazione rotte per lo swipe (ordine di navigazione)
+  const routes = authStore.isAdmin
+    ? ['/', '/calendar', '/admin/requests', '/admin/users', '/admin/analytics', '/admin']
+    : ['/', '/calendar', '/requests'];
+
+  const currentPath = router.currentRoute.value.path;
+  const currentIndex = routes.indexOf(currentPath);
+
+  if (currentIndex === -1) return;
+
+  if (direction === 'left' && currentIndex < routes.length - 1) {
+    // Swipe a sinistra -> Vai avanti
+    const nextRoute = routes[currentIndex + 1];
+    if (nextRoute) void router.push(nextRoute);
+  } else if (direction === 'right' && currentIndex > 0) {
+    // Swipe a destra -> Vai indietro
+    const prevRoute = routes[currentIndex - 1];
+    if (prevRoute) void router.push(prevRoute);
+  }
+}
 
 // Watch for user configId to initialize configStore for regular users
 watch(
@@ -112,6 +136,17 @@ watch(
     }
   },
   { immediate: true },
+);
+
+// Automatic refresh when navigating (checks global sync status)
+watch(
+  () => router.currentRoute.value.path,
+  () => {
+    if (authStore.isAuthenticated) {
+      void syncStore.checkAndRefresh();
+    }
+  },
+  { immediate: true }
 );
 
 onUnmounted(() => {
@@ -275,8 +310,12 @@ async function handleConfigChange(configId: string) {
       </q-toolbar>
     </q-header>
 
-    <q-page-container>
-      <router-view />
+    <q-page-container v-touch-swipe.horizontal="handleSwipe">
+      <router-view v-slot="{ Component }">
+        <transition appear enter-active-class="animated fadeIn" leave-active-class="animated fadeOut" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </q-page-container>
 
     <q-footer bordered class="bg-white text-primary">

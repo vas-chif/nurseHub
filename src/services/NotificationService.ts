@@ -339,3 +339,72 @@ export async function notifyEligibleSwappers(
     console.error('Error in notifyEligibleSwappers:', err);
   }
 }
+/**
+ * NEW: Consolidated notification for shift swap proposal
+ * Notifies both Admins and Eligible Peers in a single pass to prevent duplicates.
+ */
+export async function notifySwapProposed(
+  swapId: string,
+  swapObj: Omit<ShiftSwap, 'id'>,
+  activeConfigId: string,
+): Promise<void> {
+  try {
+    if (!activeConfigId) return;
+
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const recipients = new Set<string>(); // Set of Firebase UIDs
+
+    // 1. Fetch all Admins in this configuration
+    const usersRef = collection(db, 'users');
+    const adminQuery = query(
+      usersRef,
+      where('role', '==', 'admin'),
+      where('configId', '==', activeConfigId),
+    );
+    const adminsSnap = await getDocs(adminQuery);
+    adminsSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      const uid = d.uid || doc.id;
+      if (uid) recipients.add(uid);
+    });
+
+    // 2. Fetch all Eligible Peers (Operators with the desired shift)
+    const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
+    const opsSnap = await getDocs(opsRef);
+
+    // Map operatorId -> UID
+    const allUsersSnap = await getDocs(usersRef);
+    const opToUid = new Map<string, string>();
+    allUsersSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d.operatorId) opToUid.set(d.operatorId, doc.id);
+    });
+
+    for (const opDoc of opsSnap.docs) {
+      const opData = opDoc.data();
+      const opId = opDoc.id;
+      const uid = opToUid.get(opId);
+
+      if (!uid || uid === swapObj.creatorId) continue;
+
+      // Check shift compatibility
+      const opShift = opData.schedule?.[swapObj.date];
+      if (opShift === swapObj.desiredShift) {
+        recipients.add(uid);
+      }
+    }
+
+    // 3. Send single notification to each unique recipient
+    const message = `Nuova proposta di cambio: Un collega offre ${swapObj.offeredShift} per un ${swapObj.desiredShift} del ${swapObj.date}.`;
+    
+    const promises = Array.from(recipients).map((uid) =>
+      notifyUser(uid, 'NEW_OPPORTUNITY', message, swapId).catch((e) =>
+        console.error('Silent fail on notifyUser in notifySwapProposed', e),
+      ),
+    );
+
+    await Promise.all(promises);
+  } catch (err) {
+    console.error('Error in notifySwapProposed:', err);
+  }
+}

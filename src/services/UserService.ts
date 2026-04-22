@@ -307,22 +307,14 @@ export class UserService {
 
     // 2. Call Vercel API to set JWT Custom Claim (requires firebase-admin)
     try {
-      const { auth } = await import('../boot/firebase');
-      const callerIdToken = await auth.currentUser?.getIdToken();
-
-      if (!callerIdToken) {
-        logger.warn('updateUserRole: no callerIdToken available, skipping claim update');
-        return;
-      }
-
-      const apiUrl = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/update-role`;
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/update-role`;
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
         },
-        body: JSON.stringify({ targetUid: uid, newRole, callerIdToken }),
+        body: JSON.stringify({ uid, role: newRole }),
       });
 
       if (!response.ok) {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
-import { useQuasar, date as qDate } from 'quasar';
+import { useQuasar, date as dateUtil } from 'quasar';
 import {
   collection,
   query,
@@ -37,6 +37,7 @@ import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { SyncService } from '../services/SyncService';
 import { DEFAULT_SHEETS_CONFIG } from '../config/sheets';
 import { useScenarioStore } from '../stores/scenarioStore';
+import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
@@ -267,7 +268,7 @@ function initRealtimeRequests() {
                 message: `Nuova richiesta da ${getOperatorName(newData.absentOperatorId || newData.creatorId, newData)}`,
                 color: 'primary',
                 icon: 'notifications',
-                position: 'top-right',
+                position: 'top',
               });
               notificationStore.incrementUnread();
             }
@@ -324,27 +325,14 @@ function getAdminName(adminId: string) {
   return userNames.value[adminId] || `Admin (${adminId})`;
 }
 
-function formatDate(ts: number | string) {
-  if (typeof ts === 'string') {
-    if (ts.includes('T')) return ts.split('T')[0];
-    return ts;
-  }
-  return new Date(ts).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-  });
+function formatDate(ts: number | string | undefined) {
+  if (!ts) return '';
+  return dateUtil.formatDate(ts, 'DD/MM/YYYY');
 }
 
 function formatFullDate(ts: number | string | undefined) {
   if (!ts) return '';
-  const d = new Date(ts);
-  return d.toLocaleString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return dateUtil.formatDate(ts, 'DD/MM/YYYY HH:mm');
 }
 
 function getShiftColor(code: ShiftCode): string {
@@ -1008,8 +996,8 @@ const swapSyncMode = ref<'auto' | 'manual'>('auto');
 const approvalSwapContext = ref<ShiftSwap | null>(null);
 
 const archivedSwaps = computed(() => {
-  const cutoffDate = qDate.formatDate(
-    qDate.subtractFromDate(new Date(), { days: 90 }),
+  const cutoffDate = dateUtil.formatDate(
+    dateUtil.subtractFromDate(new Date(), { days: 90 }),
     'YYYY-MM-DD',
   );
   return allSwaps.value.filter((swap) => swap.status !== 'OPEN' && swap.date < cutoffDate);
@@ -1130,6 +1118,39 @@ async function processSwapApproval() {
       await updateDoc(counterRef, { [`schedule.${swap.date}`]: swap.offeredShift });
     }
 
+    // Auto-sync to Google Sheets if mode is 'auto'
+    if (swapSyncMode.value === 'auto' && configStore.activeConfigId) {
+      try {
+        const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/update-sheet-swap`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
+          },
+          body: JSON.stringify({
+            configId: configStore.activeConfigId,
+            swap: {
+              ...swap,
+              creatorName: swap.creatorName,
+              counterpartName: swap.counterpartName || 'Collega',
+            },
+          }),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          $q.notify({
+            type: 'warning',
+            message: `Firebase aggiornato, ma errore sincronizzazione Sheets: ${err.error || 'Errore sconosciuto'}`,
+          });
+        } else {
+          $q.notify({ type: 'positive', message: 'Sincronizzazione Google Sheets completata!' });
+        }
+      } catch (e) {
+        console.error('Error syncing swap to sheets:', e);
+      }
+    }
+
     // Auto-sync the schedules to update the internal cache and UI without requiring a manual click
     if (configStore.activeConfigId) {
       void scheduleStore.loadOperators(configStore.activeConfigId, true);
@@ -1239,7 +1260,10 @@ watch(activeTab, (val) => {
 
 <template>
   <q-page class="q-pa-md">
-    <div class="text-h5 q-mb-md">Gestione Richieste Assenza</div>
+    <div class="row items-center justify-between q-mb-md">
+      <div class="text-h5 text-weight-bold text-primary">Gestione Richieste</div>
+      <GlobalSyncBtn size="sm" />
+    </div>
 
     <!-- Filters Section -->
     <q-card flat bordered class="q-mb-md">
@@ -1247,42 +1271,44 @@ watch(activeTab, (val) => {
         <div class="text-subtitle2 q-mb-sm">Filtri</div>
         <div class="row q-col-gutter-md">
           <div class="col-12 col-md-3">
-            <q-input
-              v-model="filters.dateFrom"
-              label="Da Data"
-              type="date"
-              dense
-              outlined
-              clearable
-            />
+            <q-input :model-value="formatDate(filters.dateFrom)" label="Da Data" outlined dense readonly
+              class="cursor-pointer" clearable @clear="filters.dateFrom = ''">
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD">
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
           <div class="col-12 col-md-3">
-            <q-input v-model="filters.dateTo" label="A Data" type="date" dense outlined clearable />
+            <q-input :model-value="formatDate(filters.dateTo)" label="A Data" outlined dense readonly
+              class="cursor-pointer" clearable @clear="filters.dateTo = ''">
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-date v-model="filters.dateTo" mask="YYYY-MM-DD">
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
           <div class="col-12 col-md-3">
-            <q-select
-              v-model="filters.operators"
-              :options="operatorOptions"
-              label="Filtra Operatori"
-              multiple
-              use-chips
-              dense
-              outlined
-              emit-value
-              map-options
-              clearable
-            />
+            <q-select v-model="filters.operators" :options="operatorOptions" label="Filtra Operatori" multiple use-chips
+              dense outlined emit-value map-options clearable />
           </div>
           <div class="col-12 col-md-3">
-            <q-select
-              v-model="sortBy"
-              :options="sortOptions"
-              label="Ordina per"
-              dense
-              outlined
-              emit-value
-              map-options
-            />
+            <q-select v-model="sortBy" :options="sortOptions" label="Ordina per" dense outlined emit-value
+              map-options />
           </div>
         </div>
       </q-card-section>
@@ -1301,21 +1327,14 @@ watch(activeTab, (val) => {
       </div>
     </q-banner>
 
-    <q-tabs
-      v-model="activeTab"
-      dense
-      class="text-grey"
-      active-color="primary"
-      indicator-color="primary"
-      align="justify"
-      narrow-indicator
-    >
+    <q-tabs v-model="activeTab" dense class="text-grey" active-color="primary" indicator-color="primary" align="justify"
+      narrow-indicator>
       <q-tab name="pending" label="In Attesa" />
       <q-tab name="history" label="Storico" />
       <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
         <q-badge v-if="pendingSwaps.length > 0" color="red" floating>{{
           pendingSwaps.length
-        }}</q-badge>
+          }}</q-badge>
       </q-tab>
     </q-tabs>
 
@@ -1332,13 +1351,8 @@ watch(activeTab, (val) => {
         </div>
 
         <div v-else class="q-list--bordered">
-          <q-expansion-item
-            v-for="req in filteredPendingRequests"
-            :key="req.id"
-            group="requests"
-            class="bg-white q-mb-sm shadow-1"
-            header-class="q-py-md"
-          >
+          <q-expansion-item v-for="req in filteredPendingRequests" :key="req.id" group="requests"
+            class="bg-white q-mb-sm shadow-1" header-class="q-py-md">
             <!-- Header: Concise Info -->
             <template v-slot:header>
               <q-item-section avatar>
@@ -1419,7 +1433,7 @@ watch(activeTab, (val) => {
                         <q-item-section>
                           <q-item-label class="text-weight-bold">{{
                             offer.operatorName || 'Operatore'
-                          }}</q-item-label>
+                            }}</q-item-label>
                           <q-item-label caption>
                             Offerta per: {{ formatDate(req.date) }} -
                             <q-badge :label="req.originalShift" color="primary" />
@@ -1429,29 +1443,14 @@ watch(activeTab, (val) => {
                           </q-item-label>
                         </q-item-section>
                         <q-item-section side>
-                          <div
-                            v-if="offer.isRejected"
-                            class="text-negative text-caption text-weight-bold"
-                          >
+                          <div v-if="offer.isRejected" class="text-negative text-caption text-weight-bold">
                             Rifiutata
                           </div>
                           <div v-else class="row q-gutter-xs">
-                            <q-btn
-                              round
-                              flat
-                              color="negative"
-                              icon="close"
-                              size="sm"
-                              @click="rejectOffer(req.id, offer.id)"
-                            />
-                            <q-btn
-                              round
-                              flat
-                              color="positive"
-                              icon="check"
-                              size="sm"
-                              @click="acceptOffer(req.id, offer.id)"
-                            />
+                            <q-btn round flat color="negative" icon="close" size="sm"
+                              @click="rejectOffer(req.id, offer.id)" />
+                            <q-btn round flat color="positive" icon="check" size="sm"
+                              @click="acceptOffer(req.id, offer.id)" />
                           </div>
                         </q-item-section>
                       </q-item>
@@ -1462,121 +1461,58 @@ watch(activeTab, (val) => {
                   <div class="col-12 col-md-6" style="min-width: 100%">
                     <div class="text-h6 q-mb-sm">Gestione</div>
                     <div class="row q-gutter-sm q-mb-md">
-                      <q-btn
-                        outline
-                        color="negative"
-                        label="Rifiuta (Abusiva)"
-                        @click="rejectRequest(req)"
-                      />
-                      <q-btn
-                        unelevated
-                        color="positive"
-                        label="Approva (Coperto)"
-                        @click="approveRequest(req)"
-                      />
+                      <q-btn outline color="negative" label="Rifiuta (Abusiva)" @click="rejectRequest(req)" />
+                      <q-btn unelevated color="positive" label="Approva (Coperto)" @click="approveRequest(req)" />
                     </div>
 
                     <q-separator class="q-my-md" />
 
                     <div class="text-subtitle2 q-mb-xs">Sostituti Suggeriti</div>
                     <div v-if="!suggestions[req.id]" class="q-mb-sm">
-                      <q-btn
-                        flat
-                        color="primary"
-                        label="Trova Sostituti"
-                        icon="search"
-                        @click="findSubstitutes(req)"
-                        :loading="calculating[req.id]"
-                      />
+                      <q-btn flat color="primary" label="Trova Sostituti" icon="search" @click="findSubstitutes(req)"
+                        :loading="calculating[req.id]" />
                     </div>
                     <div v-else>
-                      <div
-                        v-if="getSuggestions(req.id).length === 0"
-                        class="text-grey text-caption"
-                      >
+                      <div v-if="getSuggestions(req.id).length === 0" class="text-grey text-caption">
                         Nessun sostituto trovato per i criteri attuali.
                       </div>
                       <div v-else>
-                        <div
-                          v-for="scenario in getSuggestions(req.id)"
-                          :key="scenario.id"
-                          class="q-mb-md bg-white border-radius-sm shadow-1 overflow-hidden"
-                        >
+                        <div v-for="scenario in getSuggestions(req.id)" :key="scenario.id"
+                          class="q-mb-md bg-white border-radius-sm shadow-1 overflow-hidden">
                           <div class="bg-primary text-white q-pa-sm text-weight-bold">
                             {{ scenario.label }}
                           </div>
                           <div class="row q-col-gutter-sm q-pa-sm">
-                            <div
-                              v-for="(pos, pIdx) in scenario.positions"
-                              :key="pIdx"
-                              class="col-12 col-md"
-                            >
+                            <div v-for="(pos, pIdx) in scenario.positions" :key="pIdx" class="col-12 col-md">
                               <div class="row items-center justify-between q-mb-xs">
                                 <div class="text-subtitle2 text-primary">
                                   Posizione {{ pIdx + 1 }}
                                 </div>
-                                <q-checkbox
-                                  :model-value="isAllSelected(req.id, pos.candidates)"
-                                  :indeterminate="isSomeSelected(req.id, pos.candidates)"
-                                  @update:model-value="
+                                <q-checkbox :model-value="isAllSelected(req.id, pos.candidates)"
+                                  :indeterminate="isSomeSelected(req.id, pos.candidates)" @update:model-value="
                                     (val) => toggleAllInPosition(req.id, pos.candidates, val)
-                                  "
-                                  label="Seleziona Tutti"
-                                  dense
-                                  size="xs"
-                                  color="secondary"
-                                  :disable="pos.candidates.length === 0"
-                                />
+                                  " label="Seleziona Tutti" dense size="xs" color="secondary"
+                                  :disable="pos.candidates.length === 0" />
                               </div>
                               <div class="text-caption text-grey-8 q-mb-sm">
                                 {{ pos.roleLabel }}
                               </div>
 
-                              <q-list
-                                dense
-                                separator
-                                padding
-                                class="bg-grey-1 rounded-borders q-pa-none"
-                              >
-                                <q-item
-                                  v-for="cand in pos.candidates"
-                                  :key="cand.operatorId"
-                                  class="q-py-xs"
-                                >
+                              <q-list dense separator padding class="bg-grey-1 rounded-borders q-pa-none">
+                                <q-item v-for="cand in pos.candidates" :key="cand.operatorId" class="q-py-xs">
                                   <q-item-section avatar>
-                                    <q-checkbox
-                                      v-model="selectedSuggestions[req.id]"
-                                      :val="cand.operatorId"
-                                    />
+                                    <q-checkbox v-model="selectedSuggestions[req.id]" :val="cand.operatorId" />
                                   </q-item-section>
                                   <q-item-section>
                                     <q-item-label class="text-weight-bold">
-                                      <q-chip
-                                        square
-                                        color="blue-1"
-                                        text-color="black"
-                                        size="md"
-                                        style="border-radius: 4px; min-width: 200px"
-                                      >
+                                      <q-chip square color="blue-1" text-color="black" size="md"
+                                        style="border-radius: 4px; min-width: 200px">
                                         {{ cand.name }}
                                       </q-chip>
-                                      <q-chip
-                                        square
-                                        color="blue-1"
-                                        text-color="black"
-                                        size="md"
-                                        style="border-radius: 4px"
-                                        v-if="cand.phone"
-                                        class="q-ml-xl"
-                                      >
+                                      <q-chip square color="blue-1" text-color="black" size="md"
+                                        style="border-radius: 4px" v-if="cand.phone" class="q-ml-xl">
                                         {{ cand.phone }}
-                                        <q-btn
-                                          dense
-                                          round
-                                          flat
-                                          icon="phone"
-                                          @click="callCandidate(cand.phone)"
-                                        />
+                                        <q-btn dense round flat icon="phone" @click="callCandidate(cand.phone)" />
                                       </q-chip>
                                     </q-item-label>
                                   </q-item-section>
@@ -1586,10 +1522,7 @@ watch(activeTab, (val) => {
                                     </q-badge>
                                   </q-item-section>
                                 </q-item>
-                                <div
-                                  v-if="pos.candidates.length === 0"
-                                  class="q-pa-sm text-caption text-grey italic"
-                                >
+                                <div v-if="pos.candidates.length === 0" class="q-pa-sm text-caption text-grey italic">
                                   Nessun candidato idoneo per questa posizione.
                                 </div>
                               </q-list>
@@ -1599,18 +1532,11 @@ watch(activeTab, (val) => {
                       </div>
 
                       <div class="q-mt-sm">
-                        <q-btn
-                          size="sm"
-                          color="info"
-                          :label="`Invia a Selezionati (${selectedSuggestions[req.id]?.length || 0})`"
-                          icon="send"
-                          class="full-width"
-                          @click="publishRequest(req)"
-                          :disable="
-                            !selectedSuggestions[req.id] ||
+                        <q-btn size="sm" color="info"
+                          :label="`Invia a Selezionati (${selectedSuggestions[req.id]?.length || 0})`" icon="send"
+                          class="full-width" @click="publishRequest(req)" :disable="!selectedSuggestions[req.id] ||
                             selectedSuggestions[req.id]?.length === 0
-                          "
-                        />
+                            " />
                       </div>
                     </div>
                   </div>
@@ -1623,10 +1549,8 @@ watch(activeTab, (val) => {
 
       <q-tab-panel name="history">
         <!-- Archive Widget (Battery) -->
-        <div
-          class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
-          v-if="archivedRequests.length > 0"
-        >
+        <div class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
+          v-if="archivedRequests.length > 0">
           <div class="col-grow">
             <div class="row items-center justify-between q-mb-xs">
               <div class="text-caption text-grey-8 text-weight-bold">
@@ -1635,24 +1559,11 @@ watch(activeTab, (val) => {
               </div>
               <div class="text-caption text-grey-6">{{ archivedRequests.length }} elementi</div>
             </div>
-            <q-linear-progress
-              :value="archiveStorageLevel"
-              :color="storageColor"
-              size="8px"
-              rounded
-              track-color="grey-2"
-            />
+            <q-linear-progress :value="archiveStorageLevel" :color="storageColor" size="8px" rounded
+              track-color="grey-2" />
           </div>
           <div>
-            <q-btn
-              flat
-              dense
-              color="negative"
-              icon="delete_forever"
-              label="Svuota"
-              @click="emptyArchive"
-              size="sm"
-            />
+            <q-btn flat dense color="negative" icon="delete_forever" label="Svuota" @click="emptyArchive" size="sm" />
           </div>
         </div>
 
@@ -1663,12 +1574,7 @@ watch(activeTab, (val) => {
           Nessuna richiesta visibile nello storico.
         </div>
         <q-list v-else separator bordered class="rounded-borders">
-          <q-expansion-item
-            v-for="req in visibleHistoryRequests"
-            :key="req.id"
-            group="history"
-            header-class="q-pa-sm"
-          >
+          <q-expansion-item v-for="req in visibleHistoryRequests" :key="req.id" group="history" header-class="q-pa-sm">
             <template v-slot:header>
               <q-item-section avatar>
                 <q-avatar icon="person" color="grey-2" text-color="primary" />
@@ -1681,28 +1587,15 @@ watch(activeTab, (val) => {
                   {{ formatDate(req.date) }} -
                   <q-badge :color="getShiftColor(req.originalShift)" size="xs">{{
                     req.originalShift
-                  }}</q-badge>
+                    }}</q-badge>
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
                 <div class="row items-center">
-                  <q-chip
-                    :color="getStatusColor(req.status)"
-                    text-color="white"
-                    size="sm"
-                    class="q-mr-sm"
-                  >
+                  <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm" class="q-mr-sm">
                     {{ req.status }}
                   </q-chip>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    icon="delete"
-                    color="grey-5"
-                    size="sm"
-                    @click.stop="archiveRequest(req)"
-                  >
+                  <q-btn flat round dense icon="delete" color="grey-5" size="sm" @click.stop="archiveRequest(req)">
                     <q-tooltip>Sposta nel cestino</q-tooltip>
                   </q-btn>
                 </div>
@@ -1742,12 +1635,7 @@ watch(activeTab, (val) => {
                     <div class="text-subtitle2 q-mb-xs">Stato & Chiusura</div>
                     <div class="q-mb-xs">
                       <span class="text-grey-7">Stato Attuale:</span>
-                      <q-chip
-                        :color="getStatusColor(req.status)"
-                        text-color="white"
-                        dense
-                        size="sm"
-                      >
+                      <q-chip :color="getStatusColor(req.status)" text-color="white" dense size="sm">
                         {{ req.status }}
                       </q-chip>
                     </div>
@@ -1766,10 +1654,8 @@ watch(activeTab, (val) => {
                     <!-- Esito Sostituzione -->
                     <div v-if="req.status === 'CLOSED'" class="text-positive">
                       <div class="text-weight-bold">Sostituzione Completata</div>
-                      <div
-                        class="bg-green-1 q-pa-sm rounded-borders text-caption text-black q-mt-xs"
-                        v-if="getResolutionDetails(req)"
-                      >
+                      <div class="bg-green-1 q-pa-sm rounded-borders text-caption text-black q-mt-xs"
+                        v-if="getResolutionDetails(req)">
                         <div><strong>Coperta da:</strong> {{ getResolutionDetails(req)?.who }}</div>
                         <div>
                           <strong>Scenario:</strong> {{ getResolutionDetails(req)?.scenario }}
@@ -1794,10 +1680,8 @@ watch(activeTab, (val) => {
       <!-- ===== CAMBI TURNO TAB PANEL ===== -->
       <q-tab-panel name="swaps" class="q-pa-md">
         <!-- Archive Widget (Battery) -->
-        <div
-          class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
-          v-if="archivedSwaps.length > 0"
-        >
+        <div class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1"
+          v-if="archivedSwaps.length > 0">
           <div class="col-grow">
             <div class="row items-center justify-between q-mb-xs">
               <div class="text-caption text-grey-8 text-weight-bold">
@@ -1806,24 +1690,12 @@ watch(activeTab, (val) => {
               </div>
               <div class="text-caption text-grey-6">{{ archivedSwaps.length }} elementi</div>
             </div>
-            <q-linear-progress
-              :value="archiveSwapStorageLevel"
-              :color="storageSwapColor"
-              size="8px"
-              rounded
-              track-color="grey-2"
-            />
+            <q-linear-progress :value="archiveSwapStorageLevel" :color="storageSwapColor" size="8px" rounded
+              track-color="grey-2" />
           </div>
           <div>
-            <q-btn
-              flat
-              dense
-              color="negative"
-              icon="delete_forever"
-              label="Svuota"
-              @click="emptySwapArchive"
-              size="sm"
-            />
+            <q-btn flat dense color="negative" icon="delete_forever" label="Svuota" @click="emptySwapArchive"
+              size="sm" />
           </div>
         </div>
 
@@ -1831,15 +1703,8 @@ watch(activeTab, (val) => {
           <div class="text-subtitle1 text-weight-bold">
             <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />Richieste Cambio Turno
           </div>
-          <q-btn
-            flat
-            dense
-            size="sm"
-            icon="refresh"
-            label="Aggiorna"
-            @click="initRealtimeSwaps"
-            :loading="swapLoading"
-          />
+          <q-btn flat dense size="sm" icon="refresh" label="Aggiorna" @click="initRealtimeSwaps"
+            :loading="swapLoading" />
         </div>
 
         <div v-if="swapLoading" class="text-center q-pa-lg">
@@ -1862,33 +1727,19 @@ watch(activeTab, (val) => {
                 <div class="text-caption">
                   <q-icon name="person" />
                   <strong>{{ swap.creatorName || swap.creatorId }}</strong> cede
-                  <q-chip
-                    size="xs"
-                    dense
-                    :color="
-                      swap.offeredShift === 'M'
-                        ? 'amber-9'
-                        : swap.offeredShift === 'P'
-                          ? 'deep-orange-6'
-                          : 'blue-8'
-                    "
-                    text-color="white"
-                    >{{ swap.offeredShift }}</q-chip
-                  >
+                  <q-chip size="xs" dense :color="swap.offeredShift === 'M'
+                      ? 'amber-9'
+                      : swap.offeredShift === 'P'
+                        ? 'deep-orange-6'
+                        : 'blue-8'
+                    " text-color="white">{{ swap.offeredShift }}</q-chip>
                   in cambio di
-                  <q-chip
-                    size="xs"
-                    dense
-                    :color="
-                      swap.desiredShift === 'M'
-                        ? 'amber-9'
-                        : swap.desiredShift === 'P'
-                          ? 'deep-orange-6'
-                          : 'blue-8'
-                    "
-                    text-color="white"
-                    >{{ swap.desiredShift }}</q-chip
-                  >
+                  <q-chip size="xs" dense :color="swap.desiredShift === 'M'
+                      ? 'amber-9'
+                      : swap.desiredShift === 'P'
+                        ? 'deep-orange-6'
+                        : 'blue-8'
+                    " text-color="white">{{ swap.desiredShift }}</q-chip>
                 </div>
                 <div v-if="swap.counterpartName" class="text-caption q-mt-xs">
                   <q-icon name="handshake" color="positive" />
@@ -1896,22 +1747,8 @@ watch(activeTab, (val) => {
                 </div>
               </div>
               <div class="row q-gutter-sm">
-                <q-btn
-                  unelevated
-                  size="sm"
-                  icon="check"
-                  color="positive"
-                  label="Approva"
-                  @click="approveSwap(swap)"
-                />
-                <q-btn
-                  flat
-                  size="sm"
-                  icon="close"
-                  color="negative"
-                  label="Rifiuta"
-                  @click="rejectSwap(swap)"
-                />
+                <q-btn unelevated size="sm" icon="check" color="positive" label="Approva" @click="approveSwap(swap)" />
+                <q-btn flat size="sm" icon="close" color="negative" label="Rifiuta" @click="rejectSwap(swap)" />
               </div>
             </div>
           </q-card-section>
@@ -1932,44 +1769,37 @@ watch(activeTab, (val) => {
                   <div class="row items-center q-gutter-xs">
                     <q-chip size="xs" dense color="amber-9" text-color="white">{{
                       s.offeredShift
-                    }}</q-chip>
+                      }}</q-chip>
                     <q-icon name="swap_horiz" size="xs" />
                     <q-chip size="xs" dense color="deep-orange-6" text-color="white">{{
                       s.desiredShift
-                    }}</q-chip>
+                      }}</q-chip>
                   </div>
                   <div class="text-caption q-mt-xs">
                     <q-icon name="person" size="xs" />
                     <strong>{{ s.creatorName || s.creatorId }}</strong>
                     <span v-if="s.counterpartName">
-                      ↔ <strong>{{ s.counterpartName }}</strong></span
-                    >
+                      ↔ <strong>{{ s.counterpartName }}</strong></span>
                   </div>
                   <div v-if="s.adminNote" class="text-caption text-negative q-mt-xs">
                     Nota admin: {{ s.adminNote }}
                   </div>
                 </div>
-                <q-badge
-                  :color="
-                    s.status === 'APPROVED'
-                      ? 'positive'
-                      : s.status === 'REJECTED'
-                        ? 'negative'
-                        : s.status === 'PENDING_ADMIN'
-                          ? 'orange'
-                          : 'primary'
-                  "
-                  :label="
-                    s.status === 'APPROVED'
+                <q-badge :color="s.status === 'APPROVED'
+                    ? 'positive'
+                    : s.status === 'REJECTED'
+                      ? 'negative'
+                      : s.status === 'PENDING_ADMIN'
+                        ? 'orange'
+                        : 'primary'
+                  " :label="s.status === 'APPROVED'
                       ? 'Approvato'
                       : s.status === 'REJECTED'
                         ? 'Rifiutato'
                         : s.status === 'PENDING_ADMIN'
                           ? 'In revisione'
                           : 'Aperto'
-                  "
-                  class="q-ml-sm"
-                />
+                    " class="q-ml-sm" />
               </div>
             </q-card-section>
           </q-card>
@@ -1986,26 +1816,13 @@ watch(activeTab, (val) => {
         </q-card-section>
 
         <q-card-section>
-          <q-input
-            v-model="rejectionReason"
-            type="textarea"
-            label="Inserisci il motivo"
-            rows="4"
-            outlined
-            autofocus
-            :rules="[(val) => !!val || 'Motivo obbligatorio']"
-          />
+          <q-input v-model="rejectionReason" type="textarea" label="Inserisci il motivo" rows="4" outlined autofocus
+            :rules="[(val) => !!val || 'Motivo obbligatorio']" />
         </q-card-section>
 
         <q-card-actions align="right">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            flat
-            label="Conferma Rifiuto"
-            color="negative"
-            @click="confirmReject"
-            :disable="!rejectionReason"
-          />
+          <q-btn flat label="Conferma Rifiuto" color="negative" @click="confirmReject" :disable="!rejectionReason" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -2020,33 +1837,22 @@ watch(activeTab, (val) => {
 
         <q-card-section class="q-pt-none">
           <div v-if="approvalContext?.offer" class="q-mb-md">
-            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong
-            >.
+            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong>.
           </div>
           <div v-else-if="approvalContext?.req" class="q-mb-md">
             Stai confermando la copertura per
             <strong>{{
               getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req)
-            }}</strong
-            >.
+              }}</strong>.
           </div>
 
           <div class="bg-grey-2 q-pa-md rounded-borders">
             <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
-            <q-btn-toggle
-              v-model="syncMode"
-              spread
-              no-caps
-              rounded
-              unelevated
-              toggle-color="primary"
-              color="white"
-              text-color="primary"
-              :options="[
+            <q-btn-toggle v-model="syncMode" spread no-caps rounded unelevated toggle-color="primary" color="white"
+              text-color="primary" :options="[
                 { label: 'Automatica', value: 'auto' },
                 { label: 'Manuale', value: 'manual' },
-              ]"
-            />
+              ]" />
             <div class="text-caption text-grey-7 q-mt-sm">
               <span v-if="syncMode === 'auto'">
                 Il turno verrà aggiornato automaticamente sul file Excel Master.
@@ -2060,13 +1866,7 @@ watch(activeTab, (val) => {
 
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            unelevated
-            color="positive"
-            label="Conferma & Chiudi"
-            @click="processApproval"
-            :loading="loading"
-          />
+          <q-btn unelevated color="positive" label="Conferma & Chiudi" @click="processApproval" :loading="loading" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -2081,8 +1881,7 @@ watch(activeTab, (val) => {
 
         <q-card-section class="q-pt-none">
           <div v-if="approvalSwapContext" class="q-mb-md">
-            Stai confermando il cambio turno del <strong>{{ approvalSwapContext.date }}</strong
-            ><br />
+            Stai confermando il cambio turno del <strong>{{ approvalSwapContext.date }}</strong><br />
             tra
             <strong>{{ approvalSwapContext.creatorName || approvalSwapContext.creatorId }}</strong>
             e
@@ -2090,26 +1889,16 @@ watch(activeTab, (val) => {
               approvalSwapContext.counterpartName ||
               approvalSwapContext.counterpartId ||
               'Assegnazione'
-            }}</strong
-            >.
+              }}</strong>.
           </div>
 
           <div class="bg-grey-2 q-pa-md rounded-borders">
             <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
-            <q-btn-toggle
-              v-model="swapSyncMode"
-              spread
-              no-caps
-              rounded
-              unelevated
-              toggle-color="primary"
-              color="white"
-              text-color="primary"
-              :options="[
+            <q-btn-toggle v-model="swapSyncMode" spread no-caps rounded unelevated toggle-color="primary" color="white"
+              text-color="primary" :options="[
                 { label: 'Automatica', value: 'auto' },
                 { label: 'Manuale', value: 'manual' },
-              ]"
-            />
+              ]" />
             <div class="text-caption text-grey-7 q-mt-sm">
               <span v-if="swapSyncMode === 'auto'">
                 I turni invertiti verranno aggiornati automaticamente sul file Excel Master per
@@ -2125,13 +1914,8 @@ watch(activeTab, (val) => {
 
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            unelevated
-            color="positive"
-            label="Approva & Applica"
-            @click="processSwapApproval"
-            :loading="swapLoading"
-          />
+          <q-btn unelevated color="positive" label="Approva & Applica" @click="processSwapApproval"
+            :loading="swapLoading" />
         </q-card-actions>
       </q-card>
     </q-dialog>

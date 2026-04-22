@@ -68,12 +68,9 @@ onMounted(async () => {
 watch(
   () => AppVisibility.appVisible,
   (isVisible) => {
-    if (isVisible && authStore.isAuthenticated && authStore.currentUser?.operatorId && syncStore.canSync) {
-      logger.info('App returned to focus — background sync check triggered');
-      // We don't call syncMyShifts directly here anymore to avoid duplication.
-      // If needed, we could expose a method in GlobalSyncBtn or keep it simple.
-      // Given the logic is now in the component, a manual refresh is preferred or 
-      // we could trigger the handleSync logic if we had a ref to the component.
+    if (isVisible && authStore.isAuthenticated) {
+      logger.info('App returned to focus — checking for global sync updates');
+      void syncStore.checkAndRefresh();
     }
   },
 );

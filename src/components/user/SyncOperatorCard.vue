@@ -43,10 +43,12 @@
 import { ref } from 'vue';
 import { userService } from '../../services/UserService';
 import { useAuthStore } from '../../stores/authStore';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 
 const authStore = useAuthStore();
+const scheduleStore = useScheduleStore();
 const $q = useQuasar();
 const router = useRouter();
 
@@ -59,9 +61,12 @@ const syncResult = ref<{
 async function handleSync() {
   if (!authStore.currentUser?.uid) {
     $q.notify({
-      type: 'negative',
-      message: 'Utente non autenticato',
-      position: 'top',
+      color: 'negative',
+      icon: 'lock',
+      message: 'Accesso Negato',
+      caption: 'Devi aver effettuato l\'accesso per poter sincronizzare il profilo.',
+      multiLine: true,
+      progress: true,
     });
     return;
   }
@@ -80,6 +85,12 @@ async function handleSync() {
     if (result.success) {
       // Reload user profile to get updated data
       await authStore.loadUserProfile(authStore.currentUser.uid);
+
+      // Refresh schedule store to show new shifts immediately
+      if (result.configId) {
+        scheduleStore.clearCache();
+        await scheduleStore.loadOperators(result.configId, true);
+      }
 
       setTimeout(() => {
         void router.push('/');
