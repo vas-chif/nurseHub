@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   try {
     // 3. Get the Config details from Firestore
     console.log(`Starting sync for config: ${configId}`);
-    const configDoc = await db.collection('configurations').doc(configId).get();
+    const configDoc = await db.collection('systemConfigurations').doc(configId).get();
 
     if (!configDoc.exists) {
       return res.status(404).json({ error: 'Configuration not found' });
@@ -134,10 +134,11 @@ export default async function handler(req, res) {
     let operatorsUpdated = 0;
     const batch = db.batch();
 
-    // Query existing operators to get their document IDs by IDNO
+    // Query existing operators in sub-collection
     const operatorsSnapshot = await db
+      .collection('systemConfigurations')
+      .doc(configId)
       .collection('operators')
-      .where('configId', '==', configId)
       .get();
 
     const existingOperatorsMap = new Map();
@@ -166,16 +167,19 @@ export default async function handler(req, res) {
       const docId = existingOperatorsMap.get(idnoStr);
 
       if (docId) {
-        // Update existing operator
-        const opRef = db.collection('operators').doc(docId);
-        batch.update(opRef, { schedule, lastSynced: FieldValue.serverTimestamp() });
+        const opRef = db
+          .collection('systemConfigurations')
+          .doc(configId)
+          .collection('operators')
+          .doc(docId);
+        batch.update(opRef, { schedule, lastSync: FieldValue.serverTimestamp() });
         operatorsUpdated++;
       }
       // If operator doesn't exist, we don't create them here. Creation happens via "Importa File" in Admin.
     }
 
     // 7. Update Configuration sync timestamp
-    const configRef = db.collection('configurations').doc(configId);
+    const configRef = db.collection('systemConfigurations').doc(configId);
     batch.update(configRef, { lastSyncedFromSheets: FieldValue.serverTimestamp() });
 
     await batch.commit();

@@ -55,6 +55,7 @@ export const usePwaStore = defineStore('pwa', () => {
   // Initialize state from localStorage
   const isInstalled = ref(localStorage.getItem('pwa_installed') === 'true');
   const isSafari = ref(false);
+  const isIOS = ref(false);
   const isDismissed = ref(false); 
   const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
   const STORAGE_KEY_DISMISS = 'pwa_dismissed_until';
@@ -88,6 +89,10 @@ export const usePwaStore = defineStore('pwa', () => {
 
   function setSafari(status: boolean) {
     isSafari.value = status;
+  }
+
+  function setIsIOS(status: boolean) {
+    isIOS.value = status;
   }
 
   function setDeferredPrompt(e: BeforeInstallPromptEvent) {
@@ -145,9 +150,11 @@ export const usePwaStore = defineStore('pwa', () => {
     isInstallable,
     isInstalled,
     isSafari,
+    isIOS,
     setDeferredPrompt,
     setInstalled,
     setSafari,
+    setIsIOS,
     dismiss,
     install
   };

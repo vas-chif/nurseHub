@@ -3,21 +3,9 @@
     <!-- Filters Header -->
     <div class="row q-col-gutter-sm q-mb-md">
       <div class="col-12 col-md-4">
-        <q-select
-          v-model="selectedOperators"
-          :options="operatorOptions"
-          label="Filtra Personale"
-          dense
-          outlined
-          multiple
-          use-chips
-          use-input
-          emit-value
-          map-options
-          option-value="id"
-          option-label="name"
-          @filter="filterOperators"
-        >
+        <q-select v-model="selectedOperators" :options="operatorOptions" label="Filtra Personale" dense outlined
+          multiple use-chips use-input emit-value map-options option-value="id" option-label="name"
+          @filter="filterOperators">
           <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
             <q-item v-bind="itemProps">
               <q-item-section>
@@ -36,39 +24,16 @@
       </div>
 
       <div class="col-6 col-md-2">
-        <q-input
-          v-model.number="daysToShow"
-          label="Giorni da mostrare"
-          type="number"
-          dense
-          outlined
-        />
+        <q-input v-model.number="daysToShow" label="Giorni da mostrare" type="number" dense outlined />
       </div>
 
       <div class="col-6 col-md-3">
-        <q-select
-          v-model="selectedShiftCodes"
-          :options="shiftCodeOptions"
-          label="Filtra Turni (es. M, P, N)"
-          dense
-          outlined
-          multiple
-          use-chips
-        />
+        <q-select v-model="selectedShiftCodes" :options="shiftCodeOptions" label="Filtra Turni (es. M, P, N)" dense
+          outlined multiple use-chips />
       </div>
 
       <div class="col-6 col-md-2 flex flex-center q-gutter-x-sm">
-        <q-btn
-          icon="cloud_download"
-          round
-          flat
-          dense
-          color="secondary"
-          @click="syncData"
-          :loading="syncing"
-        >
-          <q-tooltip>Sincronizza da Google Sheets</q-tooltip>
-        </q-btn>
+        <GlobalSyncBtn size="sm" />
         <q-btn icon="refresh" round flat dense color="primary" @click="() => fetchData(true)">
           <q-tooltip>Ricarica Dati</q-tooltip>
         </q-btn>
@@ -79,41 +44,20 @@
     </div>
     <!-- Table -->
     <div class="col relative-position">
-      <q-table
-        title="Calendario Turni Completo"
-        :rows="filteredRows"
-        :columns="columns"
-        row-key="id"
-        :pagination="pagination"
-        dense
-        separator="cell"
-        class="sticky-header-table absolute-full"
-        flat
-        bordered
-        virtual-scroll
-        :rows-per-page-options="[0]"
-      >
+      <q-table title="Calendario Turni Completo" :rows="filteredRows" :columns="columns" row-key="id"
+        :pagination="pagination" dense separator="cell" class="sticky-header-table absolute-full" flat bordered
+        virtual-scroll :rows-per-page-options="[0]">
         <!-- Custom Header -->
         <template v-slot:header="props">
           <q-tr :props="props">
             <!-- Operator Name Header -->
-            <q-th
-              key="operatorName"
-              :props="props"
-              class="sticky-column-z5"
-              style="background: white"
-            >
+            <q-th key="operatorName" :props="props" class="sticky-column-z5" style="background: white">
               Personale
             </q-th>
 
             <!-- Dynamic Date Headers -->
-            <q-th
-              v-for="col in dateColumns"
-              :key="col.name"
-              :props="props"
-              class="text-center q-pa-xs"
-              :class="{ 'bg-red-1': col.isHoliday, 'bg-grey-1': !col.isHoliday }"
-            >
+            <q-th v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-xs"
+              :class="{ 'bg-red-1': col.isHoliday, 'bg-grey-1': !col.isHoliday }">
               <div class="column items-center justify-center" style="line-height: 1.1">
                 <div class="text-bold text-subtitle2">{{ col.dayNum }}</div>
                 <div class="text-uppercase text-caption" style="font-size: 0.65rem">
@@ -131,18 +75,12 @@
             <q-th class="sticky-column-z5 bg-amber-1 text-left text-black text-weight-bold">
               Mattina
             </q-th>
-            <q-th
-              v-for="col in dateColumns"
-              :key="'m-' + col.name"
-              class="text-center q-pa-none"
-              style="padding: 1px !important"
-            >
-              <span
-                :class="{
-                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.M !== 6,
-                  'text-amber-9': shiftCounts[col.name]?.M === 6,
-                }"
-              >
+            <q-th v-for="col in dateColumns" :key="'m-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.M !== 6,
+                'text-amber-9': shiftCounts[col.name]?.M === 6,
+              }">
                 {{ shiftCounts[col.name]?.M || 0 }}
               </span>
             </q-th>
@@ -153,18 +91,12 @@
             <q-th class="sticky-column-z5 bg-deep-orange-1 text-left text-white text-weight-bold">
               Pomeriggio
             </q-th>
-            <q-th
-              v-for="col in dateColumns"
-              :key="'p-' + col.name"
-              class="text-center q-pa-none"
-              style="padding: 1px !important"
-            >
-              <span
-                :class="{
-                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.P !== 6,
-                  'text-deep-orange-6 text-weight-bold': shiftCounts[col.name]?.P === 6,
-                }"
-              >
+            <q-th v-for="col in dateColumns" :key="'p-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.P !== 6,
+                'text-deep-orange-6 text-weight-bold': shiftCounts[col.name]?.P === 6,
+              }">
                 {{ shiftCounts[col.name]?.P || 0 }}
               </span>
             </q-th>
@@ -175,18 +107,12 @@
             <q-th class="sticky-column-z5 bg-blue-1 text-left text-white text-weight-bold">
               Notte
             </q-th>
-            <q-th
-              v-for="col in dateColumns"
-              :key="'n-' + col.name"
-              class="text-center q-pa-none"
-              style="padding: 1px !important"
-            >
-              <span
-                :class="{
-                  'text-red-8 text-weight-bold': shiftCounts[col.name]?.N !== 6,
-                  'text-blue-10 text-weight-bold': shiftCounts[col.name]?.N === 6,
-                }"
-              >
+            <q-th v-for="col in dateColumns" :key="'n-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.N !== 6,
+                'text-blue-10 text-weight-bold': shiftCounts[col.name]?.N === 6,
+              }">
                 {{ shiftCounts[col.name]?.N || 0 }}
               </span>
             </q-th>
@@ -197,32 +123,18 @@
         <template v-slot:body="props">
           <q-tr :props="props">
             <q-td key="operatorName" :props="props" class="sticky-column text-weight-bold">
-              <div
-                class="text-weight-bold ellipsis"
-                style="max-width: 190px"
-                :title="props.row.operatorName"
-              >
+              <div class="text-weight-bold ellipsis" style="max-width: 190px" :title="props.row.operatorName">
                 {{ props.row.operatorName }}
               </div>
             </q-td>
 
-            <q-td
-              v-for="col in dateColumns"
-              :key="col.name"
-              :props="props"
-              class="text-center q-pa-none"
-              :class="{
-                'bg-red-1': col.isHoliday,
-              }"
-              style="padding: 1px !important"
-            >
+            <q-td v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-none" :class="{
+              'bg-red-1': col.isHoliday,
+            }" style="padding: 1px !important">
               <!-- Highlight badge only if it matches filter or no filter set -->
-              <q-badge
-                v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
-                :color="getShiftColor(props.row[col.name])"
-                class="cursor-pointer shadow-1 full-width flex flex-center"
-                style="height: 24px; font-size: 0.75rem; border-radius: 4px"
-              >
+              <q-badge v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
+                :color="getShiftColor(props.row[col.name])" class="cursor-pointer shadow-1 full-width flex flex-center"
+                style="height: 24px; font-size: 0.75rem; border-radius: 4px">
                 {{ props.row[col.name] }}
               </q-badge>
               <!-- Empty spacer or grey text if filtered out -->
@@ -264,9 +176,7 @@
             </div>
             <div class="row items-center">
               <q-badge color="grey-4" class="text-black" style="width: 40px">R</q-badge>
-              <span class="q-ml-md"
-                >Riposo (tutti i codici che iniziano con R: R, RRDG, RDM, etc.)</span
-              >
+              <span class="q-ml-md">Riposo (tutti i codici che iniziano con R: R, RRDG, RDM, etc.)</span>
             </div>
             <div class="row items-center">
               <q-badge color="yellow-7" class="text-black" style="width: 40px">A</q-badge>
@@ -285,13 +195,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { date as qDate, useQuasar, type QTableColumn } from 'quasar';
+import { date as qDate, type QTableColumn } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
+import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 import { useConfigStore } from '../../stores/configStore';
-import { GoogleSheetsService } from '../../services/GoogleSheetsService';
-import { SyncService } from '../../services/SyncService';
 import { useScheduleStore } from '../../stores/scheduleStore';
-import { smartEnv } from '../../config/smartEnvironment';
 import type { Operator, ShiftCode } from '../../types/models';
 
 interface TableRow {
@@ -312,7 +220,6 @@ interface DateColumn {
   isHoliday: boolean;
 }
 
-const $q = useQuasar();
 const scheduleStore = useScheduleStore();
 const operatorOptions = ref<Operator[]>([]);
 const selectedOperators = ref<string[]>([]); // Array of IDs
@@ -439,49 +346,6 @@ async function fetchData(forceRefresh = false) {
   }
 }
 
-const syncing = ref(false);
-
-async function syncData() {
-  if (!configStore.activeConfigId) {
-    $q.notify({ type: 'warning', message: 'Nessuna configurazione attiva' });
-    return;
-  }
-
-  syncing.value = true;
-  try {
-    const config = smartEnv.getFirebaseConfig();
-    const appConfig = {
-      ...config,
-      spreadsheetUrl:
-        'https://docs.google.com/spreadsheets/d/1Ib8oq0wEknerDQX8Dc7o2aZ0rQQfOkMzWbaoOTfHwxA/edit?gid=280184106',
-      dateRowIndex: 2,
-      nameColumnIndex: 2,
-      dataStartRowIndex: 4,
-      dataStartColIndex: 4,
-      contactsUrl: '',
-      contactsStartRow: 2,
-      contactNameCol: 2,
-      contactEmailCol: 3,
-      contactPhoneCol: 4,
-      organizationUrl: '',
-      gasWebUrl: '',
-    };
-
-    logger.info('Starting sync with config', { configId: configStore.activeConfigId });
-    const sheetsService = new GoogleSheetsService(appConfig);
-    const syncService = new SyncService(sheetsService);
-
-    await syncService.syncOperatorsFromSheets(configStore.activeConfigId);
-
-    $q.notify({ type: 'positive', message: 'Sincronizzazione completata!' });
-    await fetchData(true); // Refresh table with force refresh
-  } catch (e) {
-    logger.error('Sync error', e);
-    $q.notify({ type: 'negative', message: 'Errore durante la sincronizzazione' });
-  } finally {
-    syncing.value = false;
-  }
-}
 
 function filterOperators(val: string, update: (fn: () => void) => void) {
   if (val === '') {
@@ -609,17 +473,24 @@ function getShiftColor(code: ShiftCode): string {
   position: sticky;
   z-index: 2;
 }
+
 :deep(.sticky-header-table thead tr:nth-child(1) th) {
   top: 0;
-  height: 55px; /* Forced height for consistent math */
+  height: 55px;
+  /* Forced height for consistent math */
 }
+
 :deep(.sticky-header-table thead tr:nth-child(2) th) {
   top: 55px;
 }
+
 :deep(.sticky-header-table thead tr:nth-child(3) th) {
-  top: 83px; /* 55 + 28 */
+  top: 83px;
+  /* 55 + 28 */
 }
+
 :deep(.sticky-header-table thead tr:nth-child(4) th) {
-  top: 111px; /* 83 + 28 */
+  top: 111px;
+  /* 83 + 28 */
 }
 </style>

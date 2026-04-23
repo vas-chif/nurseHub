@@ -56,28 +56,39 @@ function doPost(e) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
     var rows = sheet.getDataRange().getValues();
 
-    var targetDate = data.date; // Formato previsto: YYYY-MM-DD
-    var targetOperator = data.operatorName;
+    // Parametri dinamici (opzionali dall'app, o default)
+    var dateRow = (data.dateRowIndex || 2) - 1; // Default riga 2 (index 1)
+    var nameCol = (data.nameColumnIndex || 2) - 1; // Default colonna B (index 1)
+    
+    var targetDate = data.date; // YYYY-MM-DD
+    var targetOperator = String(data.operatorName || '').trim().toUpperCase();
     var newShift = data.newShift;
 
     var colIndex = -1;
     var rowIndex = -1;
 
-    // Cerca la colonna della Data (Riga 1)
-    for (var c = 0; c < rows[0].length; c++) {
-      var cellValue = rows[0][c];
+    // 1. Cerca la colonna della Data nella riga specificata
+    var headerRow = rows[dateRow] || rows[0];
+    for (var c = 0; c < headerRow.length; c++) {
+      var cellValue = headerRow[c];
+      var formattedDate = "";
+      
       if (cellValue instanceof Date) {
-        cellValue = Utilities.formatDate(cellValue, 'GMT+1', 'yyyy-MM-dd');
+        formattedDate = Utilities.formatDate(cellValue, 'GMT+1', 'yyyy-MM-dd');
+      } else {
+        formattedDate = String(cellValue).trim();
       }
-      if (cellValue == targetDate) {
+      
+      if (formattedDate == targetDate || formattedDate.indexOf(targetDate) !== -1) {
         colIndex = c;
         break;
       }
     }
 
-    // Cerca la riga dell'Operatore (Colonna 2)
+    // 2. Cerca la riga dell'Operatore nella colonna specificata
     for (var r = 0; r < rows.length; r++) {
-      if (rows[r][1] == targetOperator) {
+      var opNameInSheet = String(rows[r][nameCol] || '').trim().toUpperCase();
+      if (opNameInSheet == targetOperator || opNameInSheet.indexOf(targetOperator) !== -1) {
         rowIndex = r;
         break;
       }
@@ -85,17 +96,22 @@ function doPost(e) {
 
     if (rowIndex != -1 && colIndex != -1) {
       sheet.getRange(rowIndex + 1, colIndex + 1).setValue(newShift);
-      return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(
-        ContentService.MimeType.JSON,
-      );
+      return ContentService.createTextOutput(JSON.stringify({ 
+        success: true, 
+        message: 'Aggiornato: ' + targetOperator + ' il ' + targetDate 
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(
-      JSON.stringify({ success: false, error: 'Cella non trovata' }),
+      JSON.stringify({ 
+        success: false, 
+        error: 'Cella non trovata', 
+        details: { rowIndex: rowIndex, colIndex: colIndex, op: targetOperator, date: targetDate } 
+      })
     ).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(
-      JSON.stringify({ success: false, error: err.toString() }),
+      JSON.stringify({ success: false, error: err.toString() })
     ).setMimeType(ContentService.MimeType.JSON);
   }
 }

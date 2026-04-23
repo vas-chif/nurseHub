@@ -261,6 +261,8 @@ export class GoogleSheetsService {
           operatorName,
           date,
           newShift,
+          dateRowIndex: this.config.dateRowIndex,
+          nameColumnIndex: this.config.nameColumnIndex,
         }),
       });
 

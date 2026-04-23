@@ -177,36 +177,21 @@ async function handleConfigChange(configId: string) {
         <q-toolbar-title> Nurse Hub </q-toolbar-title>
 
         <!-- Global Config Selector (Admin Only) -->
-        <q-select
-          v-if="authStore.isAdmin && configStore.allConfigs.length > 0"
-          v-model="configStore.activeConfigId"
-          :options="configStore.allConfigs"
-          option-value="id"
-          option-label="name"
-          emit-value
-          map-options
-          dense
-          outlined
-          label="Configurazione"
-          class="q-mr-md"
-          style="min-width: 200px"
-          @update:model-value="handleConfigChange"
-        >
+        <q-select v-if="authStore.isAdmin && configStore.allConfigs.length > 0" v-model="configStore.activeConfigId"
+          :options="configStore.allConfigs" option-value="id" option-label="name" emit-value map-options dense outlined
+          label="Configurazione" class="q-mr-md" style="min-width: 200px" @update:model-value="handleConfigChange">
           <template v-slot:prepend>
             <q-icon name="settings" size="xs" />
           </template>
           <template v-slot:option="scope">
             <q-item v-bind="scope.itemProps">
               <q-item-section avatar>
-                <q-icon
-                  :name="
-                    scope.opt.profession === 'Medico'
-                      ? 'medical_services'
-                      : scope.opt.profession === 'OSS'
-                        ? 'health_and_safety'
-                        : 'local_hospital'
-                  "
-                />
+                <q-icon :name="scope.opt.profession === 'Medico'
+                  ? 'medical_services'
+                  : scope.opt.profession === 'OSS'
+                    ? 'health_and_safety'
+                    : 'local_hospital'
+                  " />
               </q-item-section>
               <q-item-section>
                 <q-item-label>{{ scope.opt.name }}</q-item-label>
@@ -224,32 +209,20 @@ async function handleConfigChange(configId: string) {
           <q-badge v-if="notificationStore.unreadCount > 0" color="red" floating>
             {{ notificationStore.unreadCount }}
           </q-badge>
-          <q-menu>
-            <q-list style="min-width: 300px">
+          <q-menu anchor="bottom right" self="top right" :offset="[0, 10]">
+            <q-list style="min-width: 320px; max-width: 95vw">
               <div class="row items-center justify-between q-pa-sm">
                 <div class="text-subtitle2">Notifiche</div>
-                <q-btn
-                  v-if="notificationStore.unreadCount > 0"
-                  flat
-                  dense
-                  color="primary"
-                  label="Segna tutte come lette"
-                  size="xs"
-                  @click="notificationStore.resetUnread()"
-                />
+                <q-btn v-if="notificationStore.unreadCount > 0" flat dense color="primary"
+                  label="Segna tutte come lette" size="md" @click="notificationStore.resetUnread()" />
               </div>
               <q-separator />
 
               <template v-if="notificationStore.notifications.length > 0">
-                <q-item
-                  v-for="n in notificationStore.notifications"
-                  :key="n.id"
-                >
+                <q-item v-for="n in notificationStore.notifications" :key="n.id">
                   <q-item-section avatar>
-                    <q-icon
-                      :name="n.type === 'NEW_OPPORTUNITY' ? 'campaign' : 'notifications'"
-                      :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'"
-                    />
+                    <q-icon :name="n.type === 'NEW_OPPORTUNITY' ? 'campaign' : 'notifications'"
+                      :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label lines="2">{{ n.message }}</q-item-label>
@@ -267,15 +240,8 @@ async function handleConfigChange(configId: string) {
           </q-menu>
         </q-btn>
 
-        <q-btn-dropdown
-          class="q-mr-md"
-          flat
-          rounded
-          dense
-          icon="account_circle"
-          :label="authStore.currentUser?.firstName"
-          no-caps
-        >
+        <q-btn-dropdown class="q-mr-md" flat rounded dense icon="account_circle"
+          :label="authStore.currentUser?.firstName" no-caps>
           <q-list>
             <q-item clickable v-close-popup @click="router.push('/profile')">
               <q-item-section avatar>
@@ -319,13 +285,7 @@ async function handleConfigChange(configId: string) {
     </q-page-container>
 
     <q-footer bordered class="bg-white text-primary">
-      <q-tabs
-        no-caps
-        active-color="primary"
-        indicator-color="transparent"
-        class="text-grey"
-        align="justify"
-      >
+      <q-tabs no-caps active-color="primary" indicator-color="transparent" class="text-grey" align="justify">
         <!-- Home: always visible for all users -->
         <q-route-tab to="/" icon="dashboard" label="Home" />
         <q-route-tab to="/calendar" icon="calendar_month" label="Turni" />
@@ -334,63 +294,31 @@ async function handleConfigChange(configId: string) {
         <q-route-tab v-if="!authStore.isAdmin" to="/requests" icon="event_note" label="Richieste" />
 
         <!-- Admin-only tabs -->
-        <q-route-tab
-          v-if="authStore.isAdmin"
-          to="/requests"
-          icon="add_circle"
-          label="Nuova Richiesta"
-        />
-        <q-route-tab
-          v-if="authStore.isAdmin"
-          to="/admin/requests"
-          icon="event_note"
-          label="Richieste"
-        >
+        <q-route-tab v-if="authStore.isAdmin" to="/requests" icon="add_circle" label="Nuova Richiesta" />
+        <q-route-tab v-if="authStore.isAdmin" to="/admin/requests" icon="event_note" label="Richieste">
           <q-badge v-if="notificationStore.pendingRequestsCount > 0" color="red" floating>
             {{ notificationStore.pendingRequestsCount }}
           </q-badge>
         </q-route-tab>
         <q-route-tab v-if="authStore.isAdmin" to="/admin/users" icon="people" label="Utenti" />
-        <q-route-tab
-          v-if="authStore.isAdmin"
-          to="/admin/analytics"
-          icon="analytics"
-          label="Stats"
-        />
-        <q-route-tab
-          v-if="authStore.isAdmin"
-          to="/admin"
-          icon="admin_panel_settings"
-          label="Admin"
-        />
+        <q-route-tab v-if="authStore.isAdmin" to="/admin/analytics" icon="analytics" label="Stats" />
+        <q-route-tab v-if="authStore.isAdmin" to="/admin" icon="admin_panel_settings" label="Admin" />
       </q-tabs>
       <div class="row justify-center q-mx-md">
         <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>
         <div class="text-center text-caption text-primary row justify-between items-center">
           <div>
-            <router-link
-              to="/terms"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/terms" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Termini e Condizioni
             </router-link>
           </div>
           <div>
-            <router-link
-              to="/privacy"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/privacy" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Privacy Policy
             </router-link>
           </div>
           <div>
-            <router-link
-              to="/license"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/license" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Licenze
             </router-link>
           </div>

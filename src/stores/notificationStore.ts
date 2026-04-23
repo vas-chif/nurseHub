@@ -7,6 +7,8 @@ import {
   onSnapshot,
   orderBy,
   type Unsubscribe,
+  writeBatch,
+  doc,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import type { ShiftRequest, Notification as AppNotification } from '../types/models';
@@ -21,8 +23,28 @@ export const useNotificationStore = defineStore('notification', () => {
     unreadCount.value++;
   }
 
-  function resetUnread() {
-    unreadCount.value = 0;
+  async function resetUnread() {
+    if (notifications.value.length === 0) {
+      unreadCount.value = 0;
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      notifications.value.forEach((n) => {
+        const notifRef = doc(db, 'notifications', n.id);
+        batch.update(notifRef, { read: true });
+      });
+
+      await batch.commit();
+      // The onSnapshot listener will automatically clear the list and update count
+      // because they no longer match the 'read == false' query.
+    } catch (error) {
+      console.error('Error marking notifications as read:', error);
+      // Fallback: local clear anyway
+      unreadCount.value = 0;
+      notifications.value = [];
+    }
   }
 
   function setPendingRequestsCount(count: number) {

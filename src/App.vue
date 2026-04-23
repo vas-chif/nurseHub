@@ -26,6 +26,9 @@ onMounted(() => {
   
   if ((isIPad || isIPhone || isMac) && isSafariBrowser) {
     pwaStore.setSafari(true);
+    if (isIPad || isIPhone) {
+      pwaStore.setIsIOS(true);
+    }
   }
 });
 </script>

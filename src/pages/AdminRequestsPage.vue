@@ -1121,33 +1121,20 @@ async function processSwapApproval() {
     // Auto-sync to Google Sheets if mode is 'auto'
     if (swapSyncMode.value === 'auto' && configStore.activeConfigId) {
       try {
-        const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/update-sheet-swap`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
-          },
-          body: JSON.stringify({
-            configId: configStore.activeConfigId,
-            swap: {
-              ...swap,
-              creatorName: swap.creatorName,
-              counterpartName: swap.counterpartName || 'Collega',
-            },
-          }),
-        });
-        if (!response.ok) {
-          const err = await response.json();
-          $q.notify({
-            type: 'warning',
-            message: `Firebase aggiornato, ma errore sincronizzazione Sheets: ${err.error || 'Errore sconosciuto'}`,
-          });
-        } else {
-          $q.notify({ type: 'positive', message: 'Sincronizzazione Google Sheets completata!' });
-        }
+        console.log('Starting auto-sync for swap via GAS...');
+        // Sync Creator
+        await syncToSheets(swap.creatorName || 'Operatore', swap.date, swap.desiredShift);
+        // Sync Counterpart
+        const counterpartName = swap.counterpartName || 'Collega';
+        await syncToSheets(counterpartName, swap.date, swap.offeredShift);
+        
+        $q.notify({ type: 'positive', message: 'Sincronizzazione Google Sheets completata (via GAS)!' });
       } catch (e) {
         console.error('Error syncing swap to sheets:', e);
+        $q.notify({
+          type: 'warning',
+          message: 'Firebase aggiornato, ma errore sincronizzazione Sheets. Riprova manualmente.',
+        });
       }
     }
 

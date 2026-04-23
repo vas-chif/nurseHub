@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
   try {
     // 1. Get Config for sheetUrl
-    const configDoc = await db.collection('configurations').doc(configId).get();
+    const configDoc = await db.collection('systemConfigurations').doc(configId).get();
     if (!configDoc.exists) return res.status(404).json({ error: 'Config not found' });
     const configData = configDoc.data();
     const sheetUrl = configData.sheetUrl;
