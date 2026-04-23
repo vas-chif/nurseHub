@@ -5,6 +5,8 @@
  */
 
 import type { AppConfig, Operator } from '../types/models';
+import { smartEnv } from '../config/smartEnvironment';
+import { useConfigStore } from '../stores/configStore';
 
 interface GvizCell {
   v?: string | number | null;
@@ -244,20 +246,22 @@ export class GoogleSheetsService {
     date: string,
     newShift: string,
   ): Promise<boolean> {
-    if (!this.config.gasWebUrl) {
-      logger.warn('GAS Web URL configuration missing - cannot sync to Sheets');
-      return false;
-    }
+    // Phase 25: Shift update via Vercel API (Proxy to Sheets API)
+    // This is more secure and reliable than direct GAS calls.
+    const VERCEL_API_URL = '/api/update-sheet-shift';
+    const API_SECRET = smartEnv.getRequiredEnv('VITE_VERCEL_API_SECRET');
+    const configStore = useConfigStore();
+    const configId = configStore.activeConfigId || 'BOFo6KpGcBy8mZK40Wxt';
 
     try {
-      await fetch(this.config.gasWebUrl, {
+      const response = await fetch(VERCEL_API_URL, {
         method: 'POST',
-        mode: 'no-cors', // Common for GAS redirections which cause CORS issues in browser
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_SECRET}`,
         },
         body: JSON.stringify({
-          action: 'updateShift',
+          configId,
           operatorName,
           date,
           newShift,
@@ -266,11 +270,16 @@ export class GoogleSheetsService {
         }),
       });
 
-      // With no-cors, we can't read the response properly, but successful send returns opaque type
-      logger.info('Update shift request sent to GAS', { operatorName, date, newShift });
-      return true;
+      if (response.ok) {
+        logger.info('Shift update successfully proxied via Vercel API');
+        return true;
+      } else {
+        const errorData = (await response.json()) as { error?: string };
+        logger.error('Vercel API shift update failed', { error: errorData.error });
+        return false;
+      }
     } catch (error) {
-      logger.error('Error updating shift on Sheets:', error);
+      logger.error('Network error during Vercel API sync', error);
       return false;
     }
   }

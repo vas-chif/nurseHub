@@ -4,6 +4,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useScheduleStore } from '../stores/scheduleStore';
+import { useUiStore } from '../stores/uiStore';
 import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
@@ -16,6 +17,7 @@ const configStore = useConfigStore();
 const notificationStore = useNotificationStore();
 const scheduleStore = useScheduleStore();
 const syncStore = useSyncStore();
+const uiStore = useUiStore();
 const $q = useQuasar();
 
 let unsubs: (() => void)[] = [];
@@ -23,6 +25,11 @@ let unsubs: (() => void)[] = [];
 // Load configurations on mount
 onMounted(async () => {
   scheduleStore.init();
+
+  // 0. Redirect to last path if on home
+  if (router.currentRoute.value.path === '/' && uiStore.lastPath && uiStore.lastPath !== '/') {
+    void router.push(uiStore.lastPath);
+  }
 
   if (authStore.currentUser?.uid) {
     // 1. Request FCM Permission
@@ -141,9 +148,13 @@ watch(
 // Automatic refresh when navigating (checks global sync status)
 watch(
   () => router.currentRoute.value.path,
-  () => {
+  (newPath) => {
     if (authStore.isAuthenticated) {
       void syncStore.checkAndRefresh();
+      // Save last visited path for session persistence
+      if (newPath !== '/' && newPath !== '/login' && newPath !== '/register') {
+        uiStore.setLastPath(newPath);
+      }
     }
   },
   { immediate: true }

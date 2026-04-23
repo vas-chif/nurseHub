@@ -1,7 +1,17 @@
+/**
+* @file DailyRosterCard.vue
+* @description Dashboard card showing the daily staff roster.
+* @author Nurse Hub Team
+* @created 2026-03-10
+*/
+
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
 import { useScheduleStore } from '../../stores/scheduleStore';
 import { date } from 'quasar';
 import { useQuasar } from 'quasar';
@@ -90,7 +100,7 @@ async function refreshRoster() {
       icon: 'sync',
     });
   } catch (error) {
-    console.error('Error refreshing roster:', error);
+    logger.error('Error refreshing roster', error);
     $q.notify({
       type: 'negative',
       message: "Errore durante l'aggiornamento",
@@ -114,6 +124,8 @@ onMounted(() => {
   }
 });
 </script>
+
+
 
 <template>
   <q-expansion-item header-class="bg-primary text-white text-weight-bold" v-model="expanded" label="Chi c'è in turno"

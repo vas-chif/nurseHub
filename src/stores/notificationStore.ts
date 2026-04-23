@@ -1,3 +1,11 @@
+/**
+ * @file notificationStore.ts
+ * @description Pinia store for managing user notifications and alerts.
+ * @author Nurse Hub Team
+ * @created 2026-03-05
+ * @modified 2026-04-23
+ */
+
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import {
@@ -12,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import type { ShiftRequest, Notification as AppNotification } from '../types/models';
+import { useSecureLogger } from '../utils/secureLogger';
 
 export const useNotificationStore = defineStore('notification', () => {
   const unreadCount = ref(0);
@@ -40,7 +49,7 @@ export const useNotificationStore = defineStore('notification', () => {
       // The onSnapshot listener will automatically clear the list and update count
       // because they no longer match the 'read == false' query.
     } catch (error) {
-      console.error('Error marking notifications as read:', error);
+      useSecureLogger().error('Error marking notifications as read', error);
       // Fallback: local clear anyway
       unreadCount.value = 0;
       notifications.value = [];

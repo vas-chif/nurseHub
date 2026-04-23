@@ -103,12 +103,12 @@ export async function notifyUser(
         });
 
         if (!vercelRes.ok) {
-          console.error('Failed to trigger Vercel Push:', await vercelRes.text());
+          logger.error('Failed to trigger Vercel Push', { error: await vercelRes.text() });
         }
       }
     }
   } catch (error) {
-    console.error('Error sending Push Notification via Vercel:', error);
+    logger.error('Error sending Push Notification via Vercel', error);
   }
 }
 
@@ -231,12 +231,12 @@ export async function notifyEligibleOperators(
         const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile!`;
         // Chiamata fire-and-forget
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, requestObj.id).catch((e) =>
-          console.error('Silent fail on notifyUser', e),
+          logger.error('Silent fail on notifyUser', e),
         );
       }
     }
   } catch (err) {
-    console.error('Error in notifyEligibleOperators:', err);
+    logger.error('Error in notifyEligibleOperators', err);
   }
 }
 
@@ -272,12 +272,12 @@ export async function notifyAdmins(
         notifiedUids.add(adminUid);
         // Chiamata fire-and-forget
         notifyUser(adminUid, 'NEW_REQUEST', messageStr, requestId).catch((e) =>
-          console.error('Silent fail on notifyAdmins', e),
+          logger.error('Silent fail on notifyAdmins', e),
         );
       }
     }
   } catch (err) {
-    console.error('Error in notifyAdmins:', err);
+    logger.error('Error in notifyAdmins', err);
   }
 }
 
@@ -331,12 +331,12 @@ export async function notifyEligibleSwappers(
         notifiedUids.add(opUserId);
         const messageStr = `Nuovo cambio turno: Un collega offre ${swapObj.offeredShift} per il tuo ${swapObj.desiredShift} del ${swapObj.date}!`;
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, swapObj.id).catch((e) =>
-          console.error('Silent fail on notifyUser', e),
+          logger.error('Silent fail on notifyUser', e),
         );
       }
     }
   } catch (err) {
-    console.error('Error in notifyEligibleSwappers:', err);
+    logger.error('Error in notifyEligibleSwappers', err);
   }
 }
 /**
@@ -399,12 +399,12 @@ export async function notifySwapProposed(
     
     const promises = Array.from(recipients).map((uid) =>
       notifyUser(uid, 'NEW_OPPORTUNITY', message, swapId).catch((e) =>
-        console.error('Silent fail on notifyUser in notifySwapProposed', e),
+        logger.error('Silent fail on notifyUser in notifySwapProposed', e),
       ),
     );
 
     await Promise.all(promises);
   } catch (err) {
-    console.error('Error in notifySwapProposed:', err);
+    logger.error('Error in notifySwapProposed', err);
   }
 }

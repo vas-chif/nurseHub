@@ -1,137 +1,16 @@
-<template>
-  <q-page class="q-pa-md">
-    <div class="row items-center justify-between q-mb-md">
-      <h1 class="text-h5 q-my-none">Analytics Dashboard 📊</h1>
-
-      <!-- Date Filter -->
-      <div class="row q-gutter-sm">
-        <q-input
-          v-model="filters.dateFrom"
-          label="Dal"
-          dense
-          outlined
-          type="date"
-          style="width: 150px"
-          @update:model-value="refreshData"
-        />
-        <q-input
-          v-model="filters.dateTo"
-          label="Al"
-          dense
-          outlined
-          type="date"
-          style="width: 150px"
-          @update:model-value="refreshData"
-        />
-        <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
-        <q-btn
-          icon="download"
-          label="Esporta CSV"
-          color="secondary"
-          outline
-          @click="exportCSV"
-          :disable="metrics.total.value === 0"
-        />
-      </div>
-    </div>
-
-    <!-- KPI Cards -->
-    <div class="row q-col-gutter-md q-mb-lg">
-      <div class="col-12 col-sm-6 col-md-3">
-        <q-card class="bg-primary text-white">
-          <q-card-section>
-            <div class="text-subtitle2">Totale Richieste</div>
-            <div class="text-h4">{{ metrics.total }}</div>
-          </q-card-section>
-        </q-card>
-      </div>
-      <div class="col-12 col-sm-6 col-md-3">
-        <q-card class="bg-warning text-white">
-          <q-card-section>
-            <div class="text-subtitle2">In Attesa</div>
-            <div class="text-h4">{{ metrics.pending }}</div>
-          </q-card-section>
-        </q-card>
-      </div>
-      <div class="col-12 col-sm-6 col-md-3">
-        <q-card class="bg-positive text-white">
-          <q-card-section>
-            <div class="text-subtitle2">Tasso Approvazione</div>
-            <div class="text-h4">{{ metrics.approvalRate }}%</div>
-          </q-card-section>
-        </q-card>
-      </div>
-      <div class="col-12 col-sm-6 col-md-3">
-        <q-card class="bg-info text-white">
-          <q-card-section>
-            <div class="text-subtitle2">Tempo Medio Risposta</div>
-            <div class="text-h4">{{ metrics.avgTime }}</div>
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>
-
-    <!-- Charts Row 1 -->
-    <div class="row q-col-gutter-md q-mb-lg">
-      <!-- Status Distribution -->
-      <div class="col-12 col-md-4">
-        <q-card class="fit">
-          <q-card-section>
-            <div class="text-h6">Stato Richieste</div>
-          </q-card-section>
-          <q-card-section>
-            <apexchart
-              type="donut"
-              :options="charts.status.value.options"
-              :series="charts.status.value.series"
-            />
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <!-- Trend -->
-      <div class="col-12 col-md-8">
-        <q-card class="fit">
-          <q-card-section>
-            <div class="text-h6">Andamento Giornaliero</div>
-          </q-card-section>
-          <q-card-section>
-            <apexchart
-              type="line"
-              height="300"
-              :options="charts.trend.value.options"
-              :series="charts.trend.value.series"
-            />
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>
-
-    <!-- Charts Row 2 -->
-    <div class="row q-col-gutter-md">
-      <!-- Top Operators -->
-      <div class="col-12">
-        <q-card>
-          <q-card-section>
-            <div class="text-h6">Top 5 Operatori</div>
-          </q-card-section>
-          <q-card-section>
-            <apexchart
-              type="bar"
-              height="250"
-              :options="charts.topOperators.value.options"
-              :series="charts.topOperators.value.series"
-            />
-          </q-card-section>
-        </q-card>
-      </div>
-    </div>
-  </q-page>
-</template>
-
 <script setup lang="ts">
+/**
+ * @file AdminAnalyticsPage.vue
+ * @description Dashboard for administrative analytics and request trends.
+ * @author Nurse Hub Team
+ * @created 2026-03-20
+ * @modified 2026-04-23
+ */
 import { ref, onMounted } from 'vue';
 import { useAnalytics } from 'src/composables/useAnalytics';
+import { useSecureLogger } from 'src/utils/secureLogger';
+
+const logger = useSecureLogger();
 import { getDocs, collection, query } from 'firebase/firestore';
 import { db } from 'src/boot/firebase';
 import { useConfigStore } from 'src/stores/configStore';
@@ -231,7 +110,7 @@ async function refreshData() {
 
     // 2. Fetch Operators for names
     if (!configStore.activeConfigId) {
-      console.warn('No active config for analytics');
+      logger.warn('No active config for analytics');
       return;
     }
 
@@ -243,7 +122,7 @@ async function refreshData() {
 
     setRequests(requests, operators);
   } catch (e) {
-    console.error('Error fetching analytics:', e);
+    logger.error('Error fetching analytics', e);
   } finally {
     loading.value = false;
   }
@@ -253,3 +132,103 @@ onMounted(() => {
   void refreshData();
 });
 </script>
+
+
+<template>
+  <q-page class="q-pa-md">
+    <div class="row items-center justify-between q-mb-md">
+      <h1 class="text-h5 q-my-none">Analytics Dashboard 📊</h1>
+
+      <!-- Date Filter -->
+      <div class="row q-gutter-sm">
+        <q-input v-model="filters.dateFrom" label="Dal" dense outlined type="date" style="width: 150px"
+          @update:model-value="refreshData" />
+        <q-input v-model="filters.dateTo" label="Al" dense outlined type="date" style="width: 150px"
+          @update:model-value="refreshData" />
+        <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
+        <q-btn icon="download" label="Esporta CSV" color="secondary" outline @click="exportCSV"
+          :disable="metrics.total.value === 0" />
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row q-col-gutter-md q-mb-lg">
+      <div class="col-12 col-sm-6 col-md-3">
+        <q-card class="bg-primary text-white">
+          <q-card-section>
+            <div class="text-subtitle2">Totale Richieste</div>
+            <div class="text-h4">{{ metrics.total }}</div>
+          </q-card-section>
+        </q-card>
+      </div>
+      <div class="col-12 col-sm-6 col-md-3">
+        <q-card class="bg-warning text-white">
+          <q-card-section>
+            <div class="text-subtitle2">In Attesa</div>
+            <div class="text-h4">{{ metrics.pending }}</div>
+          </q-card-section>
+        </q-card>
+      </div>
+      <div class="col-12 col-sm-6 col-md-3">
+        <q-card class="bg-positive text-white">
+          <q-card-section>
+            <div class="text-subtitle2">Tasso Approvazione</div>
+            <div class="text-h4">{{ metrics.approvalRate }}%</div>
+          </q-card-section>
+        </q-card>
+      </div>
+      <div class="col-12 col-sm-6 col-md-3">
+        <q-card class="bg-info text-white">
+          <q-card-section>
+            <div class="text-subtitle2">Tempo Medio Risposta</div>
+            <div class="text-h4">{{ metrics.avgTime }}</div>
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="row q-col-gutter-md q-mb-lg">
+      <!-- Status Distribution -->
+      <div class="col-12 col-md-4">
+        <q-card class="fit">
+          <q-card-section>
+            <div class="text-h6">Stato Richieste</div>
+          </q-card-section>
+          <q-card-section>
+            <apexchart type="donut" :options="charts.status.value.options" :series="charts.status.value.series" />
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <!-- Trend -->
+      <div class="col-12 col-md-8">
+        <q-card class="fit">
+          <q-card-section>
+            <div class="text-h6">Andamento Giornaliero</div>
+          </q-card-section>
+          <q-card-section>
+            <apexchart type="line" height="300" :options="charts.trend.value.options"
+              :series="charts.trend.value.series" />
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="row q-col-gutter-md">
+      <!-- Top Operators -->
+      <div class="col-12">
+        <q-card>
+          <q-card-section>
+            <div class="text-h6">Top 5 Operatori</div>
+          </q-card-section>
+          <q-card-section>
+            <apexchart type="bar" height="250" :options="charts.topOperators.value.options"
+              :series="charts.topOperators.value.series" />
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
+  </q-page>
+</template>

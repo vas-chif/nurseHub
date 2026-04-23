@@ -1,3 +1,11 @@
+/**
+ * @file AdminRequestsPage.vue
+ * @description Administrative dashboard for managing shift requests, coverage, and approval workflows.
+ * @author Nurse Hub Team
+ * @created 2026-02-20
+ * @modified 2026-04-23
+ */
+
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
@@ -37,16 +45,26 @@ import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { SyncService } from '../services/SyncService';
 import { DEFAULT_SHEETS_CONFIG } from '../config/sheets';
 import { useScenarioStore } from '../stores/scenarioStore';
+import { useUiStore } from '../stores/uiStore';
+import { useRoute } from 'vue-router';
 import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 
 const $q = useQuasar();
+const route = useRoute();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const notificationStore = useNotificationStore();
+const uiStore = useUiStore();
 const { checkCompliance } = useShiftLogic();
 
-const activeTab = ref('pending');
+// Initialize activeTab from store
+const activeTab = ref(uiStore.getActiveTab(route.path, 'pending'));
+
+// Watch and save activeTab changes
+watch(activeTab, (newVal) => {
+  uiStore.setActiveTab(route.path, newVal);
+});
 const loading = ref(false);
 const requests = ref<ShiftRequest[]>([]);
 const operators = ref<Record<string, Operator>>({});
@@ -219,7 +237,7 @@ onUnmounted(() => {
 
 async function fetchOperators() {
   if (!configStore.activeConfigId) {
-    console.warn('No active config for requests');
+    logger.warn('No active config for requests');
     return;
   }
 
@@ -229,7 +247,7 @@ async function fetchOperators() {
       operators.value[op.id] = op;
     });
   } catch (e) {
-    console.error('Error fetching operators', e);
+    logger.error('Error fetching operators', e);
   }
 }
 
@@ -243,7 +261,7 @@ async function fetchUsersMap() {
       userNames.value[docSnap.id] = fullName || data.email || docSnap.id;
     });
   } catch (e) {
-    console.error('Error fetching users map', e);
+    logger.error('Error fetching users map', e);
   }
 }
 
@@ -289,7 +307,7 @@ function initRealtimeRequests() {
       loading.value = false;
     },
     (error) => {
-      console.error('Snapshot error:', error);
+      logger.error('Snapshot error', error);
       loading.value = false;
       $q.notify({ type: 'negative', message: 'Errore real-time: ricarica la pagina' });
     },
@@ -371,6 +389,10 @@ function getStatusColor(status: string) {
   }
 }
 
+import { useSecureLogger } from '../utils/secureLogger';
+
+const logger = useSecureLogger();
+
 /**
  * Syncs a shift update back to Google Sheets
  */
@@ -390,10 +412,10 @@ async function syncToSheets(operatorName: string, date: string, newShift: string
   try {
     const success = await syncService.syncShiftUpdate(operatorName, date, newShift);
     if (success) {
-      console.log(`Synced ${operatorName} shift update to Sheets: ${date} -> ${newShift}`);
+      logger.info('Synced shift update to Sheets', { date, newShift });
     }
   } catch (e) {
-    console.error('Failed to sync to sheets:', e);
+    logger.error('Failed to sync to sheets', e);
   }
 }
 
@@ -586,7 +608,7 @@ async function publishRequest(req: ShiftRequest) {
       message: `Richiesta pubblicata a ${selected.length} operatori!`,
     });
   } catch (e) {
-    console.error('Error publishing', e);
+    logger.error('Error publishing', e);
     $q.notify({ type: 'negative', message: 'Errore pubblicazione' });
   }
 }
@@ -643,7 +665,7 @@ async function confirmReject() {
 
     $q.notify({ type: 'warning', message: 'Richiesta Rifiutata' });
   } catch (e) {
-    console.error('Error rejecting', e);
+    logger.error('Error rejecting', e);
   } finally {
     loading.value = false;
   }
@@ -763,7 +785,7 @@ async function processApproval() {
           : 'Approvata (Sincronizzazione manuale richiesta)',
     });
   } catch (e) {
-    console.error('Approval Error:', e);
+    logger.error('Approval Error', e);
     $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
   } finally {
     loading.value = false;
@@ -822,7 +844,7 @@ function rejectOffer(requestId: string, offerId: string) {
 
         $q.notify({ type: 'info', message: 'Offerta rifiutata' });
       } catch (e) {
-        console.error(e);
+        logger.error('Error', e);
         $q.notify({ type: 'negative', message: 'Errore durante il rifiuto' });
       }
     })();
@@ -881,7 +903,7 @@ function bulkApprove() {
 
         $q.notify({ type: 'positive', message: 'Richieste approvate!' });
       } catch (e) {
-        console.error('Error bulk approving', e);
+        logger.error('Error bulk approving', e);
         $q.notify({ type: 'negative', message: 'Errore durante approvazione multipla' });
       } finally {
         loading.value = false;
@@ -916,7 +938,7 @@ function archiveRequest(req: ShiftRequest) {
           icon: 'delete_forever',
         });
       } catch (e) {
-        console.error(e);
+        logger.error('Error', e);
         $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
       }
     };
@@ -958,7 +980,7 @@ async function performEmptyArchive() {
       icon: 'delete_forever',
     });
   } catch (e) {
-    console.error(e);
+    logger.error('Error', e);
     $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
   } finally {
     loading.value = false;
@@ -1055,7 +1077,7 @@ async function performEmptySwapArchive() {
       (s) => !archivedSwaps.value.some((as) => as.id === s.id),
     );
   } catch (e) {
-    console.error(e);
+    logger.error('Error', e);
     $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
   } finally {
     swapLoading.value = false;
@@ -1077,7 +1099,7 @@ function initRealtimeSwaps() {
       swapLoading.value = false;
     },
     (error) => {
-      console.error('Error loading swaps snapshot:', error);
+      logger.error('Error loading swaps snapshot', error);
       swapLoading.value = false;
     },
   );
@@ -1129,7 +1151,7 @@ async function processSwapApproval() {
     // Auto-sync to Google Sheets if mode is 'auto'
     if (swapSyncMode.value === 'auto' && configStore.activeConfigId) {
       try {
-        console.log('Starting auto-sync for swap via GAS...');
+        logger.info('Starting auto-sync for swap via GAS...');
         // Sync Creator
         await syncToSheets(swap.creatorName || 'Operatore', swap.date, swap.desiredShift);
         // Sync Counterpart
@@ -1138,7 +1160,7 @@ async function processSwapApproval() {
         
         $q.notify({ type: 'positive', message: 'Sincronizzazione Google Sheets completata (via GAS)!' });
       } catch (e) {
-        console.error('Error syncing swap to sheets:', e);
+        logger.error('Error syncing swap to sheets', e);
         $q.notify({
           type: 'warning',
           message: 'Firebase aggiornato, ma errore sincronizzazione Sheets. Riprova manualmente.',
@@ -1194,7 +1216,7 @@ async function processSwapApproval() {
           : 'Cambio approvato (Sincronizzazione manuale richiesta)',
     });
   } catch (e) {
-    console.error(e);
+    logger.error('Error', e);
     $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
   } finally {
     swapLoading.value = false;
@@ -1238,7 +1260,7 @@ function rejectSwap(swap: ShiftSwap) {
 
         $q.notify({ type: 'info', message: 'Cambio turno rifiutato' });
       } catch (e) {
-        console.error(e);
+        logger.error('Error', e);
         $q.notify({ type: 'negative', message: 'Errore durante il rifiuto' });
       }
     })();

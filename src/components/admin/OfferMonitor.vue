@@ -1,3 +1,46 @@
+/**
+* @file OfferMonitor.vue
+* @description Dashboard component for monitoring operator offers.
+* @author Nurse Hub Team
+* @created 2026-03-26
+*/
+
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
+
+// Mock data extending ShiftOffer slightly for UI
+const offers = ref([
+  {
+    id: 'off-1',
+    operatorName: 'Mario Rossi',
+    date: '12/02/2026',
+    shift: 'M',
+    scenarioLabel: 'Spostamento Riposo',
+  },
+  {
+    id: 'off-2',
+    operatorName: 'Luigi Verdi',
+    date: '13/02/2026',
+    shift: 'N',
+    scenarioLabel: 'Doppio Turno',
+  },
+]);
+
+function acceptOffer(id: string) {
+  logger.info('Accepting offer', { id });
+  offers.value = offers.value.filter((o) => o.id !== id);
+}
+
+function rejectOffer(id: string) {
+  logger.info('Rejecting offer', { id });
+  offers.value = offers.value.filter((o) => o.id !== id);
+}
+</script>
+
 <template>
   <q-card flat bordered class="q-mt-md">
     <q-card-section>
@@ -26,57 +69,11 @@
 
         <q-item-section side>
           <div class="row q-gutter-xs">
-            <q-btn
-              round
-              flat
-              color="negative"
-              icon="close"
-              size="sm"
-              @click="rejectOffer(offer.id)"
-            />
-            <q-btn
-              round
-              flat
-              color="positive"
-              icon="check"
-              size="sm"
-              @click="acceptOffer(offer.id)"
-            />
+            <q-btn round flat color="negative" icon="close" size="sm" @click="rejectOffer(offer.id)" />
+            <q-btn round flat color="positive" icon="check" size="sm" @click="acceptOffer(offer.id)" />
           </div>
         </q-item-section>
       </q-item>
     </q-list>
   </q-card>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue';
-
-// Mock data extending ShiftOffer slightly for UI
-const offers = ref([
-  {
-    id: 'off-1',
-    operatorName: 'Mario Rossi',
-    date: '12/02/2026',
-    shift: 'M',
-    scenarioLabel: 'Spostamento Riposo',
-  },
-  {
-    id: 'off-2',
-    operatorName: 'Luigi Verdi',
-    date: '13/02/2026',
-    shift: 'N',
-    scenarioLabel: 'Doppio Turno',
-  },
-]);
-
-function acceptOffer(id: string) {
-  console.log('Accepting', id);
-  offers.value = offers.value.filter((o) => o.id !== id);
-}
-
-function rejectOffer(id: string) {
-  console.log('Rejecting', id);
-  offers.value = offers.value.filter((o) => o.id !== id);
-}
-</script>

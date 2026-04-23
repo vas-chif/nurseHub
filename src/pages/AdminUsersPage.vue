@@ -160,8 +160,16 @@
   </q-page>
 </template>
 
+/**
+ * @file AdminUsersPage.vue
+ * @description Administrative page for managing users, approving registrations, and assigning roles.
+ * @author Nurse Hub Team
+ * @created 2026-03-05
+ * @modified 2026-04-23
+ */
+
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { userService } from '../services/UserService';
 import { useConfigStore } from '../stores/configStore';
@@ -169,13 +177,21 @@ import { operatorsService } from '../services/OperatorsService';
 import type { User, SystemConfiguration, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
 import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
+import { useRoute } from 'vue-router';
 
 const logger = useSecureLogger();
 const $q = useQuasar();
+const route = useRoute();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
+const uiStore = useUiStore();
 
-const activeTab = ref('pending');
+const activeTab = ref(uiStore.getActiveTab(route.path, 'pending'));
+
+watch(activeTab, (newVal) => {
+  uiStore.setActiveTab(route.path, newVal);
+});
 const loading = ref(false);
 const processingId = ref<string | null>(null);
 const allUsers = ref<User[]>([]);

@@ -1,3 +1,356 @@
+/**
+* @file ActiveRequestsCard.vue
+* @description Dashboard widget listing current open shift coverage requests.
+* @author Nurse Hub Team
+* @created 2026-04-10
+* @modified 2026-04-23
+*/
+<script setup lang="ts">
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  updateDoc,
+  doc,
+  arrayUnion,
+  orderBy,
+  type Unsubscribe
+} from 'firebase/firestore';
+import { db } from '../../boot/firebase';
+import { useAuthStore } from '../../stores/authStore';
+import { useShiftLogic } from '../../composables/useShiftLogic';
+import { useScenarioStore } from '../../stores/scenarioStore';
+import type { ShiftRequest, ShiftCode, CompatibleScenario } from '../../types/models';
+import { useQuasar, date as qDate } from 'quasar';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
+
+const authStore = useAuthStore();
+const scenarioStore = useScenarioStore();
+const { getCompatibleScenarios } = useShiftLogic();
+const $q = useQuasar();
+
+const activeTab = ref('opportunities');
+const requests = ref<ShiftRequest[]>([]); // Open Opportunities
+const historyRequests = ref<ShiftRequest[]>([]); // My History
+const loading = ref(true);
+let opportunitiesUnsub: Unsubscribe | null = null;
+let historyUnsub: Unsubscribe | null = null;
+
+// Dialog State
+const offerDialog = ref({
+  show: false,
+  req: null as ShiftRequest | null,
+});
+const loadingCompatibility = ref(false);
+const compatibleScenarios = ref<CompatibleScenario[]>([]);
+const selectedScenario = ref<CompatibleScenario | null>(null);
+const isSubmitting = ref(false);
+
+const surroundingShifts = computed(() => {
+  if (!offerDialog.value.req || !authStore.currentOperator) return [];
+  const targetDateStr = offerDialog.value.req.date;
+  const targetDate = new Date(targetDateStr);
+  const result = [];
+
+  for (let i = -2; i <= 2; i++) {
+    const d = qDate.addToDate(targetDate, { days: i });
+    const dStr = qDate.formatDate(d, 'YYYY-MM-DD');
+    const label = i === 0 ? 'OGGI' : qDate.formatDate(d, 'DD/MM');
+    result.push({
+      date: dStr,
+      label,
+      shift: authStore.currentOperator.schedule?.[dStr] || 'R',
+      isTarget: i === 0,
+    });
+  }
+  return result;
+});
+
+const urgentRequests = computed(() => {
+  const myOpId = authStore.currentOperator?.id;
+  if (!myOpId) return [];
+  return requests.value.filter((r) => r.candidateIds?.includes(myOpId));
+});
+
+const otherRequests = computed(() => {
+  const myOpId = authStore.currentOperator?.id;
+  return requests.value.filter((r) => {
+    const isUrgent = myOpId ? r.candidateIds?.includes(myOpId) : false;
+    return !isUrgent;
+  });
+});
+
+const myHistoryRequests = computed(() => historyRequests.value);
+
+function stopDashboardListeners() {
+  if (opportunitiesUnsub) opportunitiesUnsub();
+  if (historyUnsub) historyUnsub();
+}
+
+onMounted(() => {
+  void initDashboardListeners();
+});
+
+onUnmounted(() => {
+  stopDashboardListeners();
+});
+
+watch(
+  () => authStore.currentOperator,
+  () => {
+    void initDashboardListeners();
+  }
+);
+
+watch(activeTab, () => {
+  void initDashboardListeners();
+});
+
+async function initDashboardListeners() {
+  const myOpId = authStore.currentOperator?.id;
+  const activeConfigId = authStore.currentUser?.configId;
+
+  if (!myOpId || !activeConfigId) return;
+
+  stopDashboardListeners();
+  loading.value = true;
+
+  // Assicurati che gli scenari siano caricati prima di fare qualsiasi calcolo
+  await scenarioStore.loadScenarios(activeConfigId);
+
+  // 1. REAL-TIME Opportunities (OPEN requests)
+  if (activeTab.value === 'opportunities') {
+    const q = query(
+      collection(db, 'shiftRequests'),
+      where('status', '==', 'OPEN')
+    );
+
+    opportunitiesUnsub = onSnapshot(q, (snapshot) => {
+      const loaded: ShiftRequest[] = [];
+      const { isRequestExpired } = useShiftLogic();
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as ShiftRequest;
+
+        // Filtro Reparto lato client per evitare problemi di indici Firestore
+        if (data.configId && data.configId !== activeConfigId) return;
+
+        // Salta se scaduta
+        if (isRequestExpired(data.date, data.originalShift)) return;
+
+        const isMine = data.absentOperatorId === myOpId;
+        const alreadyOffered = data.offeringOperatorIds?.includes(myOpId) || false;
+
+        if (!isMine && !alreadyOffered) {
+          const opShift = authStore.currentOperator?.schedule?.[data.date] || 'R';
+          const compatible = getCompatibleScenarios(
+            data.originalShift,
+            opShift,
+            data.date,
+            authStore.currentOperator?.schedule,
+          );
+
+          if (compatible && compatible.length > 0) {
+            loaded.push({ ...data, id: docSnap.id });
+          }
+        }
+      });
+      requests.value = loaded;
+      loading.value = false;
+    }, (err) => {
+      logger.error('Opportunities listener error', err);
+      loading.value = false;
+    });
+  }
+
+  // 2. REAL-TIME History (My offers)
+  if (activeTab.value === 'history') {
+    const qHistory = query(
+      collection(db, 'shiftRequests'),
+      where('offeringOperatorIds', 'array-contains', myOpId),
+      orderBy('createdAt', 'desc')
+    );
+
+    historyUnsub = onSnapshot(qHistory, (snapshot) => {
+      const loadedHist: ShiftRequest[] = [];
+      snapshot.forEach((d) => loadedHist.push({ id: d.id, ...d.data() } as ShiftRequest));
+      historyRequests.value = loadedHist;
+      loading.value = false;
+    }, (err) => {
+      logger.error('History listener error', err);
+      loading.value = false;
+    });
+  }
+}
+
+function openOfferDialog(req: ShiftRequest) {
+  offerDialog.value.req = req;
+  offerDialog.value.show = true;
+  loadingCompatibility.value = true;
+  compatibleScenarios.value = [];
+  selectedScenario.value = null;
+
+  if (authStore.currentOperator) {
+    const opShift = authStore.currentOperator.schedule?.[req.date] || 'R';
+    compatibleScenarios.value = getCompatibleScenarios(
+      req.originalShift,
+      opShift,
+      req.date,
+      authStore.currentOperator.schedule,
+    );
+  }
+  loadingCompatibility.value = false;
+}
+
+async function submitOffer() {
+  if (!offerDialog.value.req || !selectedScenario.value || !authStore.currentOperator) return;
+
+  isSubmitting.value = true;
+  try {
+    const reqRef = doc(db, 'shiftRequests', offerDialog.value.req.id);
+
+    const offer = {
+      id: `offer-${Date.now()}`,
+      operatorId: authStore.currentOperator.id,
+      operatorName: authStore.currentOperator.name,
+      scenarioLabel: `${selectedScenario.value.scenarioLabel} - ${selectedScenario.value.roleLabel}`,
+      timestamp: Date.now(),
+    };
+
+    await updateDoc(reqRef, {
+      offers: arrayUnion(offer),
+      offeringOperatorIds: arrayUnion(authStore.currentOperator.id),
+    });
+
+    const configStore = await import('../../stores/configStore').then((m) => m.useConfigStore());
+    const activeConfigId = configStore.activeConfigId;
+    if (activeConfigId) {
+      const { notifyAdmins } = await import('../../services/NotificationService');
+      const msg = `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date}`;
+      notifyAdmins(msg, offerDialog.value.req.id, activeConfigId).catch((err) => logger.error('Error notifying admins', err));
+    }
+
+    $q.notify({
+      type: 'positive',
+      message: 'Candidatura inviata! Ti faremo sapere presto.',
+    });
+
+    offerDialog.value.show = false;
+  } catch (e) {
+    logger.error('Error', e);
+    $q.notify({ type: 'negative', message: "Errore durante l'invio" });
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+  return dateStr;
+}
+
+function formatDateLong(dt: string) {
+  return qDate.formatDate(dt, 'DD MMMM YYYY', {
+    months: [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+    ],
+  });
+}
+
+function getShiftColor(code: ShiftCode): string {
+  switch (code) {
+    case 'M': return 'amber-8';
+    case 'P': return 'orange-8';
+    case 'N': return 'blue-10';
+    default: return 'grey';
+  }
+}
+
+function formatFullDate(ts: number | string | undefined) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleString('it-IT', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function getMyOffer(req: ShiftRequest) {
+  const myOpId = authStore.currentOperator?.id;
+  if (!myOpId || !req.offers) return null;
+  return req.offers.find((o) => o.operatorId === myOpId) || null;
+}
+
+function getMyOfferTimestamp(req: ShiftRequest) {
+  const offer = getMyOffer(req);
+  return offer?.timestamp;
+}
+
+function getMyOfferLabel(req: ShiftRequest) {
+  return getMyOffer(req)?.scenarioLabel || '';
+}
+
+function getMyOfferStatusLabel(req: ShiftRequest) {
+  const myOpId = authStore.currentOperator?.id;
+  if (!myOpId) return 'Sconosciuto';
+
+  if (req.status === 'CLOSED') {
+    const myOffer = getMyOffer(req);
+    if (myOffer && req.acceptedOfferId === myOffer.id) {
+      return 'Approvata - Assegnato a te';
+    } else {
+      return 'Rifiutata / Coperta da altri';
+    }
+  }
+  if (req.status === 'EXPIRED') return 'Scaduta / Annullata';
+
+  const myOffer = getMyOffer(req);
+  if (myOffer?.isRejected) return "Rifiutata dall'Admin";
+
+  return 'In Valutazione';
+}
+
+function getMyOfferStatusColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'positive';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'negative';
+  if (label.includes('Valutazione')) return 'warning';
+  return 'primary';
+}
+
+function getMyOfferIcon(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'check_circle';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'cancel';
+  return 'hourglass_empty';
+}
+
+function getMyOfferAvatarColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'positive';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'red-1';
+  return 'grey-2';
+}
+
+function getMyOfferAvatarTextColor(req: ShiftRequest) {
+  const label = getMyOfferStatusLabel(req);
+  if (label.includes('Approvata')) return 'white';
+  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
+    return 'negative';
+  return 'grey-7';
+}
+</script>
+
 <template>
   <div class="q-mt-md">
     <q-card flat bordered class="bg-white">
@@ -200,346 +553,3 @@
     </q-dialog>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  updateDoc,
-  doc,
-  arrayUnion,
-  orderBy,
-  type Unsubscribe
-} from 'firebase/firestore';
-import { db } from '../../boot/firebase';
-import { useAuthStore } from '../../stores/authStore';
-import { useShiftLogic } from '../../composables/useShiftLogic';
-import { useScenarioStore } from '../../stores/scenarioStore';
-import type { ShiftRequest, ShiftCode, CompatibleScenario } from '../../types/models';
-import { useQuasar, date as qDate } from 'quasar';
-
-const authStore = useAuthStore();
-const scenarioStore = useScenarioStore();
-const { getCompatibleScenarios } = useShiftLogic();
-const $q = useQuasar();
-
-const activeTab = ref('opportunities');
-const requests = ref<ShiftRequest[]>([]); // Open Opportunities
-const historyRequests = ref<ShiftRequest[]>([]); // My History
-const loading = ref(true);
-let opportunitiesUnsub: Unsubscribe | null = null;
-let historyUnsub: Unsubscribe | null = null;
-
-// Dialog State
-const offerDialog = ref({
-  show: false,
-  req: null as ShiftRequest | null,
-});
-const loadingCompatibility = ref(false);
-const compatibleScenarios = ref<CompatibleScenario[]>([]);
-const selectedScenario = ref<CompatibleScenario | null>(null);
-const isSubmitting = ref(false);
-
-const surroundingShifts = computed(() => {
-  if (!offerDialog.value.req || !authStore.currentOperator) return [];
-  const targetDateStr = offerDialog.value.req.date;
-  const targetDate = new Date(targetDateStr);
-  const result = [];
-
-  for (let i = -2; i <= 2; i++) {
-    const d = qDate.addToDate(targetDate, { days: i });
-    const dStr = qDate.formatDate(d, 'YYYY-MM-DD');
-    const label = i === 0 ? 'OGGI' : qDate.formatDate(d, 'DD/MM');
-    result.push({
-      date: dStr,
-      label,
-      shift: authStore.currentOperator.schedule?.[dStr] || 'R',
-      isTarget: i === 0,
-    });
-  }
-  return result;
-});
-
-const urgentRequests = computed(() => {
-  const myOpId = authStore.currentOperator?.id;
-  if (!myOpId) return [];
-  return requests.value.filter((r) => r.candidateIds?.includes(myOpId));
-});
-
-const otherRequests = computed(() => {
-  const myOpId = authStore.currentOperator?.id;
-  return requests.value.filter((r) => {
-    const isUrgent = myOpId ? r.candidateIds?.includes(myOpId) : false;
-    return !isUrgent;
-  });
-});
-
-const myHistoryRequests = computed(() => historyRequests.value);
-
-function stopDashboardListeners() {
-  if (opportunitiesUnsub) opportunitiesUnsub();
-  if (historyUnsub) historyUnsub();
-}
-
-onMounted(() => {
-  void initDashboardListeners();
-});
-
-onUnmounted(() => {
-  stopDashboardListeners();
-});
-
-watch(
-  () => authStore.currentOperator,
-  () => {
-    void initDashboardListeners();
-  }
-);
-
-watch(activeTab, () => {
-  void initDashboardListeners();
-});
-
-async function initDashboardListeners() {
-  const myOpId = authStore.currentOperator?.id;
-  const activeConfigId = authStore.currentUser?.configId;
-
-  if (!myOpId || !activeConfigId) return;
-
-  stopDashboardListeners();
-  loading.value = true;
-
-  // Assicurati che gli scenari siano caricati prima di fare qualsiasi calcolo
-  await scenarioStore.loadScenarios(activeConfigId);
-
-  // 1. REAL-TIME Opportunities (OPEN requests)
-  if (activeTab.value === 'opportunities') {
-    const q = query(
-      collection(db, 'shiftRequests'),
-      where('status', '==', 'OPEN')
-    );
-
-    opportunitiesUnsub = onSnapshot(q, (snapshot) => {
-      const loaded: ShiftRequest[] = [];
-      const { isRequestExpired } = useShiftLogic();
-
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as ShiftRequest;
-
-        // Filtro Reparto lato client per evitare problemi di indici Firestore
-        if (data.configId && data.configId !== activeConfigId) return;
-
-        // Salta se scaduta
-        if (isRequestExpired(data.date, data.originalShift)) return;
-
-        const isMine = data.absentOperatorId === myOpId;
-        const alreadyOffered = data.offeringOperatorIds?.includes(myOpId) || false;
-
-        if (!isMine && !alreadyOffered) {
-          const opShift = authStore.currentOperator?.schedule?.[data.date] || 'R';
-          const compatible = getCompatibleScenarios(
-            data.originalShift,
-            opShift,
-            data.date,
-            authStore.currentOperator?.schedule,
-          );
-
-          if (compatible && compatible.length > 0) {
-            loaded.push({ ...data, id: docSnap.id });
-          }
-        }
-      });
-      requests.value = loaded;
-      loading.value = false;
-    }, (err) => {
-      console.error('Opportunities listener error:', err);
-      loading.value = false;
-    });
-  }
-
-  // 2. REAL-TIME History (My offers)
-  if (activeTab.value === 'history') {
-    const qHistory = query(
-      collection(db, 'shiftRequests'),
-      where('offeringOperatorIds', 'array-contains', myOpId),
-      orderBy('createdAt', 'desc')
-    );
-
-    historyUnsub = onSnapshot(qHistory, (snapshot) => {
-      const loadedHist: ShiftRequest[] = [];
-      snapshot.forEach((d) => loadedHist.push({ id: d.id, ...d.data() } as ShiftRequest));
-      historyRequests.value = loadedHist;
-      loading.value = false;
-    }, (err) => {
-      console.error('History listener error:', err);
-      loading.value = false;
-    });
-  }
-}
-
-function openOfferDialog(req: ShiftRequest) {
-  offerDialog.value.req = req;
-  offerDialog.value.show = true;
-  loadingCompatibility.value = true;
-  compatibleScenarios.value = [];
-  selectedScenario.value = null;
-
-  if (authStore.currentOperator) {
-    const opShift = authStore.currentOperator.schedule?.[req.date] || 'R';
-    compatibleScenarios.value = getCompatibleScenarios(
-      req.originalShift,
-      opShift,
-      req.date,
-      authStore.currentOperator.schedule,
-    );
-  }
-  loadingCompatibility.value = false;
-}
-
-async function submitOffer() {
-  if (!offerDialog.value.req || !selectedScenario.value || !authStore.currentOperator) return;
-
-  isSubmitting.value = true;
-  try {
-    const reqRef = doc(db, 'shiftRequests', offerDialog.value.req.id);
-
-    const offer = {
-      id: `offer-${Date.now()}`,
-      operatorId: authStore.currentOperator.id,
-      operatorName: authStore.currentOperator.name,
-      scenarioLabel: `${selectedScenario.value.scenarioLabel} - ${selectedScenario.value.roleLabel}`,
-      timestamp: Date.now(),
-    };
-
-    await updateDoc(reqRef, {
-      offers: arrayUnion(offer),
-      offeringOperatorIds: arrayUnion(authStore.currentOperator.id),
-    });
-
-    const configStore = await import('../../stores/configStore').then((m) => m.useConfigStore());
-    const activeConfigId = configStore.activeConfigId;
-    if (activeConfigId) {
-      const { notifyAdmins } = await import('../../services/NotificationService');
-      const msg = `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date}`;
-      notifyAdmins(msg, offerDialog.value.req.id, activeConfigId).catch(console.error);
-    }
-
-    $q.notify({
-      type: 'positive',
-      message: 'Candidatura inviata! Ti faremo sapere presto.',
-    });
-
-    offerDialog.value.show = false;
-  } catch (e) {
-    console.error(e);
-    $q.notify({ type: 'negative', message: "Errore durante l'invio" });
-  } finally {
-    isSubmitting.value = false;
-  }
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
-  return dateStr;
-}
-
-function formatDateLong(dt: string) {
-  return qDate.formatDate(dt, 'DD MMMM YYYY', {
-    months: [
-      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
-      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
-    ],
-  });
-}
-
-function getShiftColor(code: ShiftCode): string {
-  switch (code) {
-    case 'M': return 'amber-8';
-    case 'P': return 'orange-8';
-    case 'N': return 'blue-10';
-    default: return 'grey';
-  }
-}
-
-function formatFullDate(ts: number | string | undefined) {
-  if (!ts) return '';
-  const d = new Date(ts);
-  return d.toLocaleString('it-IT', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function getMyOffer(req: ShiftRequest) {
-  const myOpId = authStore.currentOperator?.id;
-  if (!myOpId || !req.offers) return null;
-  return req.offers.find((o) => o.operatorId === myOpId) || null;
-}
-
-function getMyOfferTimestamp(req: ShiftRequest) {
-  const offer = getMyOffer(req);
-  return offer?.timestamp;
-}
-
-function getMyOfferLabel(req: ShiftRequest) {
-  return getMyOffer(req)?.scenarioLabel || '';
-}
-
-function getMyOfferStatusLabel(req: ShiftRequest) {
-  const myOpId = authStore.currentOperator?.id;
-  if (!myOpId) return 'Sconosciuto';
-
-  if (req.status === 'CLOSED') {
-    const myOffer = getMyOffer(req);
-    if (myOffer && req.acceptedOfferId === myOffer.id) {
-      return 'Approvata - Assegnato a te';
-    } else {
-      return 'Rifiutata / Coperta da altri';
-    }
-  }
-  if (req.status === 'EXPIRED') return 'Scaduta / Annullata';
-
-  const myOffer = getMyOffer(req);
-  if (myOffer?.isRejected) return "Rifiutata dall'Admin";
-
-  return 'In Valutazione';
-}
-
-function getMyOfferStatusColor(req: ShiftRequest) {
-  const label = getMyOfferStatusLabel(req);
-  if (label.includes('Approvata')) return 'positive';
-  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
-    return 'negative';
-  if (label.includes('Valutazione')) return 'warning';
-  return 'primary';
-}
-
-function getMyOfferIcon(req: ShiftRequest) {
-  const label = getMyOfferStatusLabel(req);
-  if (label.includes('Approvata')) return 'check_circle';
-  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
-    return 'cancel';
-  return 'hourglass_empty';
-}
-
-function getMyOfferAvatarColor(req: ShiftRequest) {
-  const label = getMyOfferStatusLabel(req);
-  if (label.includes('Approvata')) return 'positive';
-  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
-    return 'red-1';
-  return 'grey-2';
-}
-
-function getMyOfferAvatarTextColor(req: ShiftRequest) {
-  const label = getMyOfferStatusLabel(req);
-  if (label.includes('Approvata')) return 'white';
-  if (label.includes('Rifiutata') || label.includes('Scaduta') || label.includes('Coperta'))
-    return 'negative';
-  return 'grey-7';
-}
-</script>

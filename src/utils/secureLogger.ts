@@ -44,6 +44,9 @@ const PII_FIELDS = [
   'uid', // Firebase UID (optional redaction)
   'ssn',
   'socialSecurityNumber',
+  'operatorname',
+  'name',
+  'surname',
 ];
 
 /**
@@ -124,27 +127,32 @@ class SecureLogger {
    * @param data - Optional data to log
    */
   private log(level: LogLevel, message: string, data?: unknown): void {
-    const logEntry = this.formatLog(level, message, data);
-
-    if (this.isDev) {
-      // Development: Pretty console output
-      const styles = {
-        DEBUG: 'color: #888',
-        INFO: 'color: #0066cc',
-        WARN: 'color: #ff9800',
-        ERROR: 'color: #f44336',
-      };
-
-      console.log(
-        `%c[${logEntry.level}] ${logEntry.message}`,
-        styles[level],
-        logEntry.data !== undefined ? logEntry.data : '',
-      );
-    } else {
-      // Production: Structured JSON logging
-      // In futuro: inviare a servizio logging (Firestore, CloudWatch, etc.)
-      console.log(JSON.stringify(logEntry));
+    const isActuallyProd = import.meta.env.PROD === true;
+    
+    // In production, we ONLY log ERRORs and nothing else.
+    if (isActuallyProd) {
+      if (level === 'ERROR') {
+        const timestamp = new Date().toISOString();
+        // Log minimal error info without data payload to avoid PII leak
+        console.error(`[FATAL] ${message} (Timestamp: ${timestamp})`);
+      }
+      return; // Exit early in production
     }
+
+    // Development: Pretty console output
+    const logEntry = this.formatLog(level, message, data);
+    const styles: Record<LogLevel, string> = {
+      DEBUG: 'color: #888',
+      INFO: 'color: #0066cc',
+      WARN: 'color: #ff9800',
+      ERROR: 'color: #f44336',
+    };
+
+    console.log(
+      `%c[${logEntry.level}] ${logEntry.message}`,
+      styles[level],
+      logEntry.data !== undefined ? logEntry.data : '',
+    );
   } /*end log*/
 
   /**

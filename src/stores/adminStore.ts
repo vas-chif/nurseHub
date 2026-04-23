@@ -1,15 +1,22 @@
+/**
+ * @file adminStore.ts
+ * @description Pinia store for administrative state, suggestions, and request publishing.
+ * @author Nurse Hub Team
+ * @created 2026-03-15
+ * @modified 2026-04-23
+ */
+
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { ScenarioGroup, ShiftRequest } from '../types/models';
-// import { operatorsService } from '../services/OperatorsService'; // Future integration
+import { useSecureLogger } from '../utils/secureLogger';
 
 export const useAdminStore = defineStore('admin', () => {
+  const logger = useSecureLogger();
   // State for substitute suggestions (persists across navigation)
   const suggestions = ref<Record<string, ScenarioGroup[]>>({});
   const selectedSuggestions = ref<Record<string, string[]>>({});
   const calculating = ref<Record<string, boolean>>({});
-
-  // const { getCompatibleScenarios } = useShiftLogic(); // Unused
 
   function setSuggestions(reqId: string, results: ScenarioGroup[]) {
     suggestions.value[reqId] = results;
@@ -45,26 +52,13 @@ export const useAdminStore = defineStore('admin', () => {
     if (calculating.value[reqId]) delete calculating.value[reqId];
   }
 
-  // Dummy implementations for now - logic moved from component or future service
   async function calculateSuggestions(req: ShiftRequest) {
     calculating.value[req.id] = true;
     try {
-      // Here we would fetch all operators and run logic
-      // For now, let's just simulate or reuse logic if we can import stores here (careful of circular deps)
-      // or just accept emptiness until implemented fully.
-      // Actually, the user expects 'find substitute' to work.
-      // We'll leave the array empty to indicate "No candidates found" for now or
-      // Implement a basic check if we have operators in another store.
-
       // Simulating delay
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const results: ScenarioGroup[] = [];
-      // Logic would be:
-      // 1. Fetch all operators
-      // 2. Filter available ones
-      // 3. Group by scenario
-
       suggestions.value[req.id] = results;
     } finally {
       calculating.value[req.id] = false;
@@ -74,8 +68,7 @@ export const useAdminStore = defineStore('admin', () => {
   function publishToCandidates(req: ShiftRequest) {
     // Logic to send notifications/emails to selected candidates
     const selected = selectedSuggestions.value[req.id] || [];
-    console.log('Publishing request', req.id, 'to candidates:', selected);
-    // await notificationsService.send(...)
+    logger.info('Publishing request', { reqId: req.id, candidateCount: selected.length });
   }
 
   return {

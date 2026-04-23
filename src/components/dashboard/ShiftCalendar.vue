@@ -1,72 +1,16 @@
-<template>
-  <q-card flat bordered class="shift-calendar-card">
-    <q-card-section class="row items-center justify-between">
-      <div class="text-h6">I Tuoi Turni</div>
-      <div style="min-width: 200px" v-if="authStore.isAdmin && hasSearchModule">
-        <q-select
-          v-model="selectedOperator"
-          :options="operatorOptions"
-          label="Seleziona Personale"
-          dense
-          outlined
-          options-dense
-          bg-color="white"
-          multiple
-          use-chips
-          use-input
-          option-label="name"
-          @filter="filterOperators"
-        >
-          <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
-            <q-item v-bind="itemProps">
-              <q-item-section>
-                <q-item-label>{{ opt.name }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-checkbox :model-value="selected" @update:model-value="toggleOption(opt)" />
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
-      </div>
-    </q-card-section>
-
-    <!-- Loop through selected operators -->
-    <div v-for="calendar in calendars" :key="calendar.operatorId">
-      <q-separator />
-      <q-card-section>
-        <div class="text-subtitle2 q-mb-xs">Turni di: {{ calendar.operatorName }}</div>
-        <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
-          <div class="row no-wrap q-gutter-md">
-            <div
-              v-for="(day, index) in calendar.days"
-              :key="index"
-              class="shift-day-column column flex-center q-pa-sm rounded-borders"
-              :class="getShiftClass(day.shift)"
-            >
-              <div class="text-caption text-weight-bold">{{ day.dateFormatted }}</div>
-              <div class="text-caption">{{ day.dayName }}</div>
-              <q-badge :color="getShiftColor(day.shift)" class="q-mt-xs text-uppercase shadow-1">
-                {{ day.shift }}
-              </q-badge>
-            </div>
-          </div>
-        </q-scroll-area>
-      </q-card-section>
-    </div>
-
-    <q-card-section v-if="calendars.length === 0" class="text-center text-grey q-py-lg">
-      Nessun operatore selezionato
-    </q-card-section>
-  </q-card>
-</template>
-
+/**
+* @file ShiftCalendar.vue
+* @description Monthly calendar view showing operator shifts and assignments.
+* @author Nurse Hub Team
+* @created 2026-03-12
+* @modified 2026-04-23
+*/
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, watchEffect } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
-import { useScheduleStore } from '../../stores/scheduleStore';
 import { useSecureLogger } from '../../utils/secureLogger';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import type { Operator, ShiftCode } from '../../types/models';
 
 const authStore = useAuthStore();
@@ -110,7 +54,7 @@ async function loadData(force = false) {
     operatorOptions.value = sortedOps;
     filteredOptions.value = sortedOps;
   } catch (e) {
-    console.error('Error loading operators for calendar', e);
+    logger.error('Error loading operators for calendar', e);
   }
 }
 
@@ -248,6 +192,54 @@ function getShiftClass(code: ShiftCode): string {
   return code === 'R' ? 'bg-grey-2' : 'bg-grey-1';
 }
 </script>
+
+<template>
+  <q-card flat bordered class="shift-calendar-card">
+    <q-card-section class="row items-center justify-between">
+      <div class="text-h6">I Tuoi Turni</div>
+      <div style="min-width: 200px" v-if="authStore.isAdmin && hasSearchModule">
+        <q-select v-model="selectedOperator" :options="operatorOptions" label="Seleziona Personale" dense outlined
+          options-dense bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
+          <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
+            <q-item v-bind="itemProps">
+              <q-item-section>
+                <q-item-label>{{ opt.name }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-checkbox :model-value="selected" @update:model-value="toggleOption(opt)" />
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
+      </div>
+    </q-card-section>
+
+    <!-- Loop through selected operators -->
+    <div v-for="calendar in calendars" :key="calendar.operatorId">
+      <q-separator />
+      <q-card-section>
+        <div class="text-subtitle2 q-mb-xs">Turni di: {{ calendar.operatorName }}</div>
+        <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
+          <div class="row no-wrap q-gutter-md">
+            <div v-for="(day, index) in calendar.days" :key="index"
+              class="shift-day-column column flex-center q-pa-sm rounded-borders" :class="getShiftClass(day.shift)">
+              <div class="text-caption text-weight-bold">{{ day.dateFormatted }}</div>
+              <div class="text-caption">{{ day.dayName }}</div>
+              <q-badge :color="getShiftColor(day.shift)" class="q-mt-xs text-uppercase shadow-1">
+                {{ day.shift }}
+              </q-badge>
+            </div>
+          </div>
+        </q-scroll-area>
+      </q-card-section>
+    </div>
+
+    <q-card-section v-if="calendars.length === 0" class="text-center text-grey q-py-lg">
+      Nessun operatore selezionato
+    </q-card-section>
+  </q-card>
+</template>
+
 
 <style scoped>
 .shift-day-column {

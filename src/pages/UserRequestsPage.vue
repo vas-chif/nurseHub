@@ -1,5 +1,17 @@
+/**
+ * @file UserRequestsPage.vue
+ * @description Page for users to submit absence and shift swap requests.
+ * @author Nurse Hub Team
+ * @created 2026-02-15
+ * @modified 2026-04-23
+ * @notes
+ * - Handles both absence and swap logic
+ * - Integrated with push notifications
+ * - Persistent tab state via uiStore
+ */
+
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
 import type { Unsubscribe } from 'firebase/firestore';
 import {
@@ -29,17 +41,30 @@ import type {
   ShiftSwap,
   ShiftSwapStatus,
 } from '../types/models';
+import { useSecureLogger } from '../utils/secureLogger';
+
+const logger = useSecureLogger();
+
+import { useUiStore } from '../stores/uiStore';
+import { useRoute } from 'vue-router';
 
 const $q = useQuasar();
+const route = useRoute();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const uiStore = useUiStore();
 const { isRequestExpired } = useShiftLogic();
 const submitting = ref(false);
 const loading = ref(false);
 let unsubscribe: Unsubscribe | null = null;
 
 // Page tab: absence | swap
-const pageTab = ref<'absence' | 'swap'>('absence');
+const pageTab = ref<'absence' | 'swap'>(uiStore.getActiveTab(route.path, 'absence') as 'absence' | 'swap');
+
+// Watch and save tab changes
+watch(pageTab, (newVal) => {
+  uiStore.setActiveTab(route.path, newVal);
+});
 
 // Swap form state
 const swapForm = ref({
@@ -137,7 +162,7 @@ async function submitSwap() {
     $q.notify({ type: 'positive', message: 'Proposta di cambio inviata!' });
     await loadMySwaps();
   } catch (e) {
-    console.error(e);
+    logger.error('Error submitting swap', e);
     $q.notify({ type: 'negative', message: "Errore durante l'invio della proposta" });
   } finally {
     swapSubmitting.value = false;
@@ -176,7 +201,7 @@ function cancelSwap(swap: ShiftSwap) {
         mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
         $q.notify({ type: 'info', message: 'Proposta cancellata', icon: 'delete' });
       } catch (e) {
-        console.error(e);
+        logger.error('Error cancelling swap', e);
         $q.notify({ type: 'negative', message: 'Errore durante la cancellazione' });
       }
     })();
@@ -267,7 +292,7 @@ onMounted(async () => {
         operators.value[op.id] = op;
       });
     } catch (e) {
-      console.error('Error fetching operators', e);
+      logger.error('Error fetching operators', e);
     }
   }
   initRealtimeRequests();
@@ -315,7 +340,7 @@ function initRealtimeRequests() {
       loading.value = false;
     },
     (error) => {
-      console.error('Snapshot error:', error);
+      logger.error('Snapshot error', error);
       loading.value = false;
     },
   );
@@ -406,7 +431,7 @@ async function submitRequest() {
         const docRef = savedRequests[i];
         if (docRef?.id) {
           const simulatedRequest = { ...batchData[i], id: docRef.id } as ShiftRequest;
-          notifyEligibleOperators(simulatedRequest, activeConfigId).catch(console.error);
+          notifyEligibleOperators(simulatedRequest, activeConfigId).catch((err) => logger.error('Error notifying operators', err));
         }
       }
     }
@@ -425,7 +450,7 @@ async function submitRequest() {
     formData.value.endTime = '';
     formData.value.isRecurring = false;
   } catch (e) {
-    console.error(e);
+    logger.error('Error submitting request', e);
     $q.notify({ type: 'negative', message: "Errore durante l'invio" });
   } finally {
     submitting.value = false;
@@ -458,7 +483,7 @@ function deleteRequest(req: ShiftRequest) {
           icon: 'delete',
         });
       } catch (e) {
-        console.error(e);
+        logger.error('Error deleting request', e);
         $q.notify({ type: 'negative', message: 'Errore durante eliminazione' });
       }
     };
@@ -495,7 +520,7 @@ async function performEmptyArchive() {
       icon: 'delete_forever',
     });
   } catch (e) {
-    console.error(e);
+    logger.error('Error emptying archive', e);
     $q.notify({ type: 'negative', message: 'Errore durante lo svuotamento' });
   } finally {
     loading.value = false;

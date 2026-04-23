@@ -1,63 +1,16 @@
-<template>
-  <q-card flat bordered>
-    <q-card-section>
-      <div class="text-h6">Nuova Richiesta Copertura</div>
-    </q-card-section>
-
-    <q-card-section>
-      <q-form @submit="onSubmit" class="q-gutter-md">
-        <q-input
-          v-model="form.date"
-          type="date"
-          label="Data Turno"
-          stack-label
-          outlined
-          :rules="[(val) => !!val || 'Data obbligatoria']"
-        />
-
-        <q-select
-          v-model="form.shift"
-          :options="shiftOptions"
-          label="Turno Mancante"
-          outlined
-          :rules="[(val) => !!val || 'Seleziona un turno']"
-        />
-
-        <q-select
-          v-model="form.profession"
-          :options="professionOptions"
-          label="Professione Richiesta"
-          outlined
-          :rules="[(val) => !!val || 'Seleziona una professione']"
-        />
-
-        <q-select
-          v-model="form.reason"
-          :options="reasonOptions"
-          label="Motivo"
-          outlined
-          emit-value
-          map-options
-        />
-
-        <div class="row justify-end q-mt-lg">
-          <q-btn
-            label="Crea Richiesta"
-            type="submit"
-            color="primary"
-            icon="send"
-            :loading="loading"
-          />
-        </div>
-      </q-form>
-    </q-card-section>
-  </q-card>
-</template>
-
+/**
+* @file CreateRequestForm.vue
+* @description Admin form to create manual coverage requests.
+* @author Nurse Hub Team
+* @created 2026-03-25
+*/
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
 import { useQuasar } from 'quasar';
 import type { ShiftCode, RequestReason } from '../../types/models';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
 
 const $q = useQuasar();
 const loading = ref(false);
@@ -80,7 +33,7 @@ function onSubmit() {
   loading.value = true;
   // Simulate API call
   setTimeout(() => {
-    console.log('Request created:', form);
+    logger.info('Request created', form);
     $q.notify({
       color: 'positive',
       message: 'Richiesta creata con successo!',
@@ -92,3 +45,30 @@ function onSubmit() {
   }, 1000);
 }
 </script>
+
+<template>
+  <q-card flat bordered>
+    <q-card-section>
+      <div class="text-h6">Nuova Richiesta Copertura</div>
+    </q-card-section>
+
+    <q-card-section>
+      <q-form @submit="onSubmit" class="q-gutter-md">
+        <q-input v-model="form.date" type="date" label="Data Turno" stack-label outlined
+          :rules="[(val) => !!val || 'Data obbligatoria']" />
+
+        <q-select v-model="form.shift" :options="shiftOptions" label="Turno Mancante" outlined
+          :rules="[(val) => !!val || 'Seleziona un turno']" />
+
+        <q-select v-model="form.profession" :options="professionOptions" label="Professione Richiesta" outlined
+          :rules="[(val) => !!val || 'Seleziona una professione']" />
+
+        <q-select v-model="form.reason" :options="reasonOptions" label="Motivo" outlined emit-value map-options />
+
+        <div class="row justify-end q-mt-lg">
+          <q-btn label="Crea Richiesta" type="submit" color="primary" icon="send" :loading="loading" />
+        </div>
+      </q-form>
+    </q-card-section>
+  </q-card>
+</template>

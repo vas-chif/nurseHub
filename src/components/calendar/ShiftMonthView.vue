@@ -1,63 +1,11 @@
 /**
- * @file ShiftMonthView.vue
- * @description Monthly calendar view for user shifts.
- * @author Nurse Hub Team
- * @created 2026-02-11
- * @modified 2026-04-20
- */
-<template>
-  <div class="shift-month-view">
-    <!-- Header Controls -->
-    <div class="row justify-between items-center q-mb-lg bg-white q-pa-sm rounded-borders shadow-1">
-      <q-btn flat round dense size="sm" icon="chevron_left" color="grey-7" @click="prevMonth" />
+* @file ShiftMonthView.vue
+* @description Monthly calendar view for user shifts.
+* @author Nurse Hub Team
+* @created 2026-02-11
+* @modified 2026-04-20
+*/
 
-      <div class="row items-center no-wrap q-gutter-sm">
-        <div class="text-h6 text-weight-bold text-primary">
-          {{ currentMonthLabel.split(' ')[0] }}
-          <span class="text-weight-light text-grey-8">{{ currentMonthLabel.split(' ')[1] }}</span>
-        </div>
-
-        <!-- Componente Centralizzato Sincronizzazione -->
-        <GlobalSyncBtn size="sm" />
-      </div>
-
-      <q-btn flat round dense size="sm" icon="chevron_right" color="grey-7" @click="nextMonth" />
-    </div>
-
-    <!-- Calendar Grid -->
-    <div class="calendar-grid">
-      <div
-        v-for="day in weekDays"
-        :key="day"
-        class="text-center text-dark text-caption q-pb-sm text-weight-bold"
-      >
-        {{ day }}
-      </div>
-
-      <div
-        v-for="(dateObj, index) in calendarDays"
-        :key="index"
-        class="calendar-cell relative-position q-pa-xs cursor-pointer column justify-between"
-        :class="getCellClass(dateObj)"
-        @click="onDayClick(dateObj)"
-      >
-        <div class="text-caption text-right" :class="{ 'text-weight-bold': isToday(dateObj.date) }">
-          {{ dateObj.day }}
-        </div>
-
-        <div v-if="dateObj.shift" class="shift-indicator q-mt-xs text-center">
-          <q-badge
-            :color="getShiftColor(dateObj.shift)"
-            :label="dateObj.shift"
-            class="full-width shadow-2 text-center text-weight-bold text-white"
-            style="min-height: 40px"
-            :class="{ 'dimmed-badge': !dateObj.isCurrentMonth }"
-          />
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
@@ -65,6 +13,9 @@ import { date as qDate } from 'quasar';
 import type { ShiftCode } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
 
 const authStore = useAuthStore();
 
@@ -131,12 +82,72 @@ function getShiftColor(code: ShiftCode): string {
   return map[code] || 'primary';
 }
 
-function onDayClick(day: CalendarDay) { console.log('Clicked', day); }
+function onDayClick(day: CalendarDay) { logger.debug('Day clicked', { date: day.dateStr }); }
 </script>
 
+<template>
+  <div class="shift-month-view">
+    <!-- Header Controls -->
+    <div class="row justify-between items-center q-mb-lg bg-white q-pa-sm rounded-borders shadow-1">
+      <q-btn flat round dense size="sm" icon="chevron_left" color="grey-7" @click="prevMonth" />
+
+      <div class="row items-center no-wrap q-gutter-sm">
+        <div class="text-h6 text-weight-bold text-primary">
+          {{ currentMonthLabel.split(' ')[0] }}
+          <span class="text-weight-light text-grey-8">{{ currentMonthLabel.split(' ')[1] }}</span>
+        </div>
+
+        <!-- Componente Centralizzato Sincronizzazione -->
+        <GlobalSyncBtn size="sm" />
+      </div>
+
+      <q-btn flat round dense size="sm" icon="chevron_right" color="grey-7" @click="nextMonth" />
+    </div>
+
+    <!-- Calendar Grid -->
+    <div class="calendar-grid">
+      <div v-for="day in weekDays" :key="day" class="text-center text-dark text-caption q-pb-sm text-weight-bold">
+        {{ day }}
+      </div>
+
+      <div v-for="(dateObj, index) in calendarDays" :key="index"
+        class="calendar-cell relative-position q-pa-xs cursor-pointer column justify-between"
+        :class="getCellClass(dateObj)" @click="onDayClick(dateObj)">
+        <div class="text-caption text-right" :class="{ 'text-weight-bold': isToday(dateObj.date) }">
+          {{ dateObj.day }}
+        </div>
+
+        <div v-if="dateObj.shift" class="shift-indicator q-mt-xs text-center">
+          <q-badge :color="getShiftColor(dateObj.shift)" :label="dateObj.shift"
+            class="full-width shadow-2 text-center text-weight-bold text-white" style="min-height: 40px"
+            :class="{ 'dimmed-badge': !dateObj.isCurrentMonth }" />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <style scoped>
-.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background-color: #e0e0e0; border: 1px solid #e0e0e0; padding: 1px; }
-.calendar-cell { min-height: 80px; border-radius: 4px; }
-.today-cell { border: 2px solid var(--q-primary); font-weight: bold; }
-.dimmed-badge { opacity: 0.6; }
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  background-color: #e0e0e0;
+  border: 1px solid #e0e0e0;
+  padding: 1px;
+}
+
+.calendar-cell {
+  min-height: 80px;
+  border-radius: 4px;
+}
+
+.today-cell {
+  border: 2px solid var(--q-primary);
+  font-weight: bold;
+}
+
+.dimmed-badge {
+  opacity: 0.6;
+}
 </style>

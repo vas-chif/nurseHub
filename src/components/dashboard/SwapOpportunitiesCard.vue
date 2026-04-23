@@ -1,154 +1,10 @@
-<template>
-  <q-card flat bordered class="q-mt-md">
-    <!-- ===== Header ===== -->
-    <q-card-section class="q-pb-none">
-      <div class="row items-center justify-between">
-        <div>
-          <div class="text-subtitle1 text-weight-bold">
-            <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />
-            Cambi Turno
-          </div>
-          <div class="text-caption text-grey">Opportunità disponibili e le tue proposte</div>
-        </div>
-        <q-btn flat round dense icon="refresh" size="sm" :loading="loading" @click="loadAll">
-          <q-tooltip>Aggiorna</q-tooltip>
-        </q-btn>
-      </div>
-    </q-card-section>
-
-    <q-card-section>
-      <!-- ===== SEZIONE 1: Proposte di colleghi compatibili ===== -->
-      <div class="text-caption text-weight-bold text-grey-8 q-mb-sm">
-        <q-icon name="group" size="xs" class="q-mr-xs" />
-        Proposte disponibili per te
-      </div>
-
-      <div v-if="loading" class="text-center q-py-sm">
-        <q-spinner color="primary" size="1.2em" />
-      </div>
-
-      <div v-else-if="compatibleSwaps.length === 0" class="text-grey text-caption q-mb-md q-pl-sm">
-        <q-icon name="search_off" size="xs" /> Nessuna proposta compatibile con il tuo turno.
-      </div>
-
-      <div v-else class="q-gutter-xs q-mb-md">
-        <q-card
-          v-for="swap in compatibleSwaps"
-          :key="swap.id"
-          flat
-          class="swap-card bg-blue-1 rounded-borders"
-          :class="{ 'opacity-50 grayscale': isRequestExpired(swap.date, swap.offeredShift) }"
-        >
-          <q-card-section class="q-py-sm q-px-md">
-            <div class="row items-center justify-between no-wrap">
-              <div class="col">
-                <div class="text-caption text-grey-7 q-mb-xs">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />
-                  {{ formatDate(swap.date) }}
-                </div>
-                <div class="row items-center q-gutter-xs">
-                  <span class="text-caption">Un collega cede</span>
-                  <q-chip
-                    :color="getShiftColor(swap.offeredShift)"
-                    text-color="white"
-                    size="sm"
-                    dense
-                  >
-                    {{ swap.offeredShift }}
-                  </q-chip>
-                  <span class="text-caption">in cambio del tuo</span>
-                  <q-chip
-                    :color="getShiftColor(swap.desiredShift)"
-                    text-color="white"
-                    size="sm"
-                    dense
-                  >
-                    {{ swap.desiredShift }}
-                  </q-chip>
-                </div>
-                <div class="text-caption text-grey-6 q-mt-xs">
-                  <q-icon name="lock" size="xs" /> Nome rivelato dopo accettazione
-                </div>
-              </div>
-              <q-btn
-                v-if="!isRequestExpired(swap.date, swap.offeredShift)"
-                unelevated
-                color="primary"
-                icon="handshake"
-                label="Accetta"
-                size="sm"
-                class="q-ml-sm"
-                :loading="accepting[swap.id]"
-                @click="acceptSwap(swap)"
-              />
-              <q-badge v-else color="grey" label="Scaduta" class="q-ml-sm" />
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <q-separator class="q-my-sm" />
-
-      <!-- ===== SEZIONE 3: Cambi che ho accettato ===== -->
-      <template v-if="myAcceptedSwaps.length > 0">
-        <q-separator class="q-my-sm" />
-        <div class="text-caption text-weight-bold text-grey-8 q-mb-sm q-mt-sm">
-          <q-icon name="handshake" size="xs" class="q-mr-xs" />
-          Cambi che ho accettato
-        </div>
-        <div class="q-gutter-xs">
-          <q-card
-            v-for="swap in myAcceptedSwaps"
-            :key="swap.id + '-accepted'"
-            flat
-            class="my-swap-card rounded-borders"
-          >
-            <q-card-section class="q-py-sm q-px-md">
-              <div class="row items-center justify-between no-wrap">
-                <div class="col">
-                  <div class="text-caption text-grey-7 q-mb-xs">
-                    <q-icon name="event" size="xs" class="q-mr-xs" />
-                    {{ formatDate(swap.date) }}
-                  </div>
-                  <div class="row items-center q-gutter-xs">
-                    <span class="text-caption">Ricevo</span>
-                    <q-chip
-                      :color="getShiftColor(swap.offeredShift)"
-                      text-color="white"
-                      size="sm"
-                      dense
-                    >
-                      {{ swap.offeredShift }}
-                    </q-chip>
-                    <span class="text-caption">, cedo</span>
-                    <q-chip
-                      :color="getShiftColor(swap.desiredShift)"
-                      text-color="white"
-                      size="sm"
-                      dense
-                    >
-                      {{ swap.desiredShift }}
-                    </q-chip>
-                  </div>
-                  <!-- Proposer name revealed after match -->
-                  <div class="text-caption text-grey-7 q-mt-xs">
-                    <q-icon name="person" size="xs" />
-                    Proposte da: <strong>{{ swap.creatorName || 'Collega' }}</strong>
-                  </div>
-                </div>
-                <q-badge
-                  :color="getSwapStatusColor(swap.status)"
-                  :label="getSwapStatusLabel(swap.status)"
-                />
-              </div>
-            </q-card-section>
-          </q-card>
-        </div>
-      </template>
-    </q-card-section>
-  </q-card>
-</template>
-
+/**
+* @file SwapOpportunitiesCard.vue
+* @description Dashboard component highlighting potential shift swaps.
+* @author Nurse Hub Team
+* @created 2026-04-05
+* @modified 2026-04-23
+*/
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
@@ -156,6 +12,9 @@ import { collection, query, where, orderBy, getDocs, doc, updateDoc } from 'fire
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
+import { useSecureLogger } from '../../utils/secureLogger';
+
+const logger = useSecureLogger();
 import { notifyUser, notifyAdmins } from '../../services/NotificationService';
 import type { ShiftSwap, ShiftSwapStatus } from '../../types/models';
 import { useShiftLogic } from '../../composables/useShiftLogic';
@@ -264,21 +123,21 @@ function acceptSwap(swap: ShiftSwap) {
     message: `
       <div style="font-family: inherit;">
         <p style="margin-bottom: 16px; font-size: 1.1em;">Confermi di accettare il cambio per il giorno <br><strong>${formatDate(swap.date)}</strong>?</p>
-        
+
         <div style="display: flex; align-items: center; justify-content: space-around; background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 16px; border: 1px solid #e9ecef;">
           <div style="text-align: center;">
             <div style="font-size: 0.75em; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Cederai</div>
             <div style="font-size: 2em; font-weight: 800; color: #d32f2f;">${swap.desiredShift}</div>
           </div>
-          
+
           <div style="font-size: 2.5em; color: #1976d2; opacity: 0.7;">⇄</div>
-          
+
           <div style="text-align: center;">
             <div style="font-size: 0.75em; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Riceverai</div>
             <div style="font-size: 2em; font-weight: 800; color: #2e7d32;">${swap.offeredShift}</div>
           </div>
         </div>
-        
+
         <div style="font-size: 0.85em; color: #757575; display: flex; align-items: center; padding: 8px; background: #e3f2fd; border-radius: 8px;">
           <span style="margin-right: 8px; font-size: 1.2em;">ℹ️</span>
           La proposta sarà inviata all'admin per l'approvazione finale.
@@ -339,7 +198,7 @@ function acceptSwap(swap: ShiftSwap) {
         // Reload accepted swaps to show it as PENDING_ADMIN in the dashboard
         await loadMyAcceptedSwaps();
       } catch (e) {
-        console.error(e);
+        logger.error('Error accepting swap', e);
         $q.notify({ type: 'negative', message: "Errore durante l'accettazione" });
       } finally {
         accepting.value[swap.id] = false;
@@ -349,19 +208,133 @@ function acceptSwap(swap: ShiftSwap) {
 }
 </script>
 
+<template>
+  <q-card flat bordered class="q-mt-md">
+    <!-- ===== Header ===== -->
+    <q-card-section class="q-pb-none">
+      <div class="row items-center justify-between">
+        <div>
+          <div class="text-subtitle1 text-weight-bold">
+            <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />
+            Cambi Turno
+          </div>
+          <div class="text-caption text-grey">Opportunità disponibili e le tue proposte</div>
+        </div>
+        <q-btn flat round dense icon="refresh" size="sm" :loading="loading" @click="loadAll">
+          <q-tooltip>Aggiorna</q-tooltip>
+        </q-btn>
+      </div>
+    </q-card-section>
+
+    <q-card-section>
+      <!-- ===== SEZIONE 1: Proposte di colleghi compatibili ===== -->
+      <div class="text-caption text-weight-bold text-grey-8 q-mb-sm">
+        <q-icon name="group" size="xs" class="q-mr-xs" />
+        Proposte disponibili per te
+      </div>
+
+      <div v-if="loading" class="text-center q-py-sm">
+        <q-spinner color="primary" size="1.2em" />
+      </div>
+
+      <div v-else-if="compatibleSwaps.length === 0" class="text-grey text-caption q-mb-md q-pl-sm">
+        <q-icon name="search_off" size="xs" /> Nessuna proposta compatibile con il tuo turno.
+      </div>
+
+      <div v-else class="q-gutter-xs q-mb-md">
+        <q-card v-for="swap in compatibleSwaps" :key="swap.id" flat class="swap-card bg-blue-1 rounded-borders"
+          :class="{ 'opacity-50 grayscale': isRequestExpired(swap.date, swap.offeredShift) }">
+          <q-card-section class="q-py-sm q-px-md">
+            <div class="row items-center justify-between no-wrap">
+              <div class="col">
+                <div class="text-caption text-grey-7 q-mb-xs">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />
+                  {{ formatDate(swap.date) }}
+                </div>
+                <div class="row items-center q-gutter-xs">
+                  <span class="text-caption">Un collega cede</span>
+                  <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense>
+                    {{ swap.offeredShift }}
+                  </q-chip>
+                  <span class="text-caption">in cambio del tuo</span>
+                  <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense>
+                    {{ swap.desiredShift }}
+                  </q-chip>
+                </div>
+                <div class="text-caption text-grey-6 q-mt-xs">
+                  <q-icon name="lock" size="xs" /> Nome rivelato dopo accettazione
+                </div>
+              </div>
+              <q-btn v-if="!isRequestExpired(swap.date, swap.offeredShift)" unelevated color="primary" icon="handshake"
+                label="Accetta" size="sm" class="q-ml-sm" :loading="accepting[swap.id]" @click="acceptSwap(swap)" />
+              <q-badge v-else color="grey" label="Scaduta" class="q-ml-sm" />
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <q-separator class="q-my-sm" />
+
+      <!-- ===== SEZIONE 3: Cambi che ho accettato ===== -->
+      <template v-if="myAcceptedSwaps.length > 0">
+        <q-separator class="q-my-sm" />
+        <div class="text-caption text-weight-bold text-grey-8 q-mb-sm q-mt-sm">
+          <q-icon name="handshake" size="xs" class="q-mr-xs" />
+          Cambi che ho accettato
+        </div>
+        <div class="q-gutter-xs">
+          <q-card v-for="swap in myAcceptedSwaps" :key="swap.id + '-accepted'" flat
+            class="my-swap-card rounded-borders">
+            <q-card-section class="q-py-sm q-px-md">
+              <div class="row items-center justify-between no-wrap">
+                <div class="col">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    <q-icon name="event" size="xs" class="q-mr-xs" />
+                    {{ formatDate(swap.date) }}
+                  </div>
+                  <div class="row items-center q-gutter-xs">
+                    <span class="text-caption">Ricevo</span>
+                    <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense>
+                      {{ swap.offeredShift }}
+                    </q-chip>
+                    <span class="text-caption">, cedo</span>
+                    <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense>
+                      {{ swap.desiredShift }}
+                    </q-chip>
+                  </div>
+                  <!-- Proposer name revealed after match -->
+                  <div class="text-caption text-grey-7 q-mt-xs">
+                    <q-icon name="person" size="xs" />
+                    Proposte da: <strong>{{ swap.creatorName || 'Collega' }}</strong>
+                  </div>
+                </div>
+                <q-badge :color="getSwapStatusColor(swap.status)" :label="getSwapStatusLabel(swap.status)" />
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </template>
+    </q-card-section>
+  </q-card>
+</template>
+
+
 <style scoped>
 .swap-card {
   border-left: 3px solid var(--q-primary);
   transition: box-shadow 0.2s ease;
 }
+
 .swap-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
 .my-swap-card {
   border-left: 3px solid #9c9c9c;
   background: #fafafa;
   transition: box-shadow 0.2s ease;
 }
+
 .my-swap-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
