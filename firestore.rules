@@ -71,15 +71,15 @@ service cloud.firestore {
       
       match /operators/{operatorId} {
         allow read: if true;
-        // Allow update if admin OR if the authenticated user is the legitimate owner
-        // OR if the operator is "orphan" (no userId) and the user is claiming it with their own UID
-        allow update: if isAdmin() || isOperatorOwner(operatorId) || (
+        // Phase 25: Admin has full write access (create, update, delete)
+        // Others can only update if owner or claiming an orphan
+        allow write: if isAdmin();
+        allow update: if isOperatorOwner(operatorId) || (
           isAuthenticated() && 
           (!('userId' in resource.data) || resource.data.userId == null) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId']) &&
           request.resource.data.userId == request.auth.uid
         );
-        allow create: if isAdmin();
       }
 
       match /replacementScenarios/{scenarioId} {

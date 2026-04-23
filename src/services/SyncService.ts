@@ -4,7 +4,7 @@
  * @author Nurse Hub Team
  */
 import type { FieldValue } from 'firebase/firestore';
-import { collection, doc, getDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
 import type { GoogleSheetsService } from './GoogleSheetsService';
 import type { ShiftRequest, Operator } from '../types/models';
 import { db } from '../boot/firebase';
@@ -36,6 +36,18 @@ export class SyncService {
       // Write to sub-collection: systemConfigurations/{configId}/operators
       const operatorsRef = collection(db, 'systemConfigurations', configId, 'operators');
 
+      // Identify deletions (Phase 25 Mirror Logic)
+      const currentSnap = await getDocs(operatorsRef);
+      const existingIds = currentSnap.docs.map((d) => d.id);
+      const incomingIds = new Set(operators.map((op) => op.id));
+
+      for (const id of existingIds) {
+        if (!incomingIds.has(id)) {
+          batch.delete(doc(operatorsRef, id));
+        }
+      }
+
+      // Upsert new/updated operators
       for (const op of operators) {
         const opDocRef = doc(operatorsRef, op.id);
         batch.set(

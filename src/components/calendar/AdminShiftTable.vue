@@ -318,6 +318,14 @@ watch(
   },
 );
 
+watch(
+  () => scheduleStore.lastUpdated,
+  () => {
+    // When the store is updated (e.g. via global sync), update our local state
+    void fetchData(false);
+  }
+);
+
 async function fetchData(forceRefresh = false) {
   if (!configStore.activeConfigId) {
     logger.warn('No active config - cannot load operators');

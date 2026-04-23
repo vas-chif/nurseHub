@@ -260,9 +260,42 @@ function acceptSwap(swap: ShiftSwap) {
   }
 
   $q.dialog({
-    title: 'Accetta Proposta di Cambio',
-    message: `Confermi di accettare il cambio del ${formatDate(swap.date)}?\nCederai il turno ${swap.desiredShift} e riceverai il turno ${swap.offeredShift}.\nLa proposta andrà in approvazione all'admin.`,
-    cancel: true,
+    title: '<span class="text-primary text-weight-bold">Accetta Proposta di Cambio</span>',
+    message: `
+      <div style="font-family: inherit;">
+        <p style="margin-bottom: 16px; font-size: 1.1em;">Confermi di accettare il cambio per il giorno <br><strong>${formatDate(swap.date)}</strong>?</p>
+        
+        <div style="display: flex; align-items: center; justify-content: space-around; background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 16px; border: 1px solid #e9ecef;">
+          <div style="text-align: center;">
+            <div style="font-size: 0.75em; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Cederai</div>
+            <div style="font-size: 2em; font-weight: 800; color: #d32f2f;">${swap.desiredShift}</div>
+          </div>
+          
+          <div style="font-size: 2.5em; color: #1976d2; opacity: 0.7;">⇄</div>
+          
+          <div style="text-align: center;">
+            <div style="font-size: 0.75em; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Riceverai</div>
+            <div style="font-size: 2em; font-weight: 800; color: #2e7d32;">${swap.offeredShift}</div>
+          </div>
+        </div>
+        
+        <div style="font-size: 0.85em; color: #757575; display: flex; align-items: center; padding: 8px; background: #e3f2fd; border-radius: 8px;">
+          <span style="margin-right: 8px; font-size: 1.2em;">ℹ️</span>
+          La proposta sarà inviata all'admin per l'approvazione finale.
+        </div>
+      </div>
+    `,
+    html: true,
+    cancel: {
+      flat: true,
+      color: 'grey-7',
+      label: 'Annulla'
+    },
+    ok: {
+      unelevated: true,
+      color: 'primary',
+      label: 'Conferma Scambio'
+    },
     persistent: true,
   }).onOk(() => {
     void (async () => {

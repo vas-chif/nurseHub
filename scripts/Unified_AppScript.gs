@@ -1,0 +1,191 @@
+/* eslint-disable */
+/**
+ * NurseHub UNIFIED SCRIPT per Google Sheets
+ * -----------------------------------------
+ * Questo script unifica la gestione del menu 'Turni Database' 
+ * e la sincronizzazione automatica con l'App.
+ * 
+ * ISTRUZIONI:
+ * 1. Svuota completamente il tuo progetto Google Apps Script (cancella Codice.gs, GAS_AutoSync.js, ecc.)
+ * 2. Incolla questo intero codice in un unico file (es. Codice.gs)
+ * 3. Salva e fai un "Nuovo Deploy" come Web App.
+ */
+
+// ==== IMPOSTAZIONI (DA MODIFICARE SE NECESSARIO) ====
+const VERCEL_API_URL = 'https://nursehub-psi.vercel.app/api/sync-shifts';
+const VITE_VERCEL_API_SECRET = 'NurseHub-AIzaSyD37bwODUeDZ6'; 
+const CONFIG_ID = 'BOFo6KpGcBy8mZK40Wxt'; 
+const WAIT_MINUTES = 5;
+// ====================================================
+
+/**
+ * 1. GESTIONE MENU E APERTURA
+ */
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('NurseHub Admin')
+    .addItem('Genera Report Database', 'trasformaTurniInDatabase')
+    .addSeparator()
+    .addItem('Sincronizza Ora con App', 'sendSyncWebhook')
+    .addToUi();
+}
+
+/**
+ * 2. APP -> EXCEL (Ricezione dati dall'App)
+ * Questa funzione riceve i comandi dall'app (es. approvazione cambio turno)
+ */
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    var rows = sheet.getDataRange().getValues();
+
+    // Parametri dinamici dall'app
+    var dateRow = (data.dateRowIndex || 2) - 1; 
+    var nameCol = (data.nameColumnIndex || 2) - 1; 
+    
+    var targetDate = data.date; 
+    var targetOperator = String(data.operatorName || '').trim().toUpperCase();
+    var newShift = data.newShift;
+
+    var colIndex = -1;
+    var rowIndex = -1;
+
+    // Cerca la colonna della Data
+    var headerRow = rows[dateRow] || rows[0];
+    for (var c = 0; c < headerRow.length; c++) {
+      var cellValue = headerRow[c];
+      var formattedDate = "";
+      if (cellValue instanceof Date) {
+        formattedDate = Utilities.formatDate(cellValue, 'GMT+1', 'yyyy-MM-dd');
+      } else {
+        formattedDate = String(cellValue).trim();
+      }
+      if (formattedDate == targetDate || formattedDate.indexOf(targetDate) !== -1) {
+        colIndex = c;
+        break;
+      }
+    }
+
+    // Cerca la riga dell'Operatore
+    for (var r = 0; r < rows.length; r++) {
+      var opNameInSheet = String(rows[r][nameCol] || '').trim().toUpperCase();
+      if (opNameInSheet == targetOperator || opNameInSheet.indexOf(targetOperator) !== -1) {
+        rowIndex = r;
+        break;
+      }
+    }
+
+    if (rowIndex != -1 && colIndex != -1) {
+      sheet.getRange(rowIndex + 1, colIndex + 1).setValue(newShift);
+      return ContentService.createTextOutput(JSON.stringify({ 
+        success: true, 
+        message: 'Aggiornato: ' + targetOperator + ' il ' + targetDate 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'Cella non trovata', 
+      details: { rowIndex: rowIndex, colIndex: colIndex, op: targetOperator, date: targetDate } 
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, error: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * 3. EXCEL -> APP (Invio dati all'App dopo modifica)
+ */
+function notify(e) {
+  var props = PropertiesService.getScriptProperties();
+  deleteTriggers_();
+  ScriptApp.newTrigger('sendSyncWebhook')
+    .timeBased()
+    .after(WAIT_MINUTES * 60 * 1000)
+    .create();
+  props.setProperty('lastEditTime', new Date().getTime().toString());
+}
+
+function sendSyncWebhook() {
+  deleteTriggers_();
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + VITE_VERCEL_API_SECRET },
+    payload: JSON.stringify({ configId: CONFIG_ID }),
+    muteHttpExceptions: true,
+  };
+  try {
+    var response = UrlFetchApp.fetch(VERCEL_API_URL, options);
+    Logger.log('Sincronizzazione completata: ' + response.getContentText());
+  } catch (error) {
+    Logger.log('Errore chiamata Vercel: ' + error);
+  }
+}
+
+function deleteTriggers_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'sendSyncWebhook') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+}
+
+/**
+ * 4. LOGICA REPORT (Da Codice.gs)
+ */
+function trasformaTurniInDatabase() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sourceSheetName = 'Turno'; 
+  var destSheetName = 'Report'; 
+
+  var sourceSheet = ss.getSheetByName(sourceSheetName);
+  if (!sourceSheet) {
+    Browser.msgBox('Errore', 'Foglio sorgente non trovato.', Browser.Buttons.OK);
+    return;
+  }
+
+  var allData = sourceSheet.getDataRange().getValues();
+  var allNote = sourceSheet.getDataRange().getNotes();
+
+  var dateRowIndex = 3;
+  var nameColIndex = 1;
+  var firstDataRowIndex = dateRowIndex + 4;
+  var firstDataColIndex = nameColIndex + 1;
+
+  var databaseRows = [];
+  databaseRows.push(['Data', 'Nome Operatore', 'Turno', 'Note']);
+  var dates = allData[dateRowIndex].slice(firstDataColIndex);
+
+  for (var i = firstDataRowIndex; i < allData.length; i++) {
+    var operatorName = allData[i][nameColIndex];
+    if (!operatorName || String(operatorName).trim() === '') continue;
+
+    for (var j = firstDataColIndex; j < allData[i].length; j++) {
+      var shiftCode = allData[i][j];
+      var shiftNote = allNote[i][j];
+      var dateIndex = j - firstDataColIndex;
+      var currentDate = dates[dateIndex];
+
+      if (shiftCode && String(shiftCode).trim() !== '' && currentDate instanceof Date) {
+        var formattedDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        databaseRows.push([formattedDate, operatorName, shiftCode, shiftNote]);
+      }
+    }
+  }
+
+  var destSheet = ss.getSheetByName(destSheetName);
+  if (destSheet) destSheet.clearContents();
+  else destSheet = ss.insertSheet(destSheetName);
+
+  if (databaseRows.length > 1) {
+    destSheet.getRange(1, 1, databaseRows.length, databaseRows[0].length).setValues(databaseRows);
+  }
+  destSheet.autoResizeColumns(1, databaseRows[0].length);
+  Browser.msgBox('Successo', 'Report generato nel foglio Report.', Browser.Buttons.OK);
+}

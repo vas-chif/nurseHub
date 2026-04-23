@@ -201,6 +201,14 @@ watch(
   },
 );
 
+watch(
+  () => scheduleStore.lastUpdated,
+  () => {
+    // Refresh operators when store is updated (e.g. via global sync)
+    void fetchOperators();
+  }
+);
+
 let unsubscribeRequests: () => void;
 let unsubscribeSwaps: () => void;
 
