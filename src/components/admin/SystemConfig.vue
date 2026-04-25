@@ -14,6 +14,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useScenarioStore } from '../../stores/scenarioStore';
 import { useSecureLogger } from '../../utils/secureLogger';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
+import AdminBackupRestore from './AdminBackupRestore.vue';
 
 const logger = useSecureLogger();
 import type { SystemConfiguration, ReplacementScenario, ReplacementRole } from '../../types/models';
@@ -505,6 +506,12 @@ function deleteScenario(configId: string, scenarioId: string) {
               </div>
             </q-card-section>
           </q-card>
+        </q-expansion-item>
+
+        <!-- Backup & Ripristino - Phase 25 -->
+        <q-expansion-item icon="cloud_sync" label="Backup & Ripristino"
+          header-class="text-subtitle1 text-weight-bold" class="q-ma-md q-mb-lg bg-white rounded-borders shadow-1">
+          <AdminBackupRestore />
         </q-expansion-item>
       </q-expansion-item>
     </q-list>

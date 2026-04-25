@@ -115,5 +115,14 @@ service cloud.firestore {
       ));
       allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }
+
+    // Backup & Audit Logs (Phase 25)
+    match /backupLogs/{logId}           { allow read: if isAdmin(); allow write: if false; }
+    match /manualBackupLogs/{logId}     { allow read: if isAdmin(); allow write: if false; }
+    match /restoreLogs/{logId}          { allow read: if isAdmin(); allow write: if false; }
+    match /deletedBackupLogs/{logId}    { allow read: if isAdmin(); allow write: if false; }
+    match /backupAutomationLogs/{logId} { allow read: if isAdmin(); allow write: if false; }
+    match /auditLogs/{logId}            { allow read: if isAdmin(); allow write: if false; }
+    match /systemSettings/backup        { allow read: if isAdmin(); allow write: if false; }
   }
 }
