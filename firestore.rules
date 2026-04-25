@@ -68,6 +68,13 @@ service cloud.firestore {
     match /systemConfigurations/{configId} {
       allow read: if true;
       allow write: if isAdmin();
+
+      // Isolated Sync Metadata (Phase 25)
+      match /metadata/sync {
+        allow read: if isAuthenticated();
+        // Allow write if Admin OR if user belongs to this configId
+        allow write: if isAdmin() || (isAuthenticated() && request.auth.token.get('configId', '') == configId);
+      }
       
       match /operators/{operatorId} {
         allow read: if true;
@@ -88,13 +95,8 @@ service cloud.firestore {
       }
     }
 
-    // system/syncStatus: readable & writable by any authenticated user (global sync cooldown)
-    match /system/syncStatus {
-      allow read, write: if isAuthenticated();
-    }
-
     // Other system documents: admin only
-    match /system/{configId} {
+    match /system/{docId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }

@@ -187,6 +187,18 @@ async function initDashboardListeners() {
   }
 }
 
+async function refreshDashboard() {
+  loading.value = true;
+  stopDashboardListeners();
+  await initDashboardListeners();
+  $q.notify({
+    type: 'info',
+    message: 'Dati aggiornati',
+    icon: 'refresh',
+    timeout: 1000
+  });
+}
+
 function openOfferDialog(req: ShiftRequest) {
   offerDialog.value.req = req;
   offerDialog.value.show = true;
@@ -410,6 +422,9 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
           <div class="q-pa-sm">
             <div class="row items-center justify-between q-px-sm q-py-xs">
               <div class="text-subtitle2 text-primary">🤝 Altre Proposte</div>
+              <q-btn flat round dense color="primary" icon="refresh" size="sm" @click="refreshDashboard">
+                <q-tooltip>Aggiorna proposte</q-tooltip>
+              </q-btn>
             </div>
 
             <div v-if="loading" class="row justify-center q-pa-md">

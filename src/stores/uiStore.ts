@@ -11,8 +11,7 @@ import { ref } from 'vue';
 export const useUiStore = defineStore('ui', () => {
   // Map of path -> activeTab
   const activeTabs = ref<Record<string, string>>(JSON.parse(localStorage.getItem('activeTabs') || '{}'));
-  
-  // Session persistence: last visited path
+  // Last visited path for session persistence
   const lastPath = ref<string>(localStorage.getItem('lastPath') || '/');
 
   /**

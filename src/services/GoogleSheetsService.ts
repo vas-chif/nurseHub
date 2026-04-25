@@ -118,16 +118,35 @@ export class GoogleSheetsService {
    * Fetches all operators and their schedules
    */
   public async fetchOperators(): Promise<Operator[]> {
-    // Try to load dynamic config first
     this.loadConfig();
+    const gasWebUrl = this.config.gasWebUrl;
+    
+    // 1. Try to fetch via GAS Web App (Primary/Secure)
+    if (gasWebUrl) {
+      try {
+        logger.info('Attempting sync via GAS Web App...', { url: gasWebUrl });
+        const response = await fetch(gasWebUrl);
+        if (!response.ok) throw new Error('GAS Web App response not OK');
+        
+        const result = await response.json();
+        if (result.success && result.data) {
+          logger.info('Sync via GAS successful');
+          return this.parseGasData(result.data);
+        }
+        logger.warn('GAS sync returned failure, falling back to Gviz', { error: result.error });
+      } catch (e) {
+        logger.warn('GAS sync failed, falling back to Gviz', e);
+      }
+    }
 
+    // 2. Fallback to Gviz API (requires public sheet)
     if (!this.config.spreadsheetUrl) throw new Error('Spreadsheet URL configuration missing');
 
     const dateRangeUrl = this.getGvizUrl(
       this.config.spreadsheetUrl,
       `${this.config.dateRowIndex}:${this.config.dateRowIndex}`,
     );
-    const mainTableUrl = this.getGvizUrl(this.config.spreadsheetUrl); // Fetch whole sheet logic from original
+    const mainTableUrl = this.getGvizUrl(this.config.spreadsheetUrl); 
     const contactsUrl = this.config.contactsUrl
       ? this.getGvizUrl(this.config.contactsUrl || '')
       : '';
@@ -195,7 +214,7 @@ export class GoogleSheetsService {
             });
 
             parsedOps.push({
-              id: `op-${i}`, // Temporary ID based on row index, stable enough for static sheets
+              id: `op-${i}`, 
               name,
               schedule,
               email: cMap[name.toUpperCase()]?.email || '',
@@ -210,6 +229,60 @@ export class GoogleSheetsService {
       logger.error('Error fetching operators:', error);
       throw error;
     }
+  }
+
+  /**
+   * Parses raw array data from GAS doGet
+   */
+  private parseGasData(rows: (string | number | boolean | Date | null)[][]): Operator[] {
+    const colToDate: Record<number, string> = {};
+    const dateRow = rows[this.config.dateRowIndex - 1] || [];
+    
+    // 1. Map Dates
+    dateRow.forEach((val, i) => {
+      if (i < this.config.dataStartColIndex - 1) return;
+      let dateStr: string | null = null;
+      
+      if (val instanceof Date) {
+        dateStr = this.formatDate(val);
+      } else if (typeof val === 'string' && val.includes('T')) {
+        dateStr = val.split('T')[0] || null;
+      } else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+        dateStr = val.substring(0, 10);
+      }
+      
+      if (dateStr) colToDate[i] = dateStr;
+    });
+
+    // 2. Map Operators
+    const parsedOps: Operator[] = [];
+    rows.forEach((row, i) => {
+      if (i < this.config.dataStartRowIndex - 1) return;
+      
+      const nameVal = row[this.config.nameColumnIndex - 1];
+      if (nameVal) {
+        const name = String(nameVal).trim();
+        if (name.length > 1) {
+          const schedule: Record<string, string> = {};
+          Object.entries(colToDate).forEach(([idx, dateStr]) => {
+            const val = row[parseInt(idx)];
+            if (val !== undefined && val !== null && val !== '') {
+              schedule[dateStr] = String(val).toUpperCase().trim();
+            }
+          });
+
+          parsedOps.push({
+            id: `op-${i}`,
+            name,
+            schedule,
+            email: '', // Contacts handled separately if needed, or we could add them to GAS
+            phone: '',
+          });
+        }
+      }
+    });
+
+    return parsedOps;
   }
 
   /**
@@ -231,6 +304,14 @@ export class GoogleSheetsService {
     logger.info('Spreadsheet URL updated in memory', { url });
   }
 
+  /**
+   * Updates the GAS Web App URL in memory only
+   */
+  public updateGasUrl(url: string): void {
+    this.config.gasWebUrl = url;
+    logger.info('GAS Web App URL updated in memory', { url });
+  }
+
   public getCurrentUrl(): string {
     return this.config.spreadsheetUrl;
   }
@@ -246,8 +327,45 @@ export class GoogleSheetsService {
     date: string,
     newShift: string,
   ): Promise<boolean> {
-    // Phase 25: Shift update via Vercel API (Proxy to Sheets API)
-    // This is more secure and reliable than direct GAS calls.
+    const gasWebUrl = this.config.gasWebUrl;
+    
+    // 1. Prefer GAS Web App (Direct & Secure)
+    if (gasWebUrl) {
+      try {
+        logger.info('Updating shift via GAS Web App...', { operatorName, date, newShift });
+        const response = await fetch(gasWebUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            operatorName,
+            date,
+            newShift,
+            dateRowIndex: this.config.dateRowIndex,
+            nameColumnIndex: this.config.nameColumnIndex,
+          }),
+        });
+
+        // Safe JSON parsing: check response type first
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const result = await response.json();
+          if (result.success) {
+            logger.info('Shift update successfully synced via GAS');
+            return true;
+          } else {
+            logger.error('GAS shift update failed', { error: result.error });
+            return false;
+          }
+        } else {
+          const text = await response.text();
+          logger.warn('GAS returned non-JSON response', { status: response.status, text: text.substring(0, 100) });
+          return response.ok;
+        }
+      } catch (e) {
+        logger.error('Network error during GAS shift update', e);
+      }
+    }
+
+    // 2. Legacy/Fallback: Vercel API
     const VERCEL_API_URL = '/api/update-sheet-shift';
     const API_SECRET = smartEnv.getRequiredEnv('VITE_VERCEL_API_SECRET');
     const configStore = useConfigStore();
@@ -274,12 +392,13 @@ export class GoogleSheetsService {
         logger.info('Shift update successfully proxied via Vercel API');
         return true;
       } else {
-        const errorData = (await response.json()) as { error?: string };
+        const text = await response.text();
+        const errorData = text && text.startsWith('{') ? JSON.parse(text) : { error: text || 'Unknown error' };
         logger.error('Vercel API shift update failed', { error: errorData.error });
         return false;
       }
     } catch (error) {
-      logger.error('Network error during Vercel API sync', error);
+      logger.error('Network error during shift update proxy', error);
       return false;
     }
   }

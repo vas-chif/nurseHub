@@ -149,7 +149,7 @@ export interface AppConfig {
   contactEmailCol: number;
   contactPhoneCol: number;
 
-  gasWebUrl?: string; // Google Apps Script Web App URL for mailing
+  gasWebUrl?: string | undefined; // Google Apps Script Web App URL for mailing
 }
 
 // --- Business Logic Types ---

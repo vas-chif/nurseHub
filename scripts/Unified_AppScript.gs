@@ -2,9 +2,9 @@
 /**
  * NurseHub UNIFIED SCRIPT per Google Sheets
  * -----------------------------------------
- * Questo script unifica la gestione del menu 'Turni Database' 
+ * Questo script unifica la gestione del menu 'Turni Database'
  * e la sincronizzazione automatica con l'App.
- * 
+ *
  * ISTRUZIONI:
  * 1. Svuota completamente il tuo progetto Google Apps Script (cancella Codice.gs, GAS_AutoSync.js, ecc.)
  * 2. Incolla questo intero codice in un unico file (es. Codice.gs)
@@ -13,8 +13,8 @@
 
 // ==== IMPOSTAZIONI (DA MODIFICARE SE NECESSARIO) ====
 const VERCEL_API_URL = 'https://nursehub-psi.vercel.app/api/sync-shifts';
-const VITE_VERCEL_API_SECRET = 'NurseHub-AIzaSyD37bwODUeDZ6'; 
-const CONFIG_ID = 'BOFo6KpGcBy8mZK40Wxt'; 
+const VITE_VERCEL_API_SECRET = 'NurseHub-AIzaSyD37bwODUeDZ6';
+const CONFIG_ID = 'BOFo6KpGcBy8mZK40Wxt';
 const WAIT_MINUTES = 5;
 // ====================================================
 
@@ -31,7 +31,45 @@ function onOpen() {
 }
 
 /**
- * 2. APP -> EXCEL (Ricezione dati dall'App)
+ * 2. APP -> FRONTEND (Lettura dati dall'App)
+ * Permette all'app di leggere il contenuto del foglio bypassando il CORS
+ */
+function doGet(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    var rawData = sheet.getDataRange().getValues();
+    var notes = sheet.getDataRange().getNotes();
+    var tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+
+    // Trasforma le date in stringhe YYYY-MM-DD per evitare problemi di fuso orario nel browser
+    var data = rawData.map(function (row) {
+      return row.map(function (cell) {
+        if (cell instanceof Date) {
+          return Utilities.formatDate(cell, tz, 'yyyy-MM-dd');
+        }
+        return cell;
+      });
+    });
+
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        success: true,
+        data: data,
+        notes: notes,
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        success: false,
+        error: err.toString(),
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * 3. APP -> EXCEL (Ricezione dati dall'App)
  * Questa funzione riceve i comandi dall'app (es. approvazione cambio turno)
  */
 function doPost(e) {
@@ -41,11 +79,13 @@ function doPost(e) {
     var rows = sheet.getDataRange().getValues();
 
     // Parametri dinamici dall'app
-    var dateRow = (data.dateRowIndex || 2) - 1; 
-    var nameCol = (data.nameColumnIndex || 2) - 1; 
-    
-    var targetDate = data.date; 
-    var targetOperator = String(data.operatorName || '').trim().toUpperCase();
+    var dateRow = (data.dateRowIndex || 2) - 1;
+    var nameCol = (data.nameColumnIndex || 2) - 1;
+
+    var targetDate = data.date;
+    var targetOperator = String(data.operatorName || '')
+      .trim()
+      .toUpperCase();
     var newShift = data.newShift;
 
     var colIndex = -1;
@@ -55,45 +95,126 @@ function doPost(e) {
     var headerRow = rows[dateRow] || rows[0];
     for (var c = 0; c < headerRow.length; c++) {
       var cellValue = headerRow[c];
-      var formattedDate = "";
+      if (!cellValue) continue;
+
+      var formattedDate = '';
+      var tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+
       if (cellValue instanceof Date) {
-        formattedDate = Utilities.formatDate(cellValue, 'GMT+1', 'yyyy-MM-dd');
+        formattedDate = Utilities.formatDate(cellValue, tz, 'yyyy-MM-dd');
       } else {
         formattedDate = String(cellValue).trim();
+        // Se la data è in formato testo DD/MM/YYYY, proviamo a normalizzarla
+        if (formattedDate.indexOf('/') !== -1) {
+          var parts = formattedDate.split('/');
+          if (parts.length === 3) {
+            // Semplice check per DD/MM/YYYY
+            if (parts[2].length === 4)
+              formattedDate =
+                parts[2] + '-' + ('0' + parts[1]).slice(-2) + '-' + ('0' + parts[0]).slice(-2);
+          }
+        }
       }
-      if (formattedDate == targetDate || formattedDate.indexOf(targetDate) !== -1) {
+
+      // Match esatto o parziale (es. 2026-04-27 contenuto in una stringa più lunga)
+      if (
+        formattedDate == targetDate ||
+        (formattedDate.length >= 10 && formattedDate.indexOf(targetDate) !== -1)
+      ) {
         colIndex = c;
         break;
       }
     }
 
     // Cerca la riga dell'Operatore
+    var targetOpUpper = targetOperator.toUpperCase().trim();
+    var targetWords = targetOpUpper.split(/\s+/).filter(function (w) {
+      return w.length > 1;
+    });
+
     for (var r = 0; r < rows.length; r++) {
-      var opNameInSheet = String(rows[r][nameCol] || '').trim().toUpperCase();
-      if (opNameInSheet == targetOperator || opNameInSheet.indexOf(targetOperator) !== -1) {
+      var cellVal = String(rows[r][nameCol] || '');
+      var opNameInSheet = cellVal
+        .replace(/[\n\r]/g, ' ')
+        .toUpperCase()
+        .trim();
+
+      if (!opNameInSheet) continue;
+
+      // Match 1: Uguaglianza esatta (dopo trim e upper)
+      if (opNameInSheet === targetOpUpper) {
         rowIndex = r;
         break;
+      }
+
+      // Match 2: "Tutte le parole presenti" (Gestisce l'inversione Nome Cognome / Cognome Nome)
+      var allWordsMatch = true;
+      if (targetWords.length > 0) {
+        for (var w = 0; w < targetWords.length; w++) {
+          if (opNameInSheet.indexOf(targetWords[w]) === -1) {
+            allWordsMatch = false;
+            break;
+          }
+        }
+        if (allWordsMatch) {
+          rowIndex = r;
+          break;
+        }
+      }
+
+      // Match 3: Cross-check inverso (se il nome nel foglio è contenuto nell'app)
+      var sheetWords = opNameInSheet.split(/\s+/).filter(function (w) {
+        return w.length > 1;
+      });
+      var allSheetWordsMatch = true;
+      if (sheetWords.length > 0) {
+        for (var sw = 0; sw < sheetWords.length; sw++) {
+          if (targetOpUpper.indexOf(sheetWords[sw]) === -1) {
+            allSheetWordsMatch = false;
+            break;
+          }
+        }
+        if (allSheetWordsMatch) {
+          rowIndex = r;
+          break;
+        }
       }
     }
 
     if (rowIndex != -1 && colIndex != -1) {
       sheet.getRange(rowIndex + 1, colIndex + 1).setValue(newShift);
-      return ContentService.createTextOutput(JSON.stringify({ 
-        success: true, 
-        message: 'Aggiornato: ' + targetOperator + ' il ' + targetDate 
-      })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          message: 'Aggiornato: ' + targetOperator + ' il ' + targetDate,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ 
-      success: false, 
-      error: 'Cella non trovata', 
-      details: { rowIndex: rowIndex, colIndex: colIndex, op: targetOperator, date: targetDate } 
-    })).setMimeType(ContentService.MimeType.JSON);
-
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        success: false,
+        error: 'Cella non trovata',
+        details: {
+          rowIndex: rowIndex,
+          colIndex: colIndex,
+          op: targetOperator,
+          date: targetDate,
+          resolvedDateRow: dateRow + 1,
+          resolvedNameCol: nameCol + 1,
+          headerSample: headerRow.slice(0, 5).map(function (c) {
+            return String(c).substring(0, 10);
+          }),
+        },
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ 
-      success: false, error: err.toString() 
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(
+      JSON.stringify({
+        success: false,
+        error: err.toString(),
+      }),
+    ).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -141,8 +262,8 @@ function deleteTriggers_() {
  */
 function trasformaTurniInDatabase() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sourceSheetName = 'Turno'; 
-  var destSheetName = 'Report'; 
+  var sourceSheetName = 'Turno';
+  var destSheetName = 'Report';
 
   var sourceSheet = ss.getSheetByName(sourceSheetName);
   if (!sourceSheet) {
@@ -173,7 +294,11 @@ function trasformaTurniInDatabase() {
       var currentDate = dates[dateIndex];
 
       if (shiftCode && String(shiftCode).trim() !== '' && currentDate instanceof Date) {
-        var formattedDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        var formattedDate = Utilities.formatDate(
+          currentDate,
+          Session.getScriptTimeZone(),
+          'yyyy-MM-dd',
+        );
         databaseRows.push([formattedDate, operatorName, shiftCode, shiftNote]);
       }
     }

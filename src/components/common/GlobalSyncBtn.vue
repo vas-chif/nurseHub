@@ -16,12 +16,12 @@
       enter-active-class="animated fadeIn"
       leave-active-class="animated fadeOut"
     >
-      <div v-if="!syncStore.canSync && _tick >= 0" class="row items-center q-mr-xs">
+      <div v-if="!canSync" class="row items-center q-mr-xs">
         <q-badge
           rounded
           color="orange-2"
           text-color="orange-10"
-          :label="syncStore.cooldownLabel"
+          :label="cooldownLabel"
           class="text-weight-bold"
           style="padding: 2px 8px;"
         />
@@ -34,22 +34,23 @@
       dense
       :size="size"
       :icon="syncing ? 'hourglass_empty' : 'refresh'"
-      :color="syncStore.canSync ? 'primary' : 'grey-5'"
+      :color="canSync ? 'primary' : 'grey-5'"
       :loading="syncing"
-      :disable="!syncStore.canSync"
+      :disable="!canSync"
       @click="handleSync"
       class="transition-button"
     >
+      <span v-if="showLabel" class="q-ml-xs text-caption text-weight-bold">Sincronizza Ora</span>
       <q-tooltip>
-        <span v-if="syncStore.canSync">Sincronizza turni da Google Sheets</span>
-        <span v-else>Prossima sincronizzazione tra {{ syncStore.cooldownLabel }}</span>
+        <span v-if="canSync">Sincronizza turni da Google Sheets</span>
+        <span v-else>Prossima sincronizzazione tra {{ cooldownLabel }}</span>
       </q-tooltip>
     </q-btn>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useQuasar } from 'quasar';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
@@ -59,13 +60,17 @@ import { SyncService } from '../../services/SyncService';
 import { GoogleSheetsService } from '../../services/GoogleSheetsService';
 import { DEFAULT_SHEETS_CONFIG } from '../../config/sheets';
 import { useSecureLogger } from '../../utils/secureLogger';
+import type { SystemConfiguration } from '../../types/models';
 
 interface Props {
   size?: 'xs' | 'sm' | 'md';
+  targetConfig?: SystemConfiguration; // NEW: Optional targeted config
+  showLabel?: boolean; // NEW: Optional label
 }
 
-withDefaults(defineProps<Props>(), {
-  size: 'sm'
+const props = withDefaults(defineProps<Props>(), {
+  size: 'sm',
+  showLabel: false
 });
 
 const logger = useSecureLogger();
@@ -76,30 +81,37 @@ const syncStore = useSyncStore();
 const scheduleStore = useScheduleStore();
 const syncing = ref(false);
 
-// Reactive tick for timer re-evaluation
-const _tick = ref(0);
-let interval: ReturnType<typeof setInterval> | null = null;
+const canSync = computed(() => {
+  const configId = props.targetConfig?.id || configStore.activeConfigId || authStore.currentUser?.configId;
+  return configId ? syncStore.canSync(configId) : false;
+});
+
+const cooldownLabel = computed(() => {
+  const configId = props.targetConfig?.id || configStore.activeConfigId || authStore.currentUser?.configId;
+  return configId ? syncStore.getCooldownLabel(configId) : '';
+});
 
 onMounted(async () => {
-  await syncStore.loadSyncStatus();
-  interval = setInterval(() => { _tick.value++; }, 1000);
+  const configId = props.targetConfig?.id || configStore.activeConfigId || authStore.currentUser?.configId;
+  if (configId) await syncStore.loadSyncStatus(configId);
 });
 
 onUnmounted(() => {
-  if (interval) clearInterval(interval);
 });
 
 async function handleSync() {
-  const configId = authStore.currentUser?.configId || configStore.activeConfigId;
+  // Use targetConfig ID or fallback to current user/active config
+  const configId = props.targetConfig?.id || configStore.activeConfigId || authStore.currentUser?.configId;
+  
   if (!configId) {
     $q.notify({ type: 'warning', message: 'Configurazione non trovata.' });
     return;
   }
 
-  if (!syncStore.canSync) {
+  if (!syncStore.canSync(configId)) {
     $q.notify({
       type: 'info',
-      message: `Sincronizzazione globale in cooldown. Riprova tra ${syncStore.cooldownLabel}.`,
+      message: `Sincronizzazione per questo reparto in cooldown. Riprova tra ${syncStore.getCooldownLabel(configId)}.`,
       timeout: 3000
     });
     return;
@@ -107,36 +119,45 @@ async function handleSync() {
 
   syncing.value = true;
   try {
+    // 1. Prepare configuration parameters
+    const spreadsheetUrl = props.targetConfig?.spreadsheetUrl || configStore.activeConfig?.spreadsheetUrl || DEFAULT_SHEETS_CONFIG.spreadsheetUrl;
+    const gasWebUrl = props.targetConfig?.gasWebUrl || configStore.activeConfig?.gasWebUrl;
+
     const appConfig = {
       ...DEFAULT_SHEETS_CONFIG,
-      spreadsheetUrl: configStore.activeConfig?.spreadsheetUrl || DEFAULT_SHEETS_CONFIG.spreadsheetUrl,
+      spreadsheetUrl,
+      gasWebUrl: gasWebUrl || undefined
     };
 
     const sheetsService = new GoogleSheetsService(appConfig);
     const svcSync = new SyncService(sheetsService);
 
-    // Phase 25: Full sync for the active configuration
-    logger.info('Starting global sync for config', { configId });
+    // Phase 25: Full sync for the targeted configuration
+    logger.info('Starting sync for config', { configId, name: props.targetConfig?.name || 'Active' });
     await svcSync.syncOperatorsFromSheets(configId);
 
     // Record the global sync event
-    await syncStore.recordSync();
+    await syncStore.recordSync(configId);
 
     $q.notify({
       type: 'positive',
-      message: 'Sincronizzazione Google Sheets -> Firebase completata con successo!',
+      message: props.targetConfig 
+        ? `Sincronizzazione per "${props.targetConfig.name}" completata!`
+        : 'Sincronizzazione Google Sheets -> Firebase completata con successo!',
       icon: 'cloud_done',
       timeout: 3000
     });
 
-    // Refresh schedule store data immediately for the current user
-    await scheduleStore.loadOperators(configId, true);
+    // Refresh schedule store data immediately if this was the active config
+    if (configId === configStore.activeConfigId) {
+      await scheduleStore.loadOperators(configId, true);
+    }
 
   } catch (err) {
     logger.error('GlobalSyncBtn error:', err);
     $q.notify({
       type: 'negative',
-      message: 'Errore durante la sincronizzazione globale.'
+      message: 'Errore durante la sincronizzazione.'
     });
   } finally {
     syncing.value = false;

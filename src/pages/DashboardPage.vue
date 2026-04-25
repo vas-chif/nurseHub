@@ -16,11 +16,11 @@
 
     <!-- Last sync info -->
     <div
-      v-if="syncStore.lastSyncTimestamp"
+      v-if="configStore.activeConfigId && syncStore.syncTimestamps[configStore.activeConfigId]"
       class="text-caption text-grey-6 q-mb-sm"
     >
-      Ultima sincronizzazione: {{ new Date(syncStore.lastSyncTimestamp).toLocaleString('it-IT') }}
-      <span v-if="syncStore.lastSyncByName"> — da <strong>{{ syncStore.lastSyncByName }}</strong></span>
+      Ultima sincronizzazione: {{ new Date(syncStore.syncTimestamps[configStore.activeConfigId]!).toLocaleString('it-IT') }}
+      <span v-if="syncStore.syncAuthors[configStore.activeConfigId]"> — da <strong>{{ syncStore.syncAuthors[configStore.activeConfigId] }}</strong></span>
     </div>
 
     <!-- Shift Calendar -->
@@ -53,15 +53,19 @@ import ActiveRequestsCard from '../components/dashboard/ActiveRequestsCard.vue';
 import SwapOpportunitiesCard from '../components/dashboard/SwapOpportunitiesCard.vue';
 import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 import { useAuthStore } from '../stores/authStore';
+import { useConfigStore } from '../stores/configStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const syncStore = useSyncStore();
 
 onMounted(async () => {
-  await syncStore.loadSyncStatus();
+  if (configStore.activeConfigId) {
+    await syncStore.loadSyncStatus(configStore.activeConfigId);
+  }
 });
 
 // Background sync on app focus (respects global cooldown)
@@ -70,7 +74,9 @@ watch(
   (isVisible) => {
     if (isVisible && authStore.isAuthenticated) {
       logger.info('App returned to focus — checking for global sync updates');
-      void syncStore.checkAndRefresh();
+    if (configStore.activeConfigId) {
+      void syncStore.checkAndRefresh(configStore.activeConfigId);
+    }
     }
   },
 );

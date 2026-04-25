@@ -4,7 +4,16 @@
  * @author Nurse Hub Team
  */
 
-import { collection, doc, setDoc, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  setDoc,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  arrayUnion,
+} from 'firebase/firestore';
 import { db, messaging } from '../boot/firebase';
 import { getToken } from 'firebase/messaging';
 import type { Notification, NotificationType, ShiftRequest, ShiftSwap } from '../types/models';
@@ -24,8 +33,21 @@ export async function requestNotificationPermission(userId: string): Promise<voi
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
+      // Phase 25: Ensure Service Worker is ready before requesting token
+      // This prevents "no active Service Worker" error
+      let registration: ServiceWorkerRegistration | undefined;
+
+      if ('serviceWorker' in navigator) {
+        try {
+          registration = await navigator.serviceWorker.ready;
+        } catch (swErr) {
+          logger.warn('Service Worker not ready or not supported in this context', swErr);
+        }
+      }
+
       const token = await getToken(messaging, {
         vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+        ...(registration ? { serviceWorkerRegistration: registration } : {}),
       });
 
       if (token) {
@@ -36,7 +58,12 @@ export async function requestNotificationPermission(userId: string): Promise<voi
       logger.warn('Notification permission denied');
     }
   } catch (error) {
-    logger.error('Error requesting notification permission', error);
+    // If it's the Service Worker error, downgrade to warn as it's common in local dev
+    if (String(error).includes('no active Service Worker')) {
+      logger.warn('FCM registration skipped: No active Service Worker (normal in local dev)');
+    } else {
+      logger.error('Error requesting notification permission', error);
+    }
   }
 }
 
@@ -396,7 +423,7 @@ export async function notifySwapProposed(
 
     // 3. Send single notification to each unique recipient
     const message = `Nuova proposta di cambio: Un collega offre ${swapObj.offeredShift} per un ${swapObj.desiredShift} del ${swapObj.date}.`;
-    
+
     const promises = Array.from(recipients).map((uid) =>
       notifyUser(uid, 'NEW_OPPORTUNITY', message, swapId).catch((e) =>
         logger.error('Silent fail on notifyUser in notifySwapProposed', e),

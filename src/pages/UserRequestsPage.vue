@@ -346,6 +346,19 @@ function initRealtimeRequests() {
   );
 }
 
+async function manualRefresh() {
+  loading.value = true;
+  if (unsubscribe) unsubscribe();
+  initRealtimeRequests();
+  await loadMySwaps();
+  $q.notify({
+    type: 'info',
+    message: 'Dati aggiornati',
+    icon: 'refresh',
+    timeout: 1000
+  });
+}
+
 async function submitRequest() {
   if (!formData.value.date) {
     $q.notify({ type: 'warning', message: 'Seleziona una data' });
@@ -397,6 +410,27 @@ async function submitRequest() {
 
     const batch = [];
     const batchData: Omit<ShiftRequest, 'id'>[] = [];
+
+    // VALIDAZIONE TURNO (Phase 25)
+    // Verifica che l'operatore abbia effettivamente il turno per cui si chiede l'assenza
+    for (const date of datesToProcess) {
+      const realShift = operators.value[targetOperatorId]?.schedule?.[date] || 'R';
+      if (inputMode.value === 'SHIFT' && formData.value.shift !== realShift) {
+        $q.notify({
+          color: 'warning',
+          textColor: 'dark',
+          icon: 'warning',
+          message: 'Turno non corrispondente',
+          caption: `${absentOperatorName} il ${formatDate(date)} risulta essere di "${realShift}". Non puoi creare una richiesta per il turno "${formData.value.shift}".`,
+          multiLine: true,
+          progress: true,
+          actions: [{ icon: 'close', color: 'white', round: true, dense: true }]
+        });
+        submitting.value = false;
+        return;
+      }
+    }
+
     for (const date of datesToProcess) {
       const newReq: Omit<ShiftRequest, 'id'> = {
         date: date,
@@ -615,7 +649,7 @@ function getStatusLabel(req: ShiftRequest) {
         <!-- Admin: Operator Selector -->
         <div v-if="authStore.isAdmin" class="q-mb-md">
           <q-select v-model="selectedOperatorId" :options="filteredOperatorOptions" option-label="name"
-            option-value="id" label="Operatore (per conto di)" outlined dense emit-value map-options use-input
+            option-value="id" label="Operatore (per conto di)" outlined dense emit-value map-options use-input clearable
             @filter="filterOperators" :hint="'Seleziona l\'operatore per cui stai creando la richiesta'">
             <template v-slot:no-option>
               <q-item>
@@ -740,7 +774,12 @@ function getStatusLabel(req: ShiftRequest) {
 
     <!-- List of visible requests -->
     <template v-if="pageTab === 'absence'">
-      <div class="text-h6 q-my-md">Storico Richiesta</div>
+      <div class="row items-center justify-between q-my-md">
+        <div class="text-h6">Storico Richiesta</div>
+        <q-btn flat round dense color="primary" icon="refresh" size="sm" @click="manualRefresh">
+          <q-tooltip>Aggiorna storico</q-tooltip>
+        </q-btn>
+      </div>
       <div v-if="visibleRequests.length === 0" class="text-grey text-center q-py-lg">
         Nessuna richiesta visibile.
       </div>
@@ -880,7 +919,12 @@ function getStatusLabel(req: ShiftRequest) {
       </q-card>
 
       <!-- My Swap Requests History -->
-      <div class="text-subtitle2 text-weight-bold q-mb-sm q-mt-md">Le mie proposte di Cambio</div>
+      <div class="row items-center justify-between q-mb-sm q-mt-md">
+        <div class="text-subtitle2 text-weight-bold">Le mie proposte di Cambio</div>
+        <q-btn flat round dense color="primary" icon="refresh" size="sm" @click="manualRefresh">
+          <q-tooltip>Aggiorna proposte</q-tooltip>
+        </q-btn>
+      </div>
       <div v-if="mySwaps.length === 0" class="text-grey text-center q-pa-lg">
         <q-icon name="inbox" size="2em" />
         <div>Nessuna proposta di cambio turno ancora.</div>

@@ -150,7 +150,9 @@ watch(
   () => router.currentRoute.value.path,
   (newPath) => {
     if (authStore.isAuthenticated) {
-      void syncStore.checkAndRefresh();
+    if (configStore.activeConfigId) {
+      void syncStore.checkAndRefresh(configStore.activeConfigId);
+    }
       // Save last visited path for session persistence
       if (newPath !== '/' && newPath !== '/login' && newPath !== '/register') {
         uiStore.setLastPath(newPath);
@@ -287,7 +289,7 @@ async function handleConfigChange(configId: string) {
       </q-toolbar>
     </q-header>
 
-    <q-page-container v-touch-swipe.horizontal="handleSwipe">
+    <q-page-container v-touch-swipe.horizontal.100="handleSwipe">
       <router-view v-slot="{ Component }">
         <transition appear enter-active-class="animated fadeIn" leave-active-class="animated fadeOut" mode="out-in">
           <component :is="Component" />

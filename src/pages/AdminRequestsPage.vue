@@ -237,7 +237,7 @@ onUnmounted(() => {
 
 async function fetchOperators() {
   if (!configStore.activeConfigId) {
-    logger.warn('No active config for requests');
+    logger.debug('No active config for requests (initial load)');
     return;
   }
 

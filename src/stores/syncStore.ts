@@ -14,7 +14,7 @@
  */
 
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from './authStore';
@@ -26,30 +26,41 @@ const logger = useSecureLogger();
 
 const ADMIN_COOLDOWN_MS = 60 * 1000; // 1 minute
 const USER_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
-const FIRESTORE_DOC = 'system/syncStatus';
 
 export const useSyncStore = defineStore('sync', () => {
-  const lastSyncTimestamp = ref<number | null>(null);
-  const lastSyncByName = ref<string>('');
+  // Map of configId -> lastSyncTimestamp
+  const syncTimestamps = ref<Record<string, number | null>>({});
+  // Map of configId -> lastSyncByName
+  const syncAuthors = ref<Record<string, string>>({});
+  
   const loading = ref(false);
+  const currentTime = ref(Date.now());
 
-  // -- Computed --
+  // Update current time every second to drive computed reactivity
+  setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
 
-  const cooldownMs = computed(() => {
+  // -- Helpers --
+
+  const getSyncDocPath = (configId: string) => `systemConfigurations/${configId}/metadata/sync`;
+
+  // -- Getters (Factory functions since they need configId) --
+
+  const getMsUntilNextSync = (configId: string) => {
     const authStore = useAuthStore();
-    return authStore.isAdmin ? ADMIN_COOLDOWN_MS : USER_COOLDOWN_MS;
-  });
+    const lastSync = syncTimestamps.value[configId];
+    if (lastSync === undefined || lastSync === null) return 0;
+    
+    const cooldown = authStore.isAdmin ? ADMIN_COOLDOWN_MS : USER_COOLDOWN_MS;
+    const elapsed = currentTime.value - lastSync;
+    return Math.max(0, cooldown - elapsed);
+  };
 
-  const msUntilNextSync = computed(() => {
-    if (lastSyncTimestamp.value === null) return 0;
-    const elapsed = Date.now() - lastSyncTimestamp.value;
-    return Math.max(0, cooldownMs.value - elapsed);
-  });
+  const canSync = (configId: string) => getMsUntilNextSync(configId) === 0;
 
-  const canSync = computed(() => msUntilNextSync.value === 0);
-
-  const cooldownLabel = computed(() => {
-    const ms = msUntilNextSync.value;
+  const getCooldownLabel = (configId: string) => {
+    const ms = getMsUntilNextSync(configId);
     if (ms === 0) return '';
     const totalSeconds = Math.ceil(ms / 1000);
     const hours = Math.floor(totalSeconds / 3600);
@@ -58,32 +69,37 @@ export const useSyncStore = defineStore('sync', () => {
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${seconds}s`;
     return `${seconds}s`;
-  });
+  };
 
   // -- Actions --
 
   /**
-   * Loads the global sync status from Firestore.
-   * Called once on mount to initialize state.
+   * Loads the sync status for a specific config from Firestore.
    */
-  async function loadSyncStatus(): Promise<void> {
+  async function loadSyncStatus(configId: string): Promise<void> {
+    if (!configId) return;
     try {
-      const snap = await getDoc(doc(db, FIRESTORE_DOC));
+      const snap = await getDoc(doc(db, getSyncDocPath(configId)));
       if (snap.exists()) {
         const data = snap.data() as SyncStatus;
-        lastSyncTimestamp.value = data.lastSyncTimestamp;
-        lastSyncByName.value = data.lastSyncByName;
-        logger.info('SyncStatus loaded', { lastSyncTimestamp: data.lastSyncTimestamp });
+        syncTimestamps.value[configId] = data.lastSyncTimestamp;
+        syncAuthors.value[configId] = data.lastSyncByName;
+        logger.debug(`SyncStatus loaded for ${configId}`, { lastSyncTimestamp: data.lastSyncTimestamp });
+      } else {
+        // Initialize if not exists
+        syncTimestamps.value[configId] = null;
+        syncAuthors.value[configId] = '';
       }
     } catch (err) {
-      logger.error('Failed to load sync status', err);
+      logger.error(`Failed to load sync status for ${configId}`, err);
     }
   }
 
   /**
-   * Persists the sync status to Firestore after a successful sync.
+   * Persists the sync status to Firestore after a successful sync for a config.
    */
-  async function recordSync(): Promise<void> {
+  async function recordSync(configId: string): Promise<void> {
+    if (!configId) return;
     const authStore = useAuthStore();
     const now = Date.now();
     const displayName =
@@ -91,38 +107,35 @@ export const useSyncStore = defineStore('sync', () => {
       'Utente';
 
     try {
-      await setDoc(doc(db, FIRESTORE_DOC), {
+      await setDoc(doc(db, getSyncDocPath(configId)), {
         lastSyncTimestamp: now,
         lastSyncByUid: authStore.currentUser?.uid ?? 'unknown',
         lastSyncByName: displayName,
       } satisfies SyncStatus);
 
-      // Update local state immediately (no need to re-read Firestore)
-      lastSyncTimestamp.value = now;
-      lastSyncByName.value = displayName;
-      logger.info('Sync status recorded', { triggeredBy: displayName });
+      // Update local state immediately
+      syncTimestamps.value[configId] = now;
+      syncAuthors.value[configId] = displayName;
+      logger.info(`Sync status recorded for ${configId}`, { triggeredBy: displayName });
     } catch (err) {
-      logger.error('Failed to record sync status', err);
+      logger.error(`Failed to record sync status for ${configId}`, err);
     }
   }
 
   /**
-   * Compares global sync status with local store age and forces refresh if needed.
-   * Prevents stale data when another user triggers a sync.
+   * Compares sync status with local store age and forces refresh if needed.
    */
-  async function checkAndRefresh(): Promise<void> {
-    const authStore = useAuthStore();
-    const scheduleStore = useScheduleStore();
-    const configId = authStore.currentUser?.configId || scheduleStore.activeConfigId;
-
+  async function checkAndRefresh(configId: string): Promise<void> {
     if (!configId) return;
+    const scheduleStore = useScheduleStore();
 
-    await loadSyncStatus();
+    await loadSyncStatus(configId);
 
-    if (lastSyncTimestamp.value && scheduleStore.lastUpdated) {
-      if (lastSyncTimestamp.value > scheduleStore.lastUpdated) {
-        logger.info('Global sync detected, refreshing local data...', {
-          global: lastSyncTimestamp.value,
+    const lastGlobal = syncTimestamps.value[configId];
+    if (lastGlobal && scheduleStore.lastUpdated) {
+      if (lastGlobal > scheduleStore.lastUpdated) {
+        logger.info(`New sync detected for ${configId}, refreshing local data...`, {
+          global: lastGlobal,
           local: scheduleStore.lastUpdated,
         });
         await scheduleStore.loadOperators(configId, true);
@@ -131,12 +144,13 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   return {
-    lastSyncTimestamp,
-    lastSyncByName,
+    syncTimestamps,
+    syncAuthors,
     loading,
+    currentTime,
     canSync,
-    msUntilNextSync,
-    cooldownLabel,
+    getMsUntilNextSync,
+    getCooldownLabel,
     loadSyncStatus,
     recordSync,
     checkAndRefresh,

@@ -13,9 +13,9 @@ import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useScenarioStore } from '../../stores/scenarioStore';
 import { useSecureLogger } from '../../utils/secureLogger';
+import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 
 const logger = useSecureLogger();
-import { googleSheetsService, syncService } from '../../services';
 import type { SystemConfiguration, ReplacementScenario, ReplacementRole } from '../../types/models';
 
 const $q = useQuasar();
@@ -30,7 +30,6 @@ const showCreateDialog = ref(false);
 const newConfigName = ref('');
 const newConfigProfession = ref<'Infermiere' | 'Medico' | 'OSS'>('Infermiere');
 const saving = ref(false);
-const syncing = ref(false);
 
 // Scenario state
 const scenariosByConfig = reactive<Record<string, ReplacementScenario[]>>({});
@@ -197,25 +196,6 @@ function deleteConfig(configId: string) {
   });
 }
 
-async function triggerSync(config: SystemConfiguration) {
-  if (!config?.spreadsheetUrl) {
-    $q.notify({ type: 'warning', message: 'Imposta prima un URL del foglio Google' });
-    return;
-  }
-  syncing.value = true;
-  activeConfigId.value = config.id;
-  try {
-    googleSheetsService.updateSpreadsheetUrl(config.spreadsheetUrl);
-    await syncService.syncOperatorsFromSheets(config.id);
-    $q.notify({ type: 'positive', message: 'Sincronizzazione completata!' });
-  } catch (error) {
-    logger.error('Error during synchronization', error);
-    $q.notify({ type: 'negative', message: 'Errore durante la sincronizzazione' });
-  } finally {
-    syncing.value = false;
-    activeConfigId.value = null;
-  }
-}
 
 async function pasteUrl(config: SystemConfiguration, type: 'spreadsheet' | 'gas') {
   try {
@@ -379,7 +359,7 @@ function deleteScenario(configId: string, scenarioId: string) {
       </div>
     </q-card-section>
 
-    <q-list separator bordered>
+    <q-list separator bordered class="q-py-xs">
       <div v-if="configurations.length === 0" class="q-pa-md text-center text-grey">
         Nessuna configurazione. Clicca "Nuova Configurazione" per iniziare.
       </div>
@@ -432,101 +412,100 @@ function deleteScenario(configId: string, scenarioId: string) {
               <q-tooltip>Imposta come configurazione attiva</q-tooltip>
             </q-btn>
             <q-badge v-else color="green" label="● Configurazione Attiva" class="q-mr-md" />
-            <q-btn flat label="Sincronizza Ora" color="secondary" icon="sync"
-              :loading="syncing && activeConfigId === config.id" @click="triggerSync(config)" />
+            
+            <GlobalSyncBtn :target-config="config" size="sm" show-label />
+
             <q-btn label="Salva" color="primary" icon="save" :loading="saving && activeConfigId === config.id"
               @click="saveConfig(config)" />
           </q-card-actions>
         </q-card>
 
         <!-- Scenari di Sostituzione -->
-        <q-card flat bordered class="q-ma-md q-mb-lg">
-          <q-card-section>
-            <div class="row items-center justify-between q-mb-md">
-              <div>
-                <div class="text-subtitle1 text-weight-bold">
-                  <q-icon name="swap_horiz" color="primary" class="q-mr-xs" />
-                  Scenari di Sostituzione
-                </div>
+        <q-expansion-item icon="swap_horiz" label="Scenari di Sostituzione"
+          header-class="text-subtitle1 text-weight-bold" class="q-ma-md q-mb-lg bg-white rounded-borders shadow-1">
+          <q-card flat>
+            <q-card-section>
+              <div class="row items-center justify-between q-mb-md">
                 <div class="text-caption text-grey">Regole per la copertura dei turni scoperti</div>
-              </div>
-              <div class="row q-gutter-sm" v-if="scenariosLoaded[config.id]">
-                <q-btn flat size="sm" icon="restore" label="Default" color="warning"
-                  @click="seedDefaultScenarios(config.id)">
-                  <q-tooltip>Ripristina scenari predefiniti</q-tooltip>
-                </q-btn>
-                <q-btn size="sm" icon="add" label="Nuovo Scenario" color="primary" unelevated
-                  @click="openNewScenarioDialog(config.id)" />
-              </div>
-            </div>
-
-            <!-- Loading spinner -->
-            <div v-if="scenariosLoading[config.id]" class="text-center q-py-lg">
-              <q-spinner color="primary" size="2em" />
-              <div class="text-caption text-grey q-mt-sm">Caricamento scenari...</div>
-            </div>
-
-            <!-- Scenarios by group -->
-            <div v-else-if="scenariosLoaded[config.id]">
-              <div v-if="!scenariosByConfig[config.id] || scenariosByConfig[config.id]!.length === 0"
-                class="text-center q-pa-lg text-grey">
-                <q-icon name="inbox" size="2em" class="q-mb-sm" />
-                <div class="text-body2">Nessuno scenario configurato.</div>
-                <q-btn flat size="sm" color="primary" label="Carica scenari predefiniti" class="q-mt-sm"
-                  @click="seedDefaultScenarios(config.id)" />
+                <div class="row q-gutter-sm" v-if="scenariosLoaded[config.id]">
+                  <q-btn flat size="sm" icon="restore" label="Default" color="warning"
+                    @click="seedDefaultScenarios(config.id)">
+                    <q-tooltip>Ripristina scenari predefiniti</q-tooltip>
+                  </q-btn>
+                  <q-btn size="sm" icon="add" label="Nuovo Scenario" color="primary" unelevated
+                    @click="openNewScenarioDialog(config.id)" />
+                </div>
               </div>
 
-              <div v-for="group in getScenarioGroups(config.id)" :key="group.targetShift" class="q-mb-lg">
-                <div class="row items-center q-mb-sm">
-                  <q-chip :color="getShiftColor(group.targetShift)" text-color="white" size="md" dense icon="schedule">
-                    Mancanza Turno {{ group.targetShift }}
-                  </q-chip>
-                  <span class="text-caption text-grey q-ml-sm">{{ group.scenarios.length }} scenario{{
-                    group.scenarios.length !== 1 ? 'i' : ''
-                  }}</span>
+              <!-- Loading spinner -->
+              <div v-if="scenariosLoading[config.id]" class="text-center q-py-lg">
+                <q-spinner color="primary" size="2em" />
+                <div class="text-caption text-grey q-mt-sm">Caricamento scenari...</div>
+              </div>
+
+              <!-- Scenarios by group -->
+              <div v-else-if="scenariosLoaded[config.id]">
+                <div v-if="!scenariosByConfig[config.id] || scenariosByConfig[config.id]!.length === 0"
+                  class="text-center q-pa-lg text-grey">
+                  <q-icon name="inbox" size="2em" class="q-mb-sm" />
+                  <div class="text-body2">Nessuno scenario configurato.</div>
+                  <q-btn flat size="sm" color="primary" label="Carica scenari predefiniti" class="q-mt-sm"
+                    @click="seedDefaultScenarios(config.id)" />
                 </div>
 
-                <div class="q-gutter-sm">
-                  <q-card v-for="scenario in group.scenarios" :key="scenario.id" flat bordered class="scenario-card">
-                    <q-card-section class="q-py-sm q-px-md">
-                      <div class="row items-start justify-between no-wrap">
-                        <div class="col">
-                          <div class="text-weight-medium">{{ scenario.label }}</div>
-                          <div class="row q-gutter-xs q-mt-xs">
-                            <div v-for="(role, idx) in scenario.roles" :key="idx"
-                              class="role-chip row items-center q-gutter-xs">
-                              <q-chip :color="getShiftColor(role.originalShift)" text-color="white" size="xs" dense>{{
-                                role.originalShift }}</q-chip>
-                              <q-icon name="arrow_right_alt" size="xs" color="grey-6" />
-                              <q-chip :color="getShiftColor(role.newShift)" text-color="white" size="xs" dense>{{
-                                role.newShift
+                <div v-for="group in getScenarioGroups(config.id)" :key="group.targetShift" class="q-mb-lg">
+                  <div class="row items-center q-mb-sm">
+                    <q-chip :color="getShiftColor(group.targetShift)" text-color="white" size="md" dense
+                      icon="schedule">
+                      Mancanza Turno {{ group.targetShift }}
+                    </q-chip>
+                    <span class="text-caption text-grey q-ml-sm">{{ group.scenarios.length }} scenario{{
+                      group.scenarios.length !== 1 ? 'i' : ''
+                      }}</span>
+                  </div>
+
+                  <div class="q-gutter-sm">
+                    <q-card v-for="scenario in group.scenarios" :key="scenario.id" flat bordered class="scenario-card">
+                      <q-card-section class="q-py-sm q-px-md">
+                        <div class="row items-start justify-between no-wrap">
+                          <div class="col">
+                            <div class="text-weight-medium">{{ scenario.label }}</div>
+                            <div class="row q-gutter-xs q-mt-xs">
+                              <div v-for="(role, idx) in scenario.roles" :key="idx"
+                                class="role-chip row items-center q-gutter-xs">
+                                <q-chip :color="getShiftColor(role.originalShift)" text-color="white" size="xs" dense>{{
+                                  role.originalShift }}</q-chip>
+                                <q-icon name="arrow_right_alt" size="xs" color="grey-6" />
+                                <q-chip :color="getShiftColor(role.newShift)" text-color="white" size="xs" dense>{{
+                                  role.newShift
                                 }}</q-chip>
-                              <span v-if="role.startTime && role.endTime" class="text-caption text-grey-7">({{
-                                role.startTime
+                                <span v-if="role.startTime && role.endTime" class="text-caption text-grey-7">({{
+                                  role.startTime
                                 }}–{{ role.endTime }})</span>
-                              <q-badge v-if="role.isNextDay" label="D+1" color="orange" />
-                              <span v-if="idx < scenario.roles.length - 1" class="text-grey q-mx-xs">+</span>
+                                <q-badge v-if="role.isNextDay" label="D+1" color="orange" />
+                                <span v-if="idx < scenario.roles.length - 1" class="text-grey q-mx-xs">+</span>
+                              </div>
                             </div>
                           </div>
+                          <div class="row q-gutter-xs no-wrap">
+                            <q-btn flat round dense icon="edit" size="sm" color="primary"
+                              @click="openEditScenarioDialog(config.id, scenario)">
+                              <q-tooltip>Modifica scenario</q-tooltip>
+                            </q-btn>
+                            <q-btn flat round dense icon="delete" size="sm" color="negative"
+                              @click="deleteScenario(config.id, scenario.id)">
+                              <q-tooltip>Elimina scenario</q-tooltip>
+                            </q-btn>
+                          </div>
                         </div>
-                        <div class="row q-gutter-xs no-wrap">
-                          <q-btn flat round dense icon="edit" size="sm" color="primary"
-                            @click="openEditScenarioDialog(config.id, scenario)">
-                            <q-tooltip>Modifica scenario</q-tooltip>
-                          </q-btn>
-                          <q-btn flat round dense icon="delete" size="sm" color="negative"
-                            @click="deleteScenario(config.id, scenario.id)">
-                            <q-tooltip>Elimina scenario</q-tooltip>
-                          </q-btn>
-                        </div>
-                      </div>
-                    </q-card-section>
-                  </q-card>
+                      </q-card-section>
+                    </q-card>
+                  </div>
                 </div>
               </div>
-            </div>
-          </q-card-section>
-        </q-card>
+            </q-card-section>
+          </q-card>
+        </q-expansion-item>
       </q-expansion-item>
     </q-list>
   </q-card>
