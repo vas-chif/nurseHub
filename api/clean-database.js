@@ -40,9 +40,10 @@ export default async function handler(req, res) {
     // --- RULE 1: Delete all notifications older than 30 days ---
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoTimestamp = thirtyDaysAgo.getTime(); // Convert to number
     
     const notificationsSnapshot = await db.collection('notifications')
-      .where('createdAt', '<', thirtyDaysAgo)
+      .where('createdAt', '<', thirtyDaysAgoTimestamp)
       .limit(300) 
       .get();
       

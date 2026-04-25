@@ -56,9 +56,11 @@
 
 ## Note Tecniche di Manutenzione
 
-### 1. Pulizia Notifiche
-- **Policy:** Le notifiche hanno scopo informativo temporaneo.
-- **Retention:** Si consiglia la cancellazione automatica (via Cloud Function o manutenzione manuale) ogni 30 giorni per evitare accumuli nel database.
+### 1. Manutenzione Dati e Sessioni
+- **Pulizia Notifiche**: Le notifiche hanno scopo informativo temporaneo. Cancellazione automatica ogni 30 giorni via Vercel Cron.
+- **Cache Isolation**: Durante il `logout`, è OBBLIGATORIO svuotare tutte le cache locali (specialmente `scheduleStore`) per evitare che i turni di un utente siano visibili a quello successivo sullo stesso dispositivo.
+- **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protette, evitando "buchi" di dati o race conditions.
 
 ### 2. Gesture & Navigazione
-- **Swipe Sensitivity:** La sensibilità dello swipe tra i tab della Home è stata ridotta (aumentato il threshold/tempo) per evitare cambi pagina accidentali durante lo scroll verticale.
+- **Swipe Sensitivity**: La sensibilità dello swipe tra i tab della Home è stata ridotta (threshold 100px) per evitare cambi pagina accidentali.
+- **Auto-Selection Calendar**: Il calendario deve resettare la selezione se l'ID utente cambia e attendere il profilo completo prima di auto-selezionare l'operatore predefinito.

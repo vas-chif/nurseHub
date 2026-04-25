@@ -408,7 +408,7 @@ const filteredRows = computed(() => {
     ops = ops.filter((op) => selectedOperators.value.includes(op.id));
   }
 
-  const operatorRows = ops.map((op) => {
+  let operatorRows = ops.map((op) => {
     // 1 base row
     const row: TableRow = {
       id: op.id,
@@ -430,6 +430,19 @@ const filteredRows = computed(() => {
 
     return row;
   });
+
+  // 3. Filter by Selected Shift Codes (Hide rows with NO matches in the visible range)
+  if (selectedShiftCodes.value.length > 0) {
+    operatorRows = operatorRows.filter((row) => {
+      // Check if ANY of the visible date columns in this row has a shift that matches the filter
+      return dateColumns.value.some((col) => {
+        const shiftCode = row[col.name] as string;
+        if (!shiftCode) return false;
+        // We check if the shift starts with any of the selected filter prefixes
+        return selectedShiftCodes.value.some((f) => shiftCode.toUpperCase().startsWith(f));
+      });
+    });
+  }
 
   return operatorRows;
 });

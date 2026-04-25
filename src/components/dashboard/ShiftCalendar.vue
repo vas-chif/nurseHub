@@ -13,6 +13,7 @@ import { useSecureLogger } from '../../utils/secureLogger';
 import { useScheduleStore } from '../../stores/scheduleStore';
 import type { Operator, ShiftCode } from '../../types/models';
 
+import { date as dateUtil } from 'quasar';
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
@@ -84,6 +85,15 @@ watch(
   },
 );
 
+// Reset selection if user identity changes (prevent leakage between sessions)
+watch(
+  () => authStore.currentUser?.uid,
+  () => {
+    logger.info('User identity changed - resetting calendar selection');
+    selectedOperator.value = [];
+  }
+);
+
 // Unified auto-selection & data-refresh logic
 watchEffect(() => {
   const options = operatorOptions.value;
@@ -91,6 +101,11 @@ watchEffect(() => {
 
   const currentOp = authStore.currentOperator;
   const userOpId = authStore.currentUser?.operatorId;
+
+  // Prevent auto-selection if profile is not yet loaded for the authenticated user
+  if (authStore.isAuthenticated && !authStore.currentUser) {
+    return;
+  }
 
   // Case 1: Initial auto-selection (Skip if admin)
   if (selectedOperator.value.length === 0 && !authStore.isAdmin) {
@@ -143,8 +158,8 @@ const calendars = computed<OperatorCalendar[]>(() => {
     for (let i = 0; i < 14; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      const dateKey = d.toISOString().split('T')[0];
-      const code = schedule[dateKey as string];
+      const dateKey = dateUtil.formatDate(d, 'YYYY-MM-DD');
+      const code = schedule[dateKey];
       const shiftCode = (code as ShiftCode) || '';
 
       days.push(createDayObj(d, shiftCode));
@@ -160,7 +175,7 @@ const calendars = computed<OperatorCalendar[]>(() => {
 
 function createDayObj(d: Date, shift: string): DayShift {
   return {
-    date: d.toISOString().split('T')[0] || '',
+    date: dateUtil.formatDate(d, 'YYYY-MM-DD'),
     dateFormatted: `${d.getDate()}/${d.getMonth() + 1}`,
     dayName: d.toLocaleDateString('it-IT', { weekday: 'short' }),
     shift: shift as ShiftCode,

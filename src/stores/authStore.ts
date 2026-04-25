@@ -195,9 +195,11 @@ export const useAuthStore = defineStore('auth', () => {
       await signOut(auth);
       authUser.value = null;
       currentUser.value = null;
-      currentOperator.value = null;
-      selectedOperatorIds.value = [];
       claimRole.value = null;
+      
+      // Clear other caches
+      const { useScheduleStore } = await import('./scheduleStore');
+      useScheduleStore().clearCache();
     } catch (err) {
       error.value = (err as Error).message;
       throw err;
@@ -253,12 +255,13 @@ export const useAuthStore = defineStore('auth', () => {
         authUser.value = firebaseUser;
         if (firebaseUser) {
           // Phase 25: Read JWT claim before loading Firestore profile
-          void refreshClaimRole(firebaseUser).then(() => {
-            void loadUserProfile(firebaseUser.uid).finally(() => {
+          void refreshClaimRole(firebaseUser)
+            .then(() => loadUserProfile(firebaseUser.uid))
+            .catch((err) => logger.error('Error during auth initialization', err))
+            .finally(() => {
               isInitialized.value = true;
               resolve();
             });
-          });
         } else {
           currentUser.value = null;
           currentOperator.value = null;
