@@ -11,23 +11,43 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { v1 } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 
-// Initialize Firebase Admin
-if (!getApps().length) {
+// Safe initialization helper
+const getFirebaseConfig = () => {
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!sa) {
+    console.error('CRITICAL: FIREBASE_SERVICE_ACCOUNT is missing');
+    return null;
+  }
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    return JSON.parse(sa);
+  } catch (e) {
+    console.error('CRITICAL: Invalid FIREBASE_SERVICE_ACCOUNT JSON');
+    return null;
+  }
+};
+
+const serviceAccount = getFirebaseConfig();
+
+if (serviceAccount && !getApps().length) {
+  try {
+    const projectId = serviceAccount.project_id;
+    // Fallback order: custom env > project-backups > project.firebasestorage.app
+    const bucketName = process.env.BACKUP_STORAGE_BUCKET || `${projectId}-backups`;
+    
     initializeApp({
       credential: cert(serviceAccount),
-      storageBucket: `${serviceAccount.project_id}-backups`
+      storageBucket: bucketName
     });
+    console.log(`Firebase Admin initialized for project ${projectId} with bucket ${bucketName}`);
   } catch (error) {
     console.error('Firebase Admin init error:', error);
   }
 }
 
-const db = getFirestore();
-const firestoreAdminClient = new v1.FirestoreAdminClient({
-  credentials: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-});
+const db = serviceAccount ? getFirestore() : null;
+const firestoreAdminClient = serviceAccount ? new v1.FirestoreAdminClient({
+  credentials: serviceAccount
+}) : null;
 
 // BACKUP_COLLECTIONS matching src/types/backup.ts
 const BACKUP_COLLECTIONS = [
@@ -55,10 +75,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  if (!serviceAccount || !db || !firestoreAdminClient) {
+    return res.status(500).json({ 
+      error: 'Backend misconfiguration', 
+      details: 'Firebase Service Account non configurata correttamente su Vercel.' 
+    });
+  }
+
   // Security Check: VERCEL_API_SECRET
+  const apiSecret = process.env.VERCEL_API_SECRET;
   const authHeader = req.headers.authorization;
-  if (authHeader !== `Bearer ${process.env.VERCEL_API_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  
+  if (!apiSecret) {
+    return res.status(500).json({ error: 'Backend misconfiguration', details: 'VERCEL_API_SECRET non impostata.' });
+  }
+
+  if (authHeader !== `Bearer ${apiSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized', details: 'Secret non corrispondente.' });
   }
 
   const { action, backupPath, logId, reason, uid, email } = req.body;

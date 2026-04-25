@@ -10,10 +10,21 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { v1 } from '@google-cloud/firestore';
 
-// Initialize Firebase Admin
-if (!getApps().length) {
+// Safe initialization helper
+const getFirebaseConfig = () => {
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!sa) return null;
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    return JSON.parse(sa);
+  } catch (e) {
+    return null;
+  }
+};
+
+const serviceAccount = getFirebaseConfig();
+
+if (serviceAccount && !getApps().length) {
+  try {
     initializeApp({
       credential: cert(serviceAccount)
     });
@@ -22,10 +33,10 @@ if (!getApps().length) {
   }
 }
 
-const db = getFirestore();
-const firestoreAdminClient = new v1.FirestoreAdminClient({
-  credentials: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-});
+const db = serviceAccount ? getFirestore() : null;
+const firestoreAdminClient = serviceAccount ? new v1.FirestoreAdminClient({
+  credentials: serviceAccount
+}) : null;
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -37,9 +48,16 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  if (!serviceAccount || !db || !firestoreAdminClient) {
+    return res.status(500).json({ 
+      error: 'Backend misconfiguration', 
+      details: 'Firebase Service Account non configurata correttamente.' 
+    });
+  }
+
   // Security Check: VERCEL_API_SECRET
-  const authHeader = req.headers.authorization;
-  if (authHeader !== `Bearer ${process.env.VERCEL_API_SECRET}`) {
+  const apiSecret = process.env.VERCEL_API_SECRET;
+  if (!apiSecret || req.headers.authorization !== `Bearer ${apiSecret}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -49,7 +67,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing backupPath or type' });
   }
 
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   const projectId = serviceAccount.project_id;
   const startTime = Date.now();
 

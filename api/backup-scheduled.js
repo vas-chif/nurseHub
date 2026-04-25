@@ -10,10 +10,21 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { v1 } from '@google-cloud/firestore';
 
-// Initialize Firebase Admin
-if (!getApps().length) {
+// Safe initialization helper
+const getFirebaseConfig = () => {
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!sa) return null;
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    return JSON.parse(sa);
+  } catch (e) {
+    return null;
+  }
+};
+
+const serviceAccount = getFirebaseConfig();
+
+if (serviceAccount && !getApps().length) {
+  try {
     initializeApp({
       credential: cert(serviceAccount)
     });
@@ -22,10 +33,10 @@ if (!getApps().length) {
   }
 }
 
-const db = getFirestore();
-const firestoreAdminClient = new v1.FirestoreAdminClient({
-  credentials: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-});
+const db = serviceAccount ? getFirestore() : null;
+const firestoreAdminClient = serviceAccount ? new v1.FirestoreAdminClient({
+  credentials: serviceAccount
+}) : null;
 
 const BACKUP_COLLECTIONS = [
   'users',
@@ -43,11 +54,12 @@ const BACKUP_COLLECTIONS = [
 ];
 
 export default async function handler(req, res) {
-  // Security Check: Vercel Cron Secret (if configured) or just checking request from Vercel
-  // In Vercel Cron, you can check the CRON_SECRET environment variable
-  // if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
-  //   return res.status(401).json({ error: 'Unauthorized' });
-  // }
+  if (!serviceAccount || !db || !firestoreAdminClient) {
+    return res.status(500).json({ 
+      error: 'Backend misconfiguration', 
+      details: 'Firebase Service Account non configurata correttamente.' 
+    });
+  }
 
   try {
     // 1. Check if auto-backup is enabled in systemSettings
@@ -66,9 +78,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'Skipped' });
     }
 
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     const projectId = serviceAccount.project_id;
-    const bucketName = `gs://${projectId}-backups`;
+    const bucketName = process.env.BACKUP_STORAGE_BUCKET || `${projectId}-backups`;
+    const fullBucketPath = `gs://${bucketName}`;
     
     const timestamp = new Date().toISOString().replace(/[:T]/g, '-').replace(/\..+/, '') + '_' + Math.random().toString(36).substring(2, 6);
     const outputUriPrefix = `${bucketName}/firestore-exports/${timestamp}`;
