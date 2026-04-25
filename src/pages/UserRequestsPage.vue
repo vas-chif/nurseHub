@@ -11,7 +11,7 @@
  */
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, watchEffect } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
 import type { Unsubscribe } from 'firebase/firestore';
 import {
@@ -30,8 +30,8 @@ import {
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
+import { useScheduleStore } from '../stores/scheduleStore';
 import { notifySwapProposed } from '../services/NotificationService';
-import { operatorsService } from '../services/OperatorsService';
 import { useShiftLogic } from '../composables/useShiftLogic';
 import type {
   ShiftRequest,
@@ -52,6 +52,7 @@ const $q = useQuasar();
 const route = useRoute();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
 const uiStore = useUiStore();
 const { isRequestExpired } = useShiftLogic();
 const submitting = ref(false);
@@ -283,20 +284,25 @@ function filterOperators(val: string, update: (callback: () => void) => void) {
   });
 }
 
-onMounted(async () => {
-  // Fetch operators if admin
-  if (authStore.isAdmin && configStore.activeConfigId) {
-    try {
-      const operatorsList = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
-      operatorsList.forEach((op) => {
-        operators.value[op.id] = op;
-      });
-    } catch (e) {
-      logger.error('Error fetching operators', e);
-    }
+onMounted(() => {
+  // Ensure operators are loaded in the global store
+  if (configStore.activeConfigId) {
+    void scheduleStore.loadOperators(configStore.activeConfigId);
   }
+  
   initRealtimeRequests();
   void loadMySwaps();
+});
+
+watchEffect(() => {
+  const list = scheduleStore.operators;
+  if (list.length > 0) {
+    const record: Record<string, Operator> = {};
+    list.forEach((op: Operator) => {
+      record[op.id] = op;
+    });
+    operators.value = record;
+  }
 });
 
 onUnmounted(() => {
