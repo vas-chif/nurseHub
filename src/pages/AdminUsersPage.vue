@@ -21,14 +21,33 @@
       <q-tab name="active" label="Utenti Attivi" icon="people" />
     </q-tabs>
 
-    <q-tab-panels v-model="activeTab" animated>
-      <q-tab-panel name="pending">
+    <q-tab-panels v-model="activeTab" animated class="bg-transparent">
+      <q-tab-panel name="pending" class="q-pa-none">
+        <div v-if="loading && pendingUsers.length === 0" class="q-pa-md">
+          <q-card flat bordered v-for="n in 3" :key="n" class="q-mb-sm">
+            <q-item>
+              <q-item-section avatar>
+                <q-skeleton type="QAvatar" />
+              </q-item-section>
+              <q-item-section>
+                <q-skeleton type="text" width="40%" />
+                <q-skeleton type="text" width="60%" />
+              </q-item-section>
+              <q-item-section side>
+                <q-skeleton type="rect" width="80px" height="30px" />
+              </q-item-section>
+            </q-item>
+          </q-card>
+        </div>
         <q-table
+          v-else
           :rows="pendingUsers"
           :columns="columns"
           row-key="uid"
           :loading="loading"
           no-data-label="Nessun utente in attesa"
+          flat
+          bordered
         >
           <template v-slot:body-cell-actions="props">
             <q-td :props="props">
@@ -45,8 +64,26 @@
         </q-table>
       </q-tab-panel>
 
-      <q-tab-panel name="active">
-        <q-table :rows="activeUsers" :columns="columns" row-key="uid" :loading="loading" filter="">
+      <q-tab-panel name="active" class="q-pa-none">
+        <div v-if="loading && activeUsers.length === 0" class="q-pa-md">
+          <q-table
+            :rows="[{}, {}, {}]"
+            :columns="columns"
+            flat
+            bordered
+            hide-pagination
+            hide-header
+          >
+            <template v-slot:body>
+              <q-tr v-for="n in 5" :key="n">
+                <q-td v-for="col in columns" :key="col.name">
+                  <q-skeleton type="text" />
+                </q-td>
+              </q-tr>
+            </template>
+          </q-table>
+        </div>
+        <q-table v-else :rows="activeUsers" :columns="columns" row-key="uid" :loading="loading" filter="" flat bordered>
           <template v-slot:body-cell-role="props">
             <q-td :props="props">
               <div class="row items-center justify-center q-gutter-x-sm">

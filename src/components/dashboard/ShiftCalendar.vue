@@ -229,27 +229,50 @@ function getShiftClass(code: ShiftCode): string {
       </div>
     </q-card-section>
 
-    <!-- Loop through selected operators -->
-    <div v-for="calendar in calendars" :key="calendar.operatorId">
-      <q-separator />
-      <q-card-section>
-        <div class="text-subtitle2 q-mb-xs">Turni di: {{ calendar.operatorName }}</div>
-        <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
-          <div class="row no-wrap q-gutter-md">
-            <div v-for="(day, index) in calendar.days" :key="index"
-              class="shift-day-column column flex-center q-pa-sm rounded-borders" :class="getShiftClass(day.shift)">
-              <div class="text-caption text-weight-bold">{{ day.dateFormatted }}</div>
-              <div class="text-caption">{{ day.dayName }}</div>
-              <q-badge :color="getShiftColor(day.shift)" class="q-mt-xs text-uppercase shadow-1">
-                {{ day.shift }}
-              </q-badge>
+    <!-- Skeleton Loading State -->
+    <q-slide-transition>
+      <div v-if="scheduleStore.loading && calendars.length === 0">
+        <q-separator />
+        <q-card-section>
+          <q-skeleton type="text" width="150px" class="q-mb-md" />
+          <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
+            <div class="row no-wrap q-gutter-md">
+              <div v-for="n in 7" :key="n" class="shift-day-column column flex-center q-pa-sm rounded-borders bg-grey-1">
+                <q-skeleton type="text" width="30px" />
+                <q-skeleton type="text" width="40px" />
+                <q-skeleton type="rect" width="30px" height="20px" class="q-mt-xs" />
+              </div>
             </div>
-          </div>
-        </q-scroll-area>
-      </q-card-section>
-    </div>
+          </q-scroll-area>
+        </q-card-section>
+      </div>
+    </q-slide-transition>
 
-    <q-card-section v-if="calendars.length === 0" class="text-center text-grey q-py-lg">
+    <!-- Loop through selected operators -->
+    <q-slide-transition>
+      <div v-if="calendars.length > 0">
+        <div v-for="calendar in calendars" :key="calendar.operatorId">
+          <q-separator />
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-xs">Turni di: {{ calendar.operatorName }}</div>
+            <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
+              <div class="row no-wrap q-gutter-md">
+                <div v-for="(day, index) in calendar.days" :key="index"
+                  class="shift-day-column column flex-center q-pa-sm rounded-borders" :class="getShiftClass(day.shift)">
+                  <div class="text-caption text-weight-bold">{{ day.dateFormatted }}</div>
+                  <div class="text-caption">{{ day.dayName }}</div>
+                  <q-badge :color="getShiftColor(day.shift)" class="q-mt-xs text-uppercase shadow-1">
+                    {{ day.shift }}
+                  </q-badge>
+                </div>
+              </div>
+            </q-scroll-area>
+          </q-card-section>
+        </div>
+      </div>
+    </q-slide-transition>
+
+    <q-card-section v-if="calendars.length === 0 && !scheduleStore.loading" class="text-center text-grey q-py-lg">
       Nessun operatore selezionato
     </q-card-section>
   </q-card>

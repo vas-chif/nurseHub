@@ -56,7 +56,12 @@
 
 ## Note Tecniche di Manutenzione
 
-### 1. Manutenzione Dati e Sessioni
+### 1. UX & Visual Feedback (Phase 25+)
+- **Skeletons**: Implementazione sistematica di `<q-skeleton>` su tutte le liste asincrone (Turni Home, Log Backup, Lista Utenti Admin).
+- **Perceived Performance**: L'obiettivo è mostrare la struttura della pagina entro 100ms, caricando i dati reali in background.
+- **Transizioni**: Uso di `q-slide-transition` per il passaggio tra skeleton e dati reali per evitare sfarfallii.
+
+### 2. Manutenzione Dati e Sessioni
 - **Pulizia Notifiche**: Le notifiche hanno scopo informativo temporaneo. Cancellazione automatica ogni 30 giorni via Vercel Cron.
 - **Cache Isolation**: Durante il `logout`, è OBBLIGATORIO svuotare tutte le cache locali (specialmente `scheduleStore`) per evitare che i turni di un utente siano visibili a quello successivo sullo stesso dispositivo.
 - **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protette, evitando "buchi" di dati o race conditions.

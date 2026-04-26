@@ -786,7 +786,21 @@ function getStatusLabel(req: ShiftRequest) {
           <q-tooltip>Aggiorna storico</q-tooltip>
         </q-btn>
       </div>
-      <div v-if="visibleRequests.length === 0" class="text-grey text-center q-py-lg">
+      <div v-if="loading && visibleRequests.length === 0" class="q-gutter-y-sm">
+        <q-card flat bordered v-for="n in 3" :key="`sk-abs-${n}`">
+          <q-item>
+            <q-item-section>
+              <q-skeleton type="text" width="100px" />
+              <q-skeleton type="text" width="60px" />
+            </q-item-section>
+            <q-item-section side>
+              <q-skeleton type="rect" width="60px" height="20px" />
+            </q-item-section>
+          </q-item>
+        </q-card>
+      </div>
+
+      <div v-else-if="visibleRequests.length === 0 && !loading" class="text-grey text-center q-py-lg">
         Nessuna richiesta visibile.
       </div>
 
@@ -931,7 +945,22 @@ function getStatusLabel(req: ShiftRequest) {
           <q-tooltip>Aggiorna proposte</q-tooltip>
         </q-btn>
       </div>
-      <div v-if="mySwaps.length === 0" class="text-grey text-center q-pa-lg">
+      <div v-if="loading && mySwaps.length === 0" class="q-gutter-y-sm">
+        <q-card flat bordered v-for="n in 2" :key="`sk-swp-${n}`">
+          <q-card-section class="q-py-sm">
+            <div class="row items-center justify-between">
+              <div class="row q-gutter-sm">
+                <q-skeleton type="rect" width="30px" height="20px" />
+                <q-skeleton type="rect" width="30px" height="20px" />
+                <q-skeleton type="text" width="80px" />
+              </div>
+              <q-skeleton type="rect" width="60px" height="20px" />
+            </div>
+            <q-skeleton type="text" width="150px" class="q-mt-sm" />
+          </q-card-section>
+        </q-card>
+      </div>
+      <div v-else-if="mySwaps.length === 0 && !loading" class="text-grey text-center q-pa-lg">
         <q-icon name="inbox" size="2em" />
         <div>Nessuna proposta di cambio turno ancora.</div>
       </div>

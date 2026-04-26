@@ -23,7 +23,11 @@
             <div class="text-caption">Eseguito ogni notte alle 02:00 (Europe/Rome)</div>
           </div>
         </div>
+        <div v-if="loading" class="row items-center">
+          <q-skeleton type="rect" width="80px" height="30px" class="q-ml-md" />
+        </div>
         <q-toggle
+          v-else
           v-model="autoBackupEnabled"
           label="Attivo"
           color="green"
@@ -68,21 +72,34 @@
         <q-card flat bordered style="height: 300px; overflow-y: auto;">
           <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Backup</q-card-section>
           <q-list separator>
-            <q-item v-for="log in backupLogs" :key="log.id">
-              <q-item-section avatar>
-                <q-icon :name="log.status === 'SUCCESS' ? 'check_circle' : 'error'" :color="log.status === 'SUCCESS' ? 'green' : 'red'" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ log.triggerType }} - {{ log.status }}</q-item-label>
-                <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
-              </q-item-section>
-              <q-item-section side v-if="log.executionTime">
-                <q-badge color="grey-7" :label="`${(log.executionTime / 1000).toFixed(1)}s`" />
-              </q-item-section>
-            </q-item>
-            <q-item v-if="backupLogs.length === 0">
-              <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
-            </q-item>
+            <template v-if="loading && backupLogs.length === 0">
+              <q-item v-for="n in 5" :key="`sk-b-${n}`">
+                <q-item-section avatar>
+                  <q-skeleton type="QAvatar" size="24px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-skeleton type="text" width="70%" />
+                  <q-skeleton type="text" width="40%" />
+                </q-item-section>
+              </q-item>
+            </template>
+            <template v-else>
+              <q-item v-for="log in backupLogs" :key="log.id">
+                <q-item-section avatar>
+                  <q-icon :name="log.status === 'SUCCESS' ? 'check_circle' : 'error'" :color="log.status === 'SUCCESS' ? 'green' : 'red'" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ log.triggerType }} - {{ log.status }}</q-item-label>
+                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="log.executionTime">
+                  <q-badge color="grey-7" :label="`${(log.executionTime / 1000).toFixed(1)}s`" />
+                </q-item-section>
+              </q-item>
+              <q-item v-if="backupLogs.length === 0">
+                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
+              </q-item>
+            </template>
           </q-list>
         </q-card>
       </div>
@@ -90,21 +107,34 @@
         <q-card flat bordered style="height: 300px; overflow-y: auto;">
           <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Ripristini</q-card-section>
           <q-list separator>
-            <q-item v-for="log in restoreLogs" :key="log.id">
-              <q-item-section avatar>
-                <q-icon name="settings_backup_restore" color="orange" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ log.type === 'full' ? 'Full Restore' : 'Restore Parziale' }}</q-item-label>
-                <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-badge :color="log.status === 'SUCCESS' ? 'green' : 'red'" :label="log.status" />
-              </q-item-section>
-            </q-item>
-            <q-item v-if="restoreLogs.length === 0">
-              <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
-            </q-item>
+            <template v-if="loading && restoreLogs.length === 0">
+              <q-item v-for="n in 3" :key="`sk-r-${n}`">
+                <q-item-section avatar>
+                  <q-skeleton type="QAvatar" size="24px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-skeleton type="text" width="60%" />
+                  <q-skeleton type="text" width="30%" />
+                </q-item-section>
+              </q-item>
+            </template>
+            <template v-else>
+              <q-item v-for="log in restoreLogs" :key="log.id">
+                <q-item-section avatar>
+                  <q-icon name="settings_backup_restore" color="orange" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ log.type === 'full' ? 'Full Restore' : 'Restore Parziale' }}</q-item-label>
+                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-badge :color="log.status === 'SUCCESS' ? 'green' : 'red'" :label="log.status" />
+                </q-item-section>
+              </q-item>
+              <q-item v-if="restoreLogs.length === 0">
+                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
+              </q-item>
+            </template>
           </q-list>
         </q-card>
       </div>
