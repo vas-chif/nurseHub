@@ -10,7 +10,7 @@ const authStore = useAuthStore();
 <template>
   <q-page class="q-pa-md bg-white column">
     <!-- Admin View: Full Table -->
-    <div v-if="authStore.isAdmin" class="col column">
+    <div v-if="authStore.isAnyAdmin" class="col column">
       <AdminShiftTable />
     </div>
 
@@ -28,6 +28,6 @@ const authStore = useAuthStore();
     </div>
 
     <!-- Daily Roster (Chi c'è di turno) -->
-    <DailyRosterCard class="q-mt-lg" v-if="!authStore.isAdmin" />
+    <DailyRosterCard class="q-mt-lg" v-if="!authStore.isAnyAdmin" />
   </q-page>
 </template>

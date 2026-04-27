@@ -108,7 +108,7 @@ watchEffect(() => {
   }
 
   // Case 1: Initial auto-selection (Skip if admin)
-  if (selectedOperator.value.length === 0 && !authStore.isAdmin) {
+  if (selectedOperator.value.length === 0 && !authStore.isAnyAdmin) {
     const targetId = currentOp?.id || userOpId;
     if (targetId) {
       const match = options.find((o) => o.id === targetId);
@@ -212,7 +212,7 @@ function getShiftClass(code: ShiftCode): string {
   <q-card flat bordered class="shift-calendar-card">
     <q-card-section class="row items-center justify-between">
       <div class="text-h6">I Tuoi Turni</div>
-      <div style="min-width: 200px" v-if="authStore.isAdmin && hasSearchModule">
+      <div style="min-width: 200px" v-if="authStore.isAnyAdmin && hasSearchModule">
         <q-select v-model="selectedOperator" :options="operatorOptions" label="Seleziona Personale" dense outlined
           options-dense bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
           <template v-slot:option="{ itemProps, opt, selected, toggleOption }">

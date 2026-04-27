@@ -83,7 +83,7 @@ export default async function handler(req, res) {
     const fullBucketPath = `gs://${bucketName}`;
     
     const timestamp = new Date().toISOString().replace(/[:T]/g, '-').replace(/\..+/, '') + '_' + Math.random().toString(36).substring(2, 6);
-    const outputUriPrefix = `${bucketName}/firestore-exports/${timestamp}`;
+    const outputUriPrefix = `${fullBucketPath}/firestore-exports/${timestamp}`;
 
     console.log(`Starting scheduled backup to ${outputUriPrefix}...`);
     

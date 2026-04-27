@@ -6,8 +6,9 @@ import { useSyncStore } from '../stores/syncStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useUiStore } from '../stores/uiStore';
 import { useRouter } from 'vue-router';
-import { onMounted, onUnmounted, watch } from 'vue';
+import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useQuasar } from 'quasar';
+import ConfigSelector from '../components/common/ConfigSelector.vue';
 import { requestNotificationPermission } from '../services/NotificationService';
 import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
@@ -19,6 +20,7 @@ const scheduleStore = useScheduleStore();
 const syncStore = useSyncStore();
 const uiStore = useUiStore();
 const $q = useQuasar();
+const isMobile = computed(() => $q.platform.is.mobile);
 
 let unsubs: (() => void)[] = [];
 
@@ -52,7 +54,7 @@ onMounted(async () => {
   }
 
   // Admin notification listener
-  if (authStore.isAdmin) {
+  if (authStore.isAnyAdmin) {
     await configStore.loadConfigurations();
     notificationStore.initAdminListener(() => {
       if (router.currentRoute.value.path !== '/admin/requests') {
@@ -100,10 +102,29 @@ onMounted(async () => {
 });
 
 function handleSwipe({ direction }: { direction: 'left' | 'right' | 'up' | 'down' }) {
-  // Configurazione rotte per lo swipe (ordine di navigazione)
-  const routes = authStore.isAdmin
-    ? ['/', '/calendar', '/admin/requests', '/admin/users', '/admin/analytics', '/admin']
-    : ['/', '/calendar', '/requests'];
+  // Configurazione rotte per lo swipe (ordine di navigazione dinamico)
+  let routes: string[] = ['/', '/calendar'];
+
+  if (authStore.isAnyAdmin) {
+    // Basic Admin routes filtered by visibility
+    if (uiStore.isTabVisible('new_request')) routes.push('/requests');
+    if (uiStore.isTabVisible('admin_requests')) routes.push('/admin/requests');
+    if (uiStore.isTabVisible('admin_users')) routes.push('/admin/users');
+    if (uiStore.isTabVisible('admin_analytics')) routes.push('/admin/analytics');
+    // Only SuperAdmin can see /admin
+    if (authStore.isSuperAdmin && uiStore.isTabVisible('admin_system')) routes.push('/admin');
+
+    // Also filter Home and Calendar if hidden
+    if (!uiStore.isTabVisible('home')) {
+      routes = routes.filter(r => r !== '/');
+    }
+    if (!uiStore.isTabVisible('calendar')) {
+      routes = routes.filter(r => r !== '/calendar');
+    }
+  } else {
+    // Regular user routes
+    routes.push('/requests');
+  }
 
   const currentPath = router.currentRoute.value.path;
   const currentIndex = routes.indexOf(currentPath);
@@ -125,7 +146,7 @@ function handleSwipe({ direction }: { direction: 'left' | 'right' | 'up' | 'down
 watch(
   () => authStore.currentUser?.configId,
   (newConfigId) => {
-    if (newConfigId && !authStore.isAdmin && !configStore.activeConfigId) {
+    if (newConfigId && !authStore.isAnyAdmin && !configStore.activeConfigId) {
       configStore.activeConfigId = newConfigId;
       // Also set a basic activeConfig object if not present
       if (!configStore.activeConfig) {
@@ -150,9 +171,9 @@ watch(
   () => router.currentRoute.value.path,
   (newPath) => {
     if (authStore.isAuthenticated) {
-    if (configStore.activeConfigId) {
-      void syncStore.checkAndRefresh(configStore.activeConfigId);
-    }
+      if (configStore.activeConfigId) {
+        void syncStore.checkAndRefresh(configStore.activeConfigId);
+      }
       // Save last visited path for session persistence
       if (newPath !== '/' && newPath !== '/login' && newPath !== '/register') {
         uiStore.setLastPath(newPath);
@@ -173,8 +194,18 @@ async function logout() {
   await router.push('/login');
 }
 
-async function handleConfigChange(configId: string) {
-  await configStore.setActiveConfig(configId);
+const canGoBack = computed(() => {
+  const rootPaths = ['/', '/calendar', '/requests', '/admin/requests', '/admin/users', '/admin/analytics', '/admin'];
+  // Also consider sub-paths of root paths as "backable" if they are deep, but for now simple check
+  return !rootPaths.includes(router.currentRoute.value.path);
+});
+
+function goBack() {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    void router.push('/');
+  }
 }
 </script>
 
@@ -182,40 +213,24 @@ async function handleConfigChange(configId: string) {
   <q-layout view="lHh Lpr lFf">
     <q-header elevated class="bg-primary text-white">
       <q-toolbar class="q-pa-xs">
-        <q-toolbar-title class="q-ml-md">
-          <q-avatar size="60px" color="primary" text-color="white">
-            <q-img src="../assets/icon.png" />
-          </q-avatar>
+        <q-btn v-if="canGoBack" flat round dense icon="arrow_back" @click="goBack" class="q-mr-xs" />
+        <q-avatar v-else :size="isMobile ? 'sm' : '60px'" color="primary" text-color="white">
+          <q-img src="../assets/icon.png" />
+        </q-avatar>
+
+        <q-toolbar-title>
+          <!-- Active Department Indicator (Admin Only) -->
+          <div v-if="authStore.isAnyAdmin && configStore.activeConfig" class="row no-wrap q-gutter-md justify-center">
+            <q-chip outline square :size="isMobile ? 'sm' : 'lg'" color="white" text-color="white" icon="home_work"
+              class="q-px-md">
+              {{ configStore.activeConfig.name }}
+            </q-chip>
+          </div>
+
         </q-toolbar-title>
-        <q-toolbar-title> Nurse Hub </q-toolbar-title>
 
         <!-- Global Config Selector (Admin Only) -->
-        <q-select v-if="authStore.isAdmin && configStore.allConfigs.length > 0" v-model="configStore.activeConfigId"
-          :options="configStore.allConfigs" option-value="id" option-label="name" emit-value map-options dense outlined
-          label="Configurazione" class="q-mr-md" style="min-width: 200px" @update:model-value="handleConfigChange">
-          <template v-slot:prepend>
-            <q-icon name="settings" size="xs" />
-          </template>
-          <template v-slot:option="scope">
-            <q-item v-bind="scope.itemProps">
-              <q-item-section avatar>
-                <q-icon :name="scope.opt.profession === 'Medico'
-                  ? 'medical_services'
-                  : scope.opt.profession === 'OSS'
-                    ? 'health_and_safety'
-                    : 'local_hospital'
-                  " />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>{{ scope.opt.name }}</q-item-label>
-                <q-item-label caption>{{ scope.opt.profession }}</q-item-label>
-              </q-item-section>
-              <q-item-section side v-if="scope.opt.isActive">
-                <q-badge color="green" label="●" />
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
+        <ConfigSelector class="q-mr-md" />
 
         <!-- In-App Notifications Badge -->
         <q-btn flat round dense icon="notifications" class="q-mr-sm">
@@ -299,23 +314,34 @@ async function handleConfigChange(configId: string) {
 
     <q-footer bordered class="bg-white text-primary">
       <q-tabs no-caps active-color="primary" indicator-color="transparent" class="text-grey" align="justify">
-        <!-- Home: always visible for all users -->
-        <q-route-tab to="/" icon="dashboard" label="Home" />
-        <q-route-tab to="/calendar" icon="calendar_month" label="Turni" />
+        <!-- Home: always visible for regular users, toggleable for admins -->
+        <q-route-tab v-if="!authStore.isAnyAdmin || uiStore.isTabVisible('home')" to="/" icon="dashboard"
+          label="Home" />
+        <q-route-tab v-if="!authStore.isAnyAdmin || uiStore.isTabVisible('calendar')" to="/calendar"
+          icon="calendar_month" label="Turni" />
 
         <!-- User-only tabs -->
-        <q-route-tab v-if="!authStore.isAdmin" to="/requests" icon="event_note" label="Richieste" />
+        <q-route-tab v-if="!authStore.isAnyAdmin" to="/requests" icon="event_note" label="Richieste" />
 
-        <!-- Admin-only tabs -->
-        <q-route-tab v-if="authStore.isAdmin" to="/requests" icon="add_circle" label="Nuova Richiesta" />
-        <q-route-tab v-if="authStore.isAdmin" to="/admin/requests" icon="event_note" label="Richieste">
+        <!-- Admin-only tabs (conditional on visibility settings) -->
+        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('new_request')" to="/requests" icon="add_circle"
+          label="Nuova Richiesta" />
+
+        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_requests')" to="/admin/requests"
+          icon="event_note" label="Richieste">
           <q-badge v-if="notificationStore.pendingRequestsCount > 0" color="red" floating>
             {{ notificationStore.pendingRequestsCount }}
           </q-badge>
         </q-route-tab>
-        <q-route-tab v-if="authStore.isAdmin" to="/admin/users" icon="people" label="Utenti" />
-        <q-route-tab v-if="authStore.isAdmin" to="/admin/analytics" icon="analytics" label="Stats" />
-        <q-route-tab v-if="authStore.isAdmin" to="/admin" icon="admin_panel_settings" label="Admin" />
+
+        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_users')" to="/admin/users" icon="people"
+          label="Utenti" />
+
+        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_analytics')" to="/admin/analytics"
+          icon="analytics" label="Stats" />
+
+        <q-route-tab v-if="authStore.isSuperAdmin && uiStore.isTabVisible('admin_system')" to="/admin"
+          icon="admin_panel_settings" label="Admin" />
       </q-tabs>
       <div class="row justify-center q-mx-md">
         <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>

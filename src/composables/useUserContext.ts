@@ -26,7 +26,7 @@ export function useUserContext() {
       return [];
     }
 
-    if (authStore.isAdmin && authStore.selectedOperatorIds.length > 0) {
+    if (authStore.isAnyAdmin && authStore.selectedOperatorIds.length > 0) {
       // Admin with selected operators - would need to fetch them
       // For now, return current operator as placeholder
       return [authStore.currentOperator];
@@ -50,7 +50,7 @@ export function useUserContext() {
    */
   function canViewRequest(request: ShiftRequest): boolean {
     // Admin sees everything
-    if (authStore.isAdmin) {
+    if (authStore.isAnyAdmin) {
       return true;
     }
 
@@ -76,10 +76,17 @@ export function useUserContext() {
   }
 
   /**
-   * Helper to check if current user is admin
+   * Helper to check if current user has any administrative role
    */
   function isAdmin(): boolean {
-    return authStore.isAdmin;
+    return authStore.isAnyAdmin;
+  }
+
+  /**
+   * Helper to check if current user is super admin
+   */
+  function isSuperAdmin(): boolean {
+    return authStore.isSuperAdmin;
   }
 
   /**
@@ -93,7 +100,7 @@ export function useUserContext() {
    * Fetches selected operators data (for admin)
    */
   async function fetchSelectedOperators(): Promise<Operator[]> {
-    if (!authStore.isAdmin || authStore.selectedOperatorIds.length === 0) {
+    if (!authStore.isAnyAdmin || authStore.selectedOperatorIds.length === 0) {
       return authStore.currentOperator ? [authStore.currentOperator] : [];
     }
 
@@ -117,6 +124,7 @@ export function useUserContext() {
     primaryOperator,
     canViewRequest,
     isAdmin,
+    isSuperAdmin,
     isVerified,
     fetchSelectedOperators,
   };

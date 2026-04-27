@@ -16,7 +16,7 @@ export function roleGuard(
 
   // Check if route requires admin role
   if (to.meta.requiresAdmin) {
-    if (!authStore.isAdmin) {
+    if (!authStore.isAnyAdmin) {
       // Non-admin users are redirected to home
       next('/');
       return;

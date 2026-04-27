@@ -109,6 +109,17 @@ const rejectionReason = ref('');
 const requestToReject = ref<ShiftRequest | null>(null);
 const isBulkReject = ref(false);
 
+// Quasar Italian Locale for q-date
+const itLocale = {
+  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
+  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
+  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
+  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
+  firstDayOfWeek: 1,
+  format24h: true,
+  pluralDay: 'giorni'
+};
+
 // Operator options for filter
 const operatorOptions = computed(() => {
   return Object.values(operators.value).map((op) => ({
@@ -1293,7 +1304,7 @@ watch(activeTab, (val) => {
               <template v-slot:append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD">
+                    <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD" :locale="itLocale">
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Chiudi" color="primary" flat />
                       </div>
@@ -1309,7 +1320,7 @@ watch(activeTab, (val) => {
               <template v-slot:append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="filters.dateTo" mask="YYYY-MM-DD">
+                    <q-date v-model="filters.dateTo" mask="YYYY-MM-DD" :locale="itLocale">
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Chiudi" color="primary" flat />
                       </div>
@@ -1738,7 +1749,7 @@ watch(activeTab, (val) => {
             <div class="row items-center justify-between">
               <div>
                 <div class="text-weight-medium q-mb-xs">
-                  {{ swap.date }} — <q-badge color="amber-8" :label="swap.offeredShift" /> ↔
+                  {{ formatDate(swap.date) }} — <q-badge color="amber-8" :label="swap.offeredShift" /> ↔
                   <q-badge color="deep-orange" :label="swap.desiredShift" />
                 </div>
                 <div class="text-caption">
@@ -1782,7 +1793,7 @@ watch(activeTab, (val) => {
             <q-card-section class="q-py-xs q-px-md">
               <div class="row items-center justify-between no-wrap">
                 <div class="col">
-                  <div class="text-caption text-grey-7">{{ s.date }}</div>
+                  <div class="text-caption text-grey-7">{{ formatDate(s.date) }}</div>
                   <div class="row items-center q-gutter-xs">
                     <q-chip size="xs" dense color="amber-9" text-color="white">{{
                       s.offeredShift
@@ -1898,7 +1909,7 @@ watch(activeTab, (val) => {
 
         <q-card-section class="q-pt-none">
           <div v-if="approvalSwapContext" class="q-mb-md">
-            Stai confermando il cambio turno del <strong>{{ approvalSwapContext.date }}</strong><br />
+            Stai confermando il cambio turno del <strong>{{ formatDate(approvalSwapContext.date) }}</strong><br />
             tra
             <strong>{{ approvalSwapContext.creatorName || approvalSwapContext.creatorId }}</strong>
             e

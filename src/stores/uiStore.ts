@@ -13,6 +13,8 @@ export const useUiStore = defineStore('ui', () => {
   const activeTabs = ref<Record<string, string>>(JSON.parse(localStorage.getItem('activeTabs') || '{}'));
   // Last visited path for session persistence
   const lastPath = ref<string>(localStorage.getItem('lastPath') || '/');
+  // Visibility of bottom tabs (for admins)
+  const visibleTabs = ref<Record<string, boolean>>(JSON.parse(localStorage.getItem('visibleTabs') || '{}'));
 
   /**
    * Get the active tab for a specific route path
@@ -37,11 +39,29 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem('lastPath', path);
   }
 
+  /**
+   * Toggle tab visibility and persist
+   */
+  function toggleTabVisibility(tabId: string, isVisible: boolean) {
+    visibleTabs.value[tabId] = isVisible;
+    localStorage.setItem('visibleTabs', JSON.stringify(visibleTabs.value));
+  }
+
+  /**
+   * Check if a tab is visible
+   */
+  function isTabVisible(tabId: string, defaultVal = true): boolean {
+    return visibleTabs.value[tabId] ?? defaultVal;
+  }
+
   return {
     activeTabs,
     lastPath,
+    visibleTabs,
     getActiveTab,
     setActiveTab,
     setLastPath,
+    toggleTabVisibility,
+    isTabVisible,
   };
 });

@@ -6,11 +6,12 @@
 * @modified 2026-04-23
 */
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, computed } from 'vue';
 import { useQuasar } from 'quasar';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useScenarioStore } from '../../stores/scenarioStore';
 import { useSecureLogger } from '../../utils/secureLogger';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
@@ -21,16 +22,16 @@ import type { SystemConfiguration, ReplacementScenario, ReplacementRole } from '
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const scenarioStore = useScenarioStore();
 
 // Config state
-const configurations = ref<SystemConfiguration[]>([]);
-const activeConfigId = ref<string | null>(null);
-const currentConfig = ref<SystemConfiguration | null>(null);
+const configurations = computed(() => configStore.allConfigs);
 const showCreateDialog = ref(false);
 const newConfigName = ref('');
 const newConfigProfession = ref<'Infermiere' | 'Medico' | 'OSS'>('Infermiere');
 const saving = ref(false);
+const savingId = ref<string | null>(null);
 
 // Scenario state
 const scenariosByConfig = reactive<Record<string, ReplacementScenario[]>>({});
@@ -84,24 +85,10 @@ function getShiftColor(shift: string): string {
 }
 
 onMounted(async () => {
-  await loadConfigurations();
-});
-
-async function loadConfigurations() {
-  try {
-    const snapshot = await getDocs(collection(db, 'systemConfigurations'));
-    configurations.value = snapshot.docs.map(
-      (d) => ({ id: d.id, ...d.data() }) as SystemConfiguration,
-    );
-    if (configurations.value.length > 0 && !activeConfigId.value) {
-      const active = configurations.value.find((c) => c.isActive);
-      activeConfigId.value = active ? active.id : configurations.value[0]!.id;
-      currentConfig.value = configurations.value.find((c) => c.id === activeConfigId.value) || null;
-    }
-  } catch (error) {
-    logger.error('Error loading configurations', error);
+  if (configStore.allConfigs.length === 0) {
+    await configStore.loadConfigurations();
   }
-}
+});
 
 // Auto-load scenarios when a config is expanded
 async function onConfigExpand(configId: string) {
@@ -121,9 +108,9 @@ async function createConfiguration() {
       createdBy: authStore.currentUser!.uid,
       isActive: false,
     };
-    const docRef = await addDoc(collection(db, 'systemConfigurations'), newConfig);
-    configurations.value.push({ id: docRef.id, ...newConfig });
+    await addDoc(collection(db, 'systemConfigurations'), newConfig);
     $q.notify({ type: 'positive', message: 'Configurazione creata!' });
+    await configStore.loadConfigurations(); // Refresh store
     showCreateDialog.value = false;
     newConfigName.value = '';
     newConfigProfession.value = 'Infermiere';
@@ -136,7 +123,7 @@ async function createConfiguration() {
 async function saveConfig(config: SystemConfiguration) {
   if (!config) return;
   saving.value = true;
-  activeConfigId.value = config.id;
+  savingId.value = config.id;
   try {
     const configRef = doc(db, 'systemConfigurations', config.id);
     await updateDoc(configRef, {
@@ -145,29 +132,20 @@ async function saveConfig(config: SystemConfiguration) {
       spreadsheetUrl: config.spreadsheetUrl,
       gasWebUrl: config.gasWebUrl || '',
     });
-    const index = configurations.value.findIndex((c) => c.id === config.id);
-    if (index !== -1) configurations.value[index] = { ...config };
     $q.notify({ type: 'positive', message: 'Configurazione salvata!' });
+    await configStore.loadConfigurations(); // Refresh store
   } catch (error) {
     logger.error('Error', error);
     $q.notify({ type: 'negative', message: 'Errore durante il salvataggio' });
   } finally {
     saving.value = false;
-    activeConfigId.value = null;
+    savingId.value = null;
   }
 }
 
 async function activateConfig(configId: string) {
   try {
-    for (const config of configurations.value) {
-      if (config.isActive && config.id !== configId) {
-        await updateDoc(doc(db, 'systemConfigurations', config.id), { isActive: false });
-        config.isActive = false;
-      }
-    }
-    await updateDoc(doc(db, 'systemConfigurations', configId), { isActive: true });
-    const c = configurations.value.find((x) => x.id === configId);
-    if (c) c.isActive = true;
+    await configStore.setActiveConfig(configId);
     $q.notify({ type: 'positive', message: 'Configurazione attivata!' });
   } catch (error) {
     logger.error('Error', error);
@@ -176,7 +154,7 @@ async function activateConfig(configId: string) {
 }
 
 function deleteConfig(configId: string) {
-  const config = configurations.value.find((c) => c.id === configId);
+  const config = configurations.value.find((c: SystemConfiguration) => c.id === configId);
   if (!config) return;
   $q.dialog({
     title: 'Conferma Eliminazione',
@@ -187,7 +165,7 @@ function deleteConfig(configId: string) {
     void (async () => {
       try {
         await deleteDoc(doc(db, 'systemConfigurations', configId));
-        configurations.value = configurations.value.filter((c) => c.id !== configId);
+        await configStore.loadConfigurations(); // Refresh the global store
         $q.notify({ type: 'info', message: 'Configurazione eliminata' });
       } catch (error) {
         logger.error('Error', error);
@@ -386,40 +364,50 @@ function deleteScenario(configId: string, scenarioId: string) {
           </q-item-section>
         </template>
 
-        <!-- Config Details -->
-        <q-card flat bordered class="q-ma-md">
-          <q-card-section class="q-gutter-md">
-            <q-input v-model="config.name" label="Nome Configurazione" outlined dense
-              hint="Es: Turni Infermieri Reparto A" />
-            <q-select v-model="config.profession" :options="roleOptions" label="Professione Target" outlined dense
-              emit-value map-options />
-            <q-input v-model="config.spreadsheetUrl" label="Google Spreadsheet URL" outlined dense
-              hint="Incolla qui il link completo del foglio Google">
-              <template v-slot:append>
-                <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'spreadsheet')" />
-              </template>
-            </q-input>
+        <!-- Parametri di Configurazione -->
+        <q-expansion-item icon="settings" label="Parametri di Configurazione" default-opened
+          header-class="text-subtitle1 text-weight-bold" class="q-ma-md q-mb-md bg-white rounded-borders shadow-1">
+          <q-card flat>
+            <q-card-section class="q-gutter-md">
+              <div class="row q-col-gutter-md items-center">
+                <q-input v-model="config.name" label="Nome Configurazione" outlined dense class="col"
+                  hint="Es: Turni Infermieri Reparto A" />
+                <q-select v-model="config.profession" :options="roleOptions" label="Professione Target" outlined dense
+                  emit-value map-options class="col-4" />
+              </div>
 
-            <q-input v-model="config.gasWebUrl" label="GAS Web App URL (Script Google)" outlined dense
-              hint="Incolla l'URL dell'applicazione web creato dallo script">
-              <template v-slot:append>
-                <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'gas')" />
-              </template>
-            </q-input>
-          </q-card-section>
-          <q-card-actions align="right">
-            <q-btn v-if="!config.isActive" flat label="Attiva" color="positive" icon="check_circle"
-              @click="activateConfig(config.id)">
-              <q-tooltip>Imposta come configurazione attiva</q-tooltip>
-            </q-btn>
-            <q-badge v-else color="green" label="● Configurazione Attiva" class="q-mr-md" />
-            
-            <GlobalSyncBtn :target-config="config" size="sm" show-label />
+              <q-input v-model="config.spreadsheetUrl" label="Google Spreadsheet URL" outlined dense
+                hint="Incolla qui il link completo del foglio Google">
+                <template v-slot:append>
+                  <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'spreadsheet')" />
+                </template>
+              </q-input>
 
-            <q-btn label="Salva" color="primary" icon="save" :loading="saving && activeConfigId === config.id"
-              @click="saveConfig(config)" />
-          </q-card-actions>
-        </q-card>
+              <q-input v-model="config.gasWebUrl" label="GAS Web App URL (Script Google)" outlined dense
+                hint="Incolla l'URL dell'applicazione web creato dallo script">
+                <template v-slot:append>
+                  <q-btn flat round dense icon="content_paste" @click="pasteUrl(config, 'gas')" />
+                </template>
+              </q-input>
+            </q-card-section>
+
+            <q-separator inset />
+
+            <q-card-actions align="right" class="q-px-md q-pb-md">
+              <div v-if="config.isActive" class="row items-center q-mr-auto q-pl-sm">
+                <q-icon name="check_circle" color="green" size="sm" class="q-mr-xs" />
+                <span class="text-subtitle2 text-green">Configurazione Attiva</span>
+              </div>
+              <q-btn v-else flat label="Attiva Configurazione" color="grey-7" icon="circle_notifications"
+                @click="activateConfig(config.id)" />
+
+              <GlobalSyncBtn :target-config="config" size="md" label="Sincronizza Ora" />
+
+              <q-btn label="Salva" color="primary" icon="save" :loading="saving && savingId === config.id"
+                @click="saveConfig(config)" class="q-ml-sm" />
+            </q-card-actions>
+          </q-card>
+        </q-expansion-item>
 
         <!-- Scenari di Sostituzione -->
         <q-expansion-item icon="swap_horiz" label="Scenari di Sostituzione"
@@ -509,8 +497,8 @@ function deleteScenario(configId: string, scenarioId: string) {
         </q-expansion-item>
 
         <!-- Backup & Ripristino - Phase 25 -->
-        <q-expansion-item icon="cloud_sync" label="Backup & Ripristino"
-          header-class="text-subtitle1 text-weight-bold" class="q-ma-md q-mb-lg bg-white rounded-borders shadow-1">
+        <q-expansion-item icon="cloud_sync" label="Backup & Ripristino" header-class="text-subtitle1 text-weight-bold"
+          class="q-ma-md q-mb-lg bg-white rounded-borders shadow-1">
           <AdminBackupRestore />
         </q-expansion-item>
       </q-expansion-item>

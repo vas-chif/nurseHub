@@ -116,9 +116,8 @@ export default async function handler(req, res) {
 }
 
 async function listBackups(res) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   const projectId = serviceAccount.project_id;
-  const bucketName = `${projectId}-backups`;
+  const bucketName = process.env.BACKUP_STORAGE_BUCKET || `${projectId}-backups`;
   const storage = new Storage({ credentials: serviceAccount });
   const bucket = storage.bucket(bucketName);
 
@@ -176,9 +175,9 @@ async function listBackups(res) {
 }
 
 async function triggerManualBackup(res, uid, email, reason) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   const projectId = serviceAccount.project_id;
-  const bucketName = `gs://${projectId}-backups`;
+  const bucketBaseName = process.env.BACKUP_STORAGE_BUCKET || `${projectId}-backups`;
+  const bucketUri = `gs://${bucketBaseName}`;
   
   // 1. Lock check
   const settingsDoc = await db.collection('systemSettings').doc('backup').get();
@@ -196,7 +195,7 @@ async function triggerManualBackup(res, uid, email, reason) {
   }, { merge: true });
 
   const timestamp = new Date().toISOString().replace(/[:T]/g, '-').replace(/\..+/, '') + '_' + Math.random().toString(36).substring(2, 6);
-  const outputUriPrefix = `${bucketName}/firestore-exports/${timestamp}`;
+  const outputUriPrefix = `${bucketUri}/firestore-exports/${timestamp}`;
 
   try {
     const [operation] = await firestoreAdminClient.exportDocuments({
@@ -240,7 +239,6 @@ async function triggerManualBackup(res, uid, email, reason) {
 async function deleteBackup(res, backupPath, logId, reason, uid, email) {
   if (!backupPath) return res.status(400).json({ error: 'Missing backupPath' });
 
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   const storage = new Storage({ credentials: serviceAccount });
   
   // Safety Check if logId is provided

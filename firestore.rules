@@ -6,19 +6,33 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Phase 25 (§1.10): JWT-First — reads role from Custom Claim (zero Firestore reads).
-    // Falls back gracefully: if claim is missing (pre-migration users), deny by default.
-    // After running api/migrate-claims.js all users will have the claim set.
+    // Phase 27: Multi-Level Role Hierarchy (§1.10)
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.get('role', 'user') == 'superAdmin';
+    }
+
     function isAdmin() {
       return isAuthenticated() && request.auth.token.get('role', 'user') == 'admin';
     }
 
-    function isOperatorOwner(operatorId) {
+    function isAnyAdmin() {
+      return isSuperAdmin() || isAdmin();
+    }
+
+    /**
+     * Config-Fencing: Check if admin has authority over a specific configuration
+     */
+    function hasConfigAuthority(configId) {
+      return isSuperAdmin() || (isAdmin() && configId in request.auth.token.get('managedConfigIds', []));
+    }
+
+    function isOperatorOwner(configId, operatorId) {
       return isAuthenticated() && (
         // Case 1: Direct UID link on the operator document
         (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
-        // Case 2: User profile links to this operatorId
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.operatorId == operatorId
+        // Case 2: User profile links to this operatorId and configId
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.operatorId == operatorId &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.configId == configId)
       );
     }
 
@@ -26,14 +40,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      // Phase 25: Users can update their profile but NOT their role or approval status
-      // ALLOW linking operatorId/configId ONLY IF they are currently null (first-time sync)
+      // Phase 27: manageAdmins permission required to modify other users
       allow update: if isAuthenticated() && (
-        isAdmin() || 
+        isSuperAdmin() || 
+        (isAdmin() && request.auth.token.get('permissions', {}).get('manageAdmins', false) == true) ||
         (request.auth.uid == userId && (
-          // Standard update: role, isApproved, operatorId, configId are protected
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId']) ||
-          // Linking exception: allow setting operatorId and configId if they don't exist yet
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId', 'managerialInfo']) ||
           (resource.data.get('operatorId', null) == null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt']))
         ))
       );
@@ -43,45 +55,45 @@ service cloud.firestore {
     match /shiftRequests/{requestId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Allow update if admin OR if a user is adding an offer (only modifying offers and offeringOperatorIds)
-      allow update: if isAdmin() || (
+      // Config-Fencing for updates (approvals, rejections)
+      allow update: if hasConfigAuthority(resource.data.configId) || (
         isAuthenticated() && 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'offeringOperatorIds'])
       );
-      allow delete: if isAdmin() || (isAuthenticated() && resource != null && (resource.data.creatorId == request.auth.uid || resource.data.userId == request.auth.uid));
+      allow delete: if hasConfigAuthority(resource.data.configId) || 
+                   (isAuthenticated() && resource != null && (resource.data.creatorId == request.auth.uid || resource.data.userId == request.auth.uid));
     }
     
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated() && (isAnyAdmin() || resource.data.userId == request.auth.uid);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated();
     }
     
-    // Settings & System Config
+    // Settings & System Config (Super Admin only for global settings)
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
 
     // System Configurations
     match /systemConfigurations/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      // Only Super Admin can create/delete configs. Authorized admins can update.
+      allow create, delete: if isSuperAdmin();
+      allow update: if hasConfigAuthority(configId);
 
-      // Isolated Sync Metadata (Phase 25)
+      // Isolated Sync Metadata
       match /metadata/sync {
         allow read: if isAuthenticated();
-        // Allow write if Admin OR if user belongs to this configId
-        allow write: if isAdmin() || (isAuthenticated() && request.auth.token.get('configId', '') == configId);
+        allow write: if hasConfigAuthority(configId) || (isAuthenticated() && request.auth.token.get('configId', '') == configId);
       }
       
       match /operators/{operatorId} {
         allow read: if true;
-        // Phase 25: Admin has full write access (create, update, delete)
-        // Others can only update if owner or claiming an orphan
-        allow write: if isAdmin();
-        allow update: if isOperatorOwner(operatorId) || (
+        allow write: if hasConfigAuthority(configId);
+        allow update: if isOperatorOwner(configId, operatorId) || (
           isAuthenticated() && 
           (!('userId' in resource.data) || resource.data.userId == null) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId']) &&
@@ -91,38 +103,34 @@ service cloud.firestore {
 
       match /replacementScenarios/{scenarioId} {
         allow read: if isAuthenticated();
-        allow write: if isAdmin();
+        allow write: if hasConfigAuthority(configId);
       }
     }
 
-    // Other system documents: admin only
+    // Other system documents: super admin only
     match /system/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
 
-    // Shift Swaps (Phase 20)
+    // Shift Swaps
     match /shiftSwaps/{swapId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Hardening: Only Admin can approve/finalize swaps.
-      // Involved parties can only update the status to 'PENDING_ADMIN' (accepting) or 'CANCELLED' (by creator).
-      allow update: if isAdmin() || (isAuthenticated() && (
-        // Allow accepting an OPEN swap: status must become PENDING_ADMIN, and counterpartId must be the current user
+      allow update: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && (
         (resource.data.status == 'OPEN' && request.resource.data.status == 'PENDING_ADMIN' && request.resource.data.counterpartId == request.auth.uid) ||
-        // Allow creator to cancel
         (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED')
       ));
-      allow delete: if isAdmin() || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
+      allow delete: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }
 
-    // Backup & Audit Logs (Phase 25)
-    match /backupLogs/{logId}           { allow read: if isAdmin(); allow write: if false; }
-    match /manualBackupLogs/{logId}     { allow read: if isAdmin(); allow write: if false; }
-    match /restoreLogs/{logId}          { allow read: if isAdmin(); allow write: if false; }
-    match /deletedBackupLogs/{logId}    { allow read: if isAdmin(); allow write: if false; }
-    match /backupAutomationLogs/{logId} { allow read: if isAdmin(); allow write: if false; }
-    match /auditLogs/{logId}            { allow read: if isAdmin(); allow write: if false; }
-    match /systemSettings/backup        { allow read: if isAdmin(); allow write: if false; }
+    // Backup & Audit Logs: Requires manageSystem or manageAdmins permission
+    match /backupLogs/{logId}           { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageSystem', false) == true); allow write: if false; }
+    match /manualBackupLogs/{logId}     { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageSystem', false) == true); allow write: if false; }
+    match /restoreLogs/{logId}          { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageSystem', false) == true); allow write: if false; }
+    match /deletedBackupLogs/{logId}    { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageSystem', false) == true); allow write: if false; }
+    match /backupAutomationLogs/{logId} { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageSystem', false) == true); allow write: if false; }
+    match /auditLogs/{logId}            { allow read: if isSuperAdmin() || (isAdmin() && request.auth.token.get('permissions', {}).get('manageAdmins', false) == true); allow write: if false; }
+    match /systemSettings/backup        { allow read: if isAnyAdmin(); allow write: if false; }
   }
 }

@@ -72,8 +72,9 @@ export default async function handler(req, res) {
 
   try {
     // 1. SAFETY: Emergency Backup before restore
+    const bucketBaseName = process.env.BACKUP_STORAGE_BUCKET || `${projectId}-backups`;
     const emergencyTimestamp = `emergency-before-restore-${Date.now()}`;
-    const emergencyPath = `gs://${projectId}-backups/emergency/${emergencyTimestamp}`;
+    const emergencyPath = `gs://${bucketBaseName}/emergency/${emergencyTimestamp}`;
     
     console.log('Starting emergency safety backup...');
     const [exportOp] = await firestoreAdminClient.exportDocuments({

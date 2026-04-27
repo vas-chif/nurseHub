@@ -67,11 +67,17 @@
             readonly
             hint="L'email non può essere modificata"
           />
-          <q-input v-model="formData.dateOfBirth" label="Data di Nascita" outlined dense readonly>
+          <q-input
+            :model-value="formatDate(formData.dateOfBirth)"
+            label="Data di Nascita"
+            outlined
+            dense
+            readonly
+          >
             <template v-slot:append v-if="isEditing">
               <q-icon name="event" class="cursor-pointer">
                 <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                  <q-date v-model="formData.dateOfBirth" mask="YYYY-MM-DD">
+                  <q-date v-model="formData.dateOfBirth" mask="YYYY-MM-DD" :locale="itLocale">
                     <div class="row items-center justify-end">
                       <q-btn v-close-popup label="Chiudi" color="primary" flat />
                     </div>
@@ -112,7 +118,7 @@
 import { ref, computed, watch } from 'vue';
 import { useAuthStore } from '../stores/authStore';
 import { userService } from '../services/UserService';
-import { useQuasar } from 'quasar';
+import { useQuasar, date as dateUtil } from 'quasar';
 import { useSecureLogger } from '../utils/secureLogger';
 import { useRoute } from 'vue-router';
 
@@ -135,6 +141,22 @@ const formData = ref({
   email: '',
   dateOfBirth: '',
 });
+
+// Quasar Italian Locale for q-date
+const itLocale = {
+  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
+  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
+  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
+  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
+  firstDayOfWeek: 1,
+  format24h: true,
+  pluralDay: 'giorni'
+};
+
+function formatDate(val: string | undefined) {
+  if (!val) return '-';
+  return dateUtil.formatDate(val, 'DD/MM/YYYY');
+}
 
 // Initialize form data when user loads
 watch(

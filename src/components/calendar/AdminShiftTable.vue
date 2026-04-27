@@ -1,8 +1,8 @@
 <template>
   <div class="column full-height col">
     <!-- Filters Header -->
-    <div class="row q-col-gutter-sm q-mb-md">
-      <div class="col-12 col-md-4">
+    <div class="row q-col-gutter-sm q-mb-md items-center">
+      <div class="col-12 col-md-3">
         <q-select v-model="selectedOperators" :options="operatorOptions" label="Filtra Personale" dense outlined
           multiple use-chips use-input emit-value map-options option-value="id" option-label="name"
           @filter="filterOperators">
@@ -19,23 +19,36 @@
         </q-select>
       </div>
 
-      <div class="col-12 col-md-3">
-        <q-input v-model="startDate" label="Data Inizio" type="date" dense outlined />
+      <div class="col-12 col-md-2">
+        <q-input :model-value="formatDate(startDate)" label="Data Inizio" outlined dense readonly
+          class="cursor-pointer">
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="startDate" mask="YYYY-MM-DD" :locale="itLocale">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
       </div>
 
       <div class="col-6 col-md-2">
-        <q-input v-model.number="daysToShow" label="Giorni da mostrare" type="number" dense outlined />
+        <q-input v-model.number="daysToShow" label="Giorni" type="number" dense outlined />
       </div>
 
-      <div class="col-6 col-md-3">
-        <q-select v-model="selectedShiftCodes" :options="shiftCodeOptions" label="Filtra Turni (es. M, P, N)" dense
-          outlined multiple use-chips />
+      <div class="col-6 col-md-2">
+        <q-select v-model="selectedShiftCodes" :options="shiftCodeOptions" label="Filtra Turni" dense outlined multiple
+          use-chips />
       </div>
 
-      <div class="col-6 col-md-2 flex flex-center q-gutter-x-sm">
-        <GlobalSyncBtn size="sm" />
-        <q-btn icon="refresh" round flat dense color="primary" @click="() => fetchData(true)">
-          <q-tooltip>Ricarica Dati</q-tooltip>
+      <div class="col-12 col-md-3 row no-wrap items-center justify-end q-gutter-x-sm">
+        <GlobalSyncBtn size="md" />
+        <q-btn icon="refresh" label="Aggiorna" outline dense color="primary" @click="() => fetchData(true)" no-caps>
+          <q-tooltip>Ricarica Dati Locale</q-tooltip>
         </q-btn>
         <q-btn icon="info" round flat dense color="info" @click="showLegend = true">
           <q-tooltip>Legenda Turni</q-tooltip>
@@ -232,6 +245,22 @@ const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
 
 const pagination = ref({ rowsPerPage: 0 }); // Show all rows for virtual scroll
 const showLegend = ref(false);
+
+// Quasar Italian Locale for q-date
+const itLocale = {
+  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
+  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
+  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
+  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
+  firstDayOfWeek: 1,
+  format24h: true,
+  pluralDay: 'giorni'
+};
+
+function formatDate(dt: string) {
+  if (!dt) return '';
+  return qDate.formatDate(dt, 'DD/MM/YYYY');
+}
 
 // Generate Date Columns dynamically based on startDate and daysToShow
 const dateColumns = computed<DateColumn[]>(() => {

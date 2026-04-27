@@ -20,6 +20,7 @@ import { ref, computed } from 'vue';
 import type { User, Operator } from '../types/models';
 import { userService } from '../services/UserService';
 import { operatorsService } from '../services/OperatorsService';
+import type { UserRole, IUserPermissions } from '../types/auth';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -50,7 +51,13 @@ export const useAuthStore = defineStore('auth', () => {
    * Populated after getIdTokenResult() on auth state change.
    * Primary source for isAdmin computed.
    */
-  const claimRole = ref<'admin' | 'user' | null>(null);
+  const claimRole = ref<UserRole | null>(null);
+  const managedConfigIds = ref<string[]>([]);
+  const permissions = ref<IUserPermissions>({
+    manageAdmins: false,
+    manageSystem: false,
+    viewAuditLogs: false
+  });
 
   // --- Computed ---
 
@@ -60,15 +67,29 @@ export const useAuthStore = defineStore('auth', () => {
    * Phase 25 (§1.10): JWT-First — claim is primary, Firestore role is fallback.
    * This guarantees immediate reflection of role changes after token refresh.
    */
-  const userRole = computed((): 'admin' | 'user' => {
+  const userRole = computed((): UserRole => {
     // Primary: JWT Custom Claim
     if (claimRole.value !== null) return claimRole.value;
-    // Fallback: Firestore document (used on first render before claims resolve)
+    // Fallback: Firestore document
     return currentUser.value?.role ?? 'user';
   });
 
+  const isSuperAdmin = computed(() => userRole.value === 'superAdmin');
   const isAdmin = computed(() => userRole.value === 'admin');
+  const isAnyAdmin = computed(() => isSuperAdmin.value || isAdmin.value);
   const isVerified = computed(() => currentUser.value?.isVerified || false);
+
+  /**
+   * Check if user can manage a specific configuration
+   */
+  const canManageConfig = computed(() => (configId: string) => {
+    if (isSuperAdmin.value) return true;
+    if (!isAdmin.value) return false;
+    return managedConfigIds.value.includes(configId);
+  });
+
+  const canManageAdmins = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageAdmins));
+  const canManageSystem = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageSystem));
 
   // --- Private helpers ---
 
@@ -79,17 +100,37 @@ export const useAuthStore = defineStore('auth', () => {
   async function refreshClaimRole(firebaseUser: FirebaseUser): Promise<void> {
     try {
       const tokenResult = await firebaseUser.getIdTokenResult();
-      const roleClaim = tokenResult.claims['role'];
-      if (roleClaim === 'admin' || roleClaim === 'user') {
+      const claims = tokenResult.claims;
+      
+      const roleClaim = claims['role'] as UserRole;
+      if (roleClaim === 'superAdmin' || roleClaim === 'admin' || roleClaim === 'user') {
         claimRole.value = roleClaim;
       } else {
-        // No claim yet (new user or pre-migration): rely on Firestore fallback
         claimRole.value = null;
       }
-      logger.info('JWT claim role loaded', { role: claimRole.value ?? 'fallback-to-firestore' });
+
+      managedConfigIds.value = (claims['managedConfigIds'] as string[]) || [];
+      
+      const permsClaim = claims['permissions'] as IUserPermissions | undefined;
+      if (permsClaim) {
+        permissions.value = {
+          manageAdmins: !!permsClaim.manageAdmins,
+          manageSystem: !!permsClaim.manageSystem,
+          viewAuditLogs: !!permsClaim.viewAuditLogs
+        };
+      } else {
+        permissions.value = { manageAdmins: false, manageSystem: false, viewAuditLogs: false };
+      }
+
+      logger.info('JWT claims loaded', { 
+        role: claimRole.value ?? 'fallback', 
+        configs: managedConfigIds.value.length,
+        canManageAdmins: permissions.value.manageAdmins
+      });
     } catch (err) {
-      logger.warn('Failed to read JWT claim, falling back to Firestore role', err);
+      logger.warn('Failed to read JWT claims', err);
       claimRole.value = null;
+      managedConfigIds.value = [];
     }
   }
 
@@ -281,14 +322,20 @@ export const useAuthStore = defineStore('auth', () => {
     currentOperator,
     selectedOperatorIds,
     loading,
-    error,
     isInitialized,
     claimRole,
+    managedConfigIds,
+    permissions,
     // Computed
     isAuthenticated,
     userRole,
     isAdmin,
+    isSuperAdmin,
+    isAnyAdmin,
     isVerified,
+    canManageConfig,
+    canManageAdmins,
+    canManageSystem,
     // Actions
     login,
     register,

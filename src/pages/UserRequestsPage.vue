@@ -45,6 +45,17 @@ import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
 
+// Quasar Italian Locale for q-date
+const itLocale = {
+  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
+  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
+  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
+  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
+  firstDayOfWeek: 1,
+  format24h: true,
+  pluralDay: 'giorni'
+};
+
 import { useUiStore } from '../stores/uiStore';
 import { useRoute } from 'vue-router';
 
@@ -231,7 +242,7 @@ const absenceOptions = [
 const requests = ref<ShiftRequest[]>([]);
 
 // Admin: Operator selection
-const selectedOperatorId = ref(authStore.isAdmin ? '' : authStore.currentOperator?.id || '');
+const selectedOperatorId = ref(authStore.isAnyAdmin ? '' : authStore.currentOperator?.id || '');
 const operators = ref<Record<string, Operator>>({});
 const filterText = ref('');
 
@@ -379,7 +390,7 @@ async function submitRequest() {
   submitting.value = true;
   try {
     // Use selected operator ID (for admin) or current user's operator ID
-    const targetOperatorId = authStore.isAdmin
+    const targetOperatorId = authStore.isAnyAdmin
       ? selectedOperatorId.value
       : authStore.currentOperator?.id || '';
 
@@ -653,7 +664,7 @@ function getStatusLabel(req: ShiftRequest) {
 
       <q-card-section class="q-gutter-md">
         <!-- Admin: Operator Selector -->
-        <div v-if="authStore.isAdmin" class="q-mb-md">
+        <div v-if="authStore.isAnyAdmin" class="q-mb-md">
           <q-select v-model="selectedOperatorId" :options="filteredOperatorOptions" option-label="name"
             option-value="id" label="Operatore (per conto di)" outlined dense emit-value map-options use-input clearable
             @filter="filterOperators" :hint="'Seleziona l\'operatore per cui stai creando la richiesta'">
@@ -676,7 +687,7 @@ function getStatusLabel(req: ShiftRequest) {
               <template v-slot:append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="formData.date" mask="YYYY-MM-DD">
+                    <q-date v-model="formData.date" mask="YYYY-MM-DD" :locale="itLocale">
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Chiudi" color="primary" flat />
                       </div>
@@ -702,7 +713,7 @@ function getStatusLabel(req: ShiftRequest) {
               <template v-slot:append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="formData.endDate" mask="YYYY-MM-DD">
+                    <q-date v-model="formData.endDate" mask="YYYY-MM-DD" :locale="itLocale">
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Chiudi" color="primary" flat />
                       </div>
@@ -909,7 +920,7 @@ function getStatusLabel(req: ShiftRequest) {
                 <template v-slot:append>
                   <q-icon name="event" class="cursor-pointer">
                     <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date v-model="swapForm.date" mask="YYYY-MM-DD">
+                      <q-date v-model="swapForm.date" mask="YYYY-MM-DD" :locale="itLocale">
                         <div class="row items-center justify-end">
                           <q-btn v-close-popup label="Chiudi" color="primary" flat />
                         </div>

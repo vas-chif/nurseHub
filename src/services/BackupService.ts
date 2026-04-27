@@ -61,7 +61,7 @@ export class BackupService {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Errore durante l\'avvio del backup');
+        throw new Error(`${err.error || 'Errore'}: ${err.details || ''}`);
       }
       return await response.json();
     } catch (e) {
@@ -93,7 +93,7 @@ export class BackupService {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Errore durante l\'eliminazione del backup');
+        throw new Error(`${err.error || 'Errore'}: ${err.details || ''}`);
       }
       return await response.json();
     } catch (e) {
@@ -125,7 +125,7 @@ export class BackupService {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Errore durante il ripristino');
+        throw new Error(`${err.error || 'Errore'}: ${err.details || ''}`);
       }
       return await response.json();
     } catch (e) {

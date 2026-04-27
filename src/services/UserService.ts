@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import type { User } from '../types/models';
+import type { UserRole, IUserPermissions } from '../types/auth';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
@@ -297,14 +298,15 @@ export class UserService {
    * Phase 25 (§1.10): Also calls /api/update-role to set JWT Custom Claim,
    * then forces the current session's token to refresh.
    */
-  async updateUserRole(uid: string, newRole: 'user' | 'admin'): Promise<void> {
+  async updateUserRole(
+    uid: string, 
+    newRole: UserRole, 
+    managedConfigIds: string[] = [], 
+    permissions: IUserPermissions = { manageAdmins: false, manageSystem: false, viewAuditLogs: false }
+  ): Promise<void> {
     // 1. Update Firestore (source of truth for audit / fallback)
-    await updateDoc(doc(this.usersCollection, uid), {
-      role: newRole,
-      updatedAt: Date.now(),
-    });
-    logger.info('Role updated in Firestore', { uid, newRole });
-
+    // managerialInfo is updated by the API for consistency
+    
     // 2. Call Vercel API to set JWT Custom Claim (requires firebase-admin)
     try {
       const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/update-role`;
@@ -314,18 +316,18 @@ export class UserService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
         },
-        body: JSON.stringify({ uid, role: newRole }),
+        body: JSON.stringify({ uid, role: newRole, managedConfigIds, permissions }),
       });
 
       if (!response.ok) {
         const errBody = (await response.json()) as { error?: string };
-        logger.error('Failed to set JWT claim via API', { status: response.status, error: errBody.error });
-      } else {
-        logger.info('JWT Custom Claim updated via API', { uid, newRole });
+        throw new Error(errBody.error || 'Failed to update role via API');
       }
+      
+      logger.info('JWT Custom Claim and Firestore updated via API', { uid, newRole, managedCount: managedConfigIds.length });
     } catch (err) {
-      // Non-blocking: Firestore role is already updated. JWT will sync on next login.
-      logger.error('update-role API call failed (non-blocking)', err);
+      logger.error('update-role API call failed', err);
+      throw err;
     }
   }
 

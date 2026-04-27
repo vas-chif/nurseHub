@@ -24,10 +24,12 @@ export type RequestStatus = 'OPEN' | 'PARTIAL' | 'CLOSED' | 'EXPIRED';
 
 // --- Entities ---
 
+import type { UserRole, IManagerialInfo } from './auth';
+
 export interface User {
   uid: string; // Firebase Auth UID
   email: string;
-  role: 'admin' | 'user'; // System access level
+  role: UserRole; // System access level (superAdmin, admin, user)
   profession?: string; // e.g. 'Infermiere', 'OSS', 'Medico' (from SystemConfiguration)
   operatorId: string | null; // Link to operator in the active config's sub-collection
   configId: string | null; // Link to which systemConfiguration this user belongs to
@@ -42,6 +44,7 @@ export interface User {
   phoneNumber?: string;
   isBlocked?: boolean;
   fcmTokens?: string[]; // Multiple devices support
+  managerialInfo?: IManagerialInfo; // Admin-only: scope and permissions (§1.10)
 }
 
 export interface Operator {

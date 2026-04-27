@@ -1,17 +1,31 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import type { SystemConfiguration } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import { useAuthStore } from './authStore';
 
 const logger = useSecureLogger();
 
 export const useConfigStore = defineStore('config', () => {
+  const authStore = useAuthStore();
   const activeConfig = ref<SystemConfiguration | null>(null);
   const activeConfigId = ref<string | null>(null);
   const allConfigs = ref<SystemConfiguration[]>([]);
   const loading = ref(false);
+
+  /**
+   * Filtered list of configurations based on user permissions
+   */
+  const availableConfigs = computed(() => {
+    if (authStore.isSuperAdmin) return allConfigs.value;
+    if (authStore.isAdmin) {
+      return allConfigs.value.filter((c) => authStore.managedConfigIds.includes(c.id));
+    }
+    // Standard users only see their own config
+    return allConfigs.value.filter((c) => c.id === authStore.currentUser?.configId);
+  });
 
   /**
    * Load all configurations and identify the active one
@@ -101,6 +115,7 @@ export const useConfigStore = defineStore('config', () => {
     activeConfig,
     activeConfigId,
     allConfigs,
+    availableConfigs,
     loading,
     loadConfigurations,
     setActiveConfig,

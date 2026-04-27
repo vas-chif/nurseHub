@@ -52,7 +52,7 @@ export const useSyncStore = defineStore('sync', () => {
     const lastSync = syncTimestamps.value[configId];
     if (lastSync === undefined || lastSync === null) return 0;
     
-    const cooldown = authStore.isAdmin ? ADMIN_COOLDOWN_MS : USER_COOLDOWN_MS;
+    const cooldown = authStore.isAnyAdmin ? ADMIN_COOLDOWN_MS : USER_COOLDOWN_MS;
     const elapsed = currentTime.value - lastSync;
     return Math.max(0, cooldown - elapsed);
   };

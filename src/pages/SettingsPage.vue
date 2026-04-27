@@ -38,6 +38,109 @@
         </q-item-section>
       </q-item>
 
+      <template v-if="authStore.isAnyAdmin">
+        <q-separator />
+        <q-item-label header>Visibilità Navigazione (Bottom Tabs)</q-item-label>
+
+        <!-- Home Tab -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Home / Dashboard</q-item-label>
+            <q-item-label caption>Mostra tab Home</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('home')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('home', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- Calendar Tab -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Turni / Calendario</q-item-label>
+            <q-item-label caption>Mostra tab Turni</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('calendar')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('calendar', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- New Request (Admin Quick Access) -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Nuova Richiesta</q-item-label>
+            <q-item-label caption>Accesso rapido inserimento assenze</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('new_request')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('new_request', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- Requests List -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Richieste</q-item-label>
+            <q-item-label caption>Gestione assenze e cambi</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('admin_requests')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('admin_requests', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- Users List -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Utenti</q-item-label>
+            <q-item-label caption>Anagrafica e reparti</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('admin_users')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('admin_users', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- Analytics -->
+        <q-item tag="label" v-ripple>
+          <q-item-section>
+            <q-item-label>Stats</q-item-label>
+            <q-item-label caption>Analisi e reportistica</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('admin_analytics')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('admin_analytics', val)"
+            />
+          </q-item-section>
+        </q-item>
+
+        <!-- Admin / System Config (ONLY SuperAdmin) -->
+        <q-item tag="label" v-ripple v-if="authStore.isSuperAdmin">
+          <q-item-section>
+            <q-item-label>Sistema</q-item-label>
+            <q-item-label caption>Configurazione globale e reparti</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-toggle
+              :model-value="uiStore.isTabVisible('admin_system')"
+              @update:model-value="(val) => uiStore.toggleTabVisibility('admin_system', val)"
+            />
+          </q-item-section>
+        </q-item>
+      </template>
+
       <q-separator />
       <q-item-label header>Account</q-item-label>
 
@@ -65,10 +168,12 @@ import { messaging, db } from '../boot/firebase';
 import { getToken, deleteToken } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const uiStore = useUiStore();
 const logger = useSecureLogger();
 
 const notificationsEnabled = ref(false);

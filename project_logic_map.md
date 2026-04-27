@@ -20,16 +20,30 @@
   - **Assenze:** Impedisce di chiedere assenza per un turno diverso da quello previsto nel calendario (es. non puoi chiedere P se sei di M).
 - **Notifiche:** Invio unificato e anonimo (Admin + Colleghi) per evitare duplicati e proteggere la privacy.
 
-### 3. Gestione Utenti (Admin)
+### 3. Gestione Utenti e Gerarchia (Admin & SuperAdmin)
 - **Pagina:** `AdminUsersPage.vue`.
-- **Azioni:**
-  - Promuovere a Admin / Rimuovere Admin.
-  - Approvare/Disapprovare accesso utente.
-- **Tecnologia:** Custom Claims via Vercel API (`api/update-role.js`).
+- **Gerarchia Ruoli (Phase 27):**
+  - **SuperAdmin:** Accesso universale, gestione configurazioni di sistema, backup e permessi admin.
+  - **Admin (Config-Fencing):** Gestisce **solo** i reparti assegnati (`managedConfigIds`). Non può creare/modificare configurazioni globali.
+  - **User:** Accesso limitato ai propri turni e richieste.
+- **Config-Fencing:** Isolamento totale dei dati tra reparti. Un Admin degli "Infermieri TI" non può vedere né gestire i dati degli "Infermieri PS".
+- **Tecnologia:** Custom Claims (JWT) sincronizzati con Firestore `managerialInfo` via Vercel API (`api/update-role.js`).
+### 4. Personalizzazione Navigazione e Sicurezza (Phase 28)
+- **Settings:** In `SettingsPage.vue`, Admin e SuperAdmin possono personalizzare la visibilità delle schede (tab) del footer.
+- **Persistenza:** Le preferenze di visibilità sono salvate in `uiStore` (localStorage).
+- **Navigazione Dinamica:** Sia il menu footer che la logica di "swipe" si adattano dinamicamente mostrando solo le rotte abilitate.
+- **Sicurezza Gerarchica:**
+  - La pagina **Sistema** (`/admin`) è ora accessibile **esclusivamente** ai SuperAdmin.
+  - **Redirect di Sicurezza:** Gli Admin che tentano di accedere via URL diretto a `/admin` vengono automaticamente reindirizzati alla dashboard con notifica di accesso negato.
 
 ## Flussi Critici
 
-### Il "Cambio Turno" (Swap)
+### 1. Localizzazione e Standard Date
+- **Formato Unificato:** Tutte le date nel sistema utilizzano il formato italiano `DD/MM/YYYY` (gg/mm/aaaa).
+- **Calendari Localizzati:** Ogni componente `q-date` (Assenze, Scambi, Filtri Admin, Profilo) integra la locale `itLocale` per nomi mesi e giorni.
+- **Integrazione UI:** Sostituzione sistematica degli input `type="date"` con selettori Quasar localizzati per garantire uniformità tra browser e dispositivi.
+
+### 2. Il "Cambio Turno" (Swap)
 1. **Creazione:** L'utente sceglie data e turno da offrire. 
    - *Logic Check:* Deve avere quel turno in quella data (Validazione client-side).
 2. **Notifica:** Parte una notifica anonima a tutti i colleghi compatibili e agli admin.
@@ -45,9 +59,7 @@
 - **Cooldown Indipendente:** 1 minuto per Admin, 2 ore per Utente, calcolato per singolo reparto.
 - **Auto-Refresh Intelligente:** Al cambio pagina o ritorno al focus, l'app verifica il timestamp specifico del reparto attivo; se c'è stata una sincronizzazione esterna per quel reparto, ricarica i dati.
 
-## Flussi Critici
-
-### Sincronizzazione Operatore (Nuovi Utenti)
+### 5. Sincronizzazione Operatore (Nuovi Utenti)
 - **Componente:** `SyncOperatorCard.vue`.
 - **Azione:** Cerca l'associazione tra utente Firebase e riga del foglio turni (per Email o Nome/Cognome).
 - **Sicurezza:** Permette il collegamento solo se l'operatore non ha già un `userId` e l'utente non ha già un `operatorId`.
@@ -64,8 +76,9 @@
 ### 2. Manutenzione Dati e Sessioni
 - **Pulizia Notifiche**: Le notifiche hanno scopo informativo temporaneo. Cancellazione automatica ogni 30 giorni via Vercel Cron.
 - **Cache Isolation**: Durante il `logout`, è OBBLIGATORIO svuotare tutte le cache locali (specialmente `scheduleStore`) per evitare che i turni di un utente siano visibili a quello successivo sullo stesso dispositivo.
-- **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protette, evitando "buchi" di dati o race conditions.
+- **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protetti, evitando "buchi" di dati o race conditions.
 
-### 2. Gesture & Navigazione
+### 3. Gesture & Navigazione
 - **Swipe Sensitivity**: La sensibilità dello swipe tra i tab della Home è stata ridotta (threshold 100px) per evitare cambi pagina accidentali.
+- **Dynamic Routing**: Le rotte dello swipe vengono ricalcolate dinamicamente in base ai permessi dell'utente e alle preferenze di visibilità impostate nelle Settings.
 - **Auto-Selection Calendar**: Il calendario deve resettare la selezione se l'ID utente cambia e attendere il profilo completo prima di auto-selezionare l'operatore predefinito.

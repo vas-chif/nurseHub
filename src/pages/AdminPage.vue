@@ -11,5 +11,24 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/authStore';
+import { useQuasar } from 'quasar';
 import SystemConfig from '../components/admin/SystemConfig.vue';
+
+const router = useRouter();
+const authStore = useAuthStore();
+const $q = useQuasar();
+
+onMounted(() => {
+  if (!authStore.isSuperAdmin) {
+    $q.notify({
+      type: 'negative',
+      message: 'Accesso negato',
+      caption: 'Solo i SuperAdmin possono accedere a questa pagina.'
+    });
+    void router.push('/');
+  }
+});
 </script>
