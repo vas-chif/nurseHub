@@ -1,3 +1,14 @@
+/**
+ * @file SettingsPage.vue
+ * @description User preferences page for managing notifications, language, and navigation visibility.
+ * @author Nurse Hub Team
+ * @created 2026-03-12
+ * @modified 2026-04-27
+ * @notes
+ * - Integrates with Firebase Messaging (FCM) for push notifications.
+ * - Allows admins to customize the bottom navigation bar visibility (Tab-Fencing).
+ * - Language selection logic (Italian/English).
+ */
 <template>
   <q-page class="q-pa-md">
     <div class="row items-center q-mb-md">

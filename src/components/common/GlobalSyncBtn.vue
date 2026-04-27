@@ -1,53 +1,13 @@
 /**
- * @file GlobalSyncBtn.vue
- * @description Centralized sync button component with global cooldown logic and premium UI.
- * @author Nurse Hub Team
- * @created 2026-04-20
- * @notes
- * - Shared across Dashboard and Calendar pages.
- * - Handles its own loading state and syncStore interaction.
- * - Respects §1.10 JWT-First and Phase 25 global cooldown.
- */
-<template>
-  <div class="row items-center no-wrap bg-grey-2 q-px-sm q-py-xs rounded-borders" style="border-radius: 20px;">
-    <!-- Visible Cooldown Timer Badge -->
-    <transition
-      appear
-      enter-active-class="animated fadeIn"
-      leave-active-class="animated fadeOut"
-    >
-      <div v-if="!canSync" class="row items-center q-mr-xs">
-        <q-badge
-          rounded
-          color="orange-2"
-          text-color="orange-10"
-          :label="cooldownLabel"
-          class="text-weight-bold"
-          style="padding: 2px 8px;"
-        />
-      </div>
-    </transition>
-
-    <q-btn
-      flat
-      round
-      dense
-      :size="size"
-      :icon="syncing ? 'hourglass_empty' : 'refresh'"
-      :color="canSync ? 'primary' : 'grey-5'"
-      :loading="syncing"
-      :disable="!canSync"
-      @click="handleSync"
-      class="transition-button"
-    >
-      <span v-if="showLabel" class="q-ml-xs text-caption text-weight-bold">Sincronizza Ora</span>
-      <q-tooltip>
-        <span v-if="canSync">Sincronizza turni da Google Sheets</span>
-        <span v-else>Prossima sincronizzazione tra {{ cooldownLabel }}</span>
-      </q-tooltip>
-    </q-btn>
-  </div>
-</template>
+* @file GlobalSyncBtn.vue
+* @description Centralized sync button component with global cooldown logic and premium UI.
+* @author Nurse Hub Team
+* @created 2026-04-20
+* @notes
+* - Shared across Dashboard and Calendar pages.
+* - Handles its own loading state and syncStore interaction.
+* - Respects §1.10 JWT-First and Phase 25 global cooldown.
+*/
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
@@ -102,7 +62,7 @@ onUnmounted(() => {
 async function handleSync() {
   // Use targetConfig ID or fallback to current user/active config
   const configId = props.targetConfig?.id || configStore.activeConfigId || authStore.currentUser?.configId;
-  
+
   if (!configId) {
     $q.notify({ type: 'warning', message: 'Configurazione non trovata.' });
     return;
@@ -141,7 +101,7 @@ async function handleSync() {
 
     $q.notify({
       type: 'positive',
-      message: props.targetConfig 
+      message: props.targetConfig
         ? `Sincronizzazione per "${props.targetConfig.name}" completata!`
         : 'Sincronizzazione Google Sheets -> Firebase completata con successo!',
       icon: 'cloud_done',
@@ -164,11 +124,33 @@ async function handleSync() {
   }
 }
 </script>
+<template>
+  <div class="row items-center no-wrap bg-grey-2 q-px-sm q-py-xs rounded-borders" style="border-radius: 20px;">
+    <!-- Visible Cooldown Timer Badge -->
+    <transition appear enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
+      <div v-if="!canSync" class="row items-center q-mr-xs">
+        <q-badge rounded color="orange-2" text-color="orange-10" :label="cooldownLabel" class="text-weight-bold"
+          style="padding: 2px 8px;" />
+      </div>
+    </transition>
+
+    <q-btn flat round dense :size="size" :icon="syncing ? 'hourglass_empty' : 'refresh'"
+      :color="canSync ? 'primary' : 'grey-5'" :loading="syncing" :disable="!canSync" @click="handleSync"
+      class="transition-button">
+      <span v-if="showLabel" class="q-ml-xs text-caption text-weight-bold">Sincronizza Ora</span>
+      <q-tooltip>
+        <span v-if="canSync">Sincronizza turni da Google Sheets</span>
+        <span v-else>Prossima sincronizzazione tra {{ cooldownLabel }}</span>
+      </q-tooltip>
+    </q-btn>
+  </div>
+</template>
 
 <style scoped>
 .transition-button {
   transition: transform 0.2s ease;
 }
+
 .transition-button:active {
   transform: scale(0.9);
 }

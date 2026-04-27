@@ -1,7 +1,14 @@
 /**
  * @file NotificationService.ts
- * @description Service for managing in-app notifications
+ * @description Comprehensive service for in-app and Web Push (FCM) notifications.
  * @author Nurse Hub Team
+ * @created 2026-02-18
+ * @modified 2026-04-27
+ * @notes
+ * - Manages FCM token registration and storage in Firestore.
+ * - Integrates with a Vercel-hosted API for triggering actual Web Push notifications.
+ * - Implements targeted notification logic for eligible operators (shift compatibility) and admins.
+ * - Handles service worker readiness checks for robust token retrieval.
  */
 
 import {

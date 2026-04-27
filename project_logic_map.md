@@ -23,11 +23,13 @@
 ### 3. Gestione Utenti e Gerarchia (Admin & SuperAdmin)
 - **Pagina:** `AdminUsersPage.vue`.
 - **Gerarchia Ruoli (Phase 27):**
-  - **SuperAdmin:** Accesso universale, gestione configurazioni di sistema, backup e permessi admin.
-  - **Admin (Config-Fencing):** Gestisce **solo** i reparti assegnati (`managedConfigIds`). Non può creare/modificare configurazioni globali.
+  - **SuperAdmin:** Accesso universale, gestione configurazioni di sistema, backup e permessi admin. Può cambiare il reparto attivo tramite il `ConfigSelector` nell'header.
+  - **Admin (Config-Fencing):** Gestisce **solo** i reparti assegnati (`managedConfigIds`). Non può creare/modificare configurazioni globali e non vede il selettore di reparti nell'header (è bloccato sul suo reparto predefinito).
   - **User:** Accesso limitato ai propri turni e richieste.
 - **Config-Fencing:** Isolamento totale dei dati tra reparti. Un Admin degli "Infermieri TI" non può vedere né gestire i dati degli "Infermieri PS".
-- **Tecnologia:** Custom Claims (JWT) sincronizzati con Firestore `managerialInfo` via Vercel API (`api/update-role.js`).
+- **Backup & Infrastructure:**
+  - Il sistema di Backup (Export/Import Firestore) richiede obbligatoriamente che il progetto Firebase sia sul piano **Blaze (Pay-as-you-go)**.
+  - Le API su Vercel gestiscono l'avvio e la logistica, ma l'esecuzione materiale avviene sui server Google Cloud.
 ### 4. Personalizzazione Navigazione e Sicurezza (Phase 28)
 - **Settings:** In `SettingsPage.vue`, Admin e SuperAdmin possono personalizzare la visibilità delle schede (tab) del footer.
 - **Persistenza:** Le preferenze di visibilità sono salvate in `uiStore` (localStorage).
@@ -69,16 +71,22 @@
 ## Note Tecniche di Manutenzione
 
 ### 1. UX & Visual Feedback (Phase 25+)
-- **Skeletons**: Implementazione sistematica di `<q-skeleton>` su tutte le liste asincrone (Turni Home, Log Backup, Lista Utenti Admin).
+- **Skeletons [COMPLETATO]**: Implementazione sistematica di `<q-skeleton>` su tutte le liste asincrone e dashboard (Turni Home, Log Backup, Lista Utenti Admin, Storico Richieste, Analytics e Tabella Turni Admin).
+- **Esportazione PDF/CSV [COMPLETATO]**: Implementazione di reportistica avanzata nella dashboard Analytics con generazione client-side di documenti professionali.
 - **Perceived Performance**: L'obiettivo è mostrare la struttura della pagina entro 100ms, caricando i dati reali in background.
-- **Transizioni**: Uso di `q-slide-transition` per il passaggio tra skeleton e dati reali per evitare sfarfallii.
+- **Transizioni**: Uso di `q-slide-transition` e Skeleton UI per eliminare lo sfarfallio del layout (Cumulative Layout Shift) durante il caricamento dei dati da Firestore/Sheets.
 
-### 2. Manutenzione Dati e Sessioni
+### 4. Manutenzione Dati e Sessioni
 - **Pulizia Notifiche**: Le notifiche hanno scopo informativo temporaneo. Cancellazione automatica ogni 30 giorni via Vercel Cron.
 - **Cache Isolation**: Durante il `logout`, è OBBLIGATORIO svuotare tutte le cache locali (specialmente `scheduleStore`) per evitare che i turni di un utente siano visibili a quello successivo sullo stesso dispositivo.
 - **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protetti, evitando "buchi" di dati o race conditions.
 
-### 3. Gesture & Navigazione
+### 5. Standard di Documentazione (Phase 29)
+- **Documentazione Sistematica [COMPLETATO]**: Audit e implementazione degli header JSDoc obbligatori per tutti i file critici (Pages, Services, Stores e Composables) secondo lo standard §1.7 di `project-rules.md`.
+- **Tracciabilità**: Ogni file include ora `@created`, `@modified` e `@notes` per tracciare l'evoluzione delle logiche di business e delle integrazioni esterne (Firebase/Google Sheets/Vercel).
+- **Manutenibilità**: I commenti JSDoc guidano i futuri sviluppatori attraverso le complessità dei flussi asincroni e delle gerarchie di permessi.
+
+## Note Tecniche di Manutenzione
 - **Swipe Sensitivity**: La sensibilità dello swipe tra i tab della Home è stata ridotta (threshold 100px) per evitare cambi pagina accidentali.
 - **Dynamic Routing**: Le rotte dello swipe vengono ricalcolate dinamicamente in base ai permessi dell'utente e alle preferenze di visibilità impostate nelle Settings.
 - **Auto-Selection Calendar**: Il calendario deve resettare la selezione se l'ID utente cambia e attendere il profilo completo prima di auto-selezionare l'operatore predefinito.

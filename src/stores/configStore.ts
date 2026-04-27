@@ -1,3 +1,14 @@
+/**
+ * @file configStore.ts
+ * @description Pinia store for managing system-wide configurations, department settings, and environment isolation.
+ * @author Nurse Hub Team
+ * @created 2026-03-05
+ * @modified 2026-04-27
+ * @notes
+ * - Handles the activation/deactivation of hierarchical system configurations.
+ * - Implements config-fencing: filters available configurations based on Admin/SuperAdmin managed claims.
+ * - Bridges legacy Firestore fields (role) to modern profession-based interfaces.
+ */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';

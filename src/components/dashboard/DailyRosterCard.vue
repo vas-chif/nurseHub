@@ -1,10 +1,13 @@
 /**
 * @file DailyRosterCard.vue
-* @description Dashboard card showing the daily staff roster.
+* @description Dashboard component displaying the list of operators scheduled for the current day.
 * @author Nurse Hub Team
-* @created 2026-03-10
+* @created 2026-03-08
+* @modified 2026-04-27
+* @notes
+* - Provides a quick overview of who is on shift today.
+* - Systematic skeleton loading implemented for smooth initialization.
 */
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
@@ -156,9 +159,18 @@ onMounted(() => {
       </q-card-section>
 
       <q-card-section class="q-pa-md">
-        <div v-if="loading" class="text-center q-pa-lg">
-          <q-spinner color="primary" size="2em" />
-          <div class="q-mt-sm text-grey">Sincronizzazione turni in corso...</div>
+        <div v-if="loading" class="q-gutter-y-sm q-pa-sm">
+          <q-item v-for="n in 5" :key="n" dense>
+            <q-item-section avatar>
+              <q-skeleton type="QAvatar" size="24px" />
+            </q-item-section>
+            <q-item-section>
+              <q-skeleton type="text" width="60%" />
+            </q-item-section>
+            <q-item-section side>
+              <q-skeleton type="rect" width="30px" height="20px" />
+            </q-item-section>
+          </q-item>
         </div>
 
         <div v-else class="row q-col-gutter-md">

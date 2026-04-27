@@ -1,108 +1,14 @@
-<template>
-  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
-    <q-card class="q-pa-md" style="width: 400px; max-width: 90vw">
-      <div class="text-h5 text-center q-mb-sm">Accedi a</div>
-      <q-card-section>
-        <div class="row justify-center">
-          <q-avatar size="100px" color="primary" text-color="white">
-            <q-img src="../assets/icon.png" />
-          </q-avatar>
-        </div>
-      </q-card-section>
-
-      <q-card-section>
-        <q-form @submit="handleLogin" class="q-gutter-md">
-          <q-input
-            v-model="email"
-            filled
-            type="email"
-            label="Email"
-            autocomplete="email"
-            :rules="[(val) => !!val || 'Email obbligatoria']"
-          />
-
-          <q-input
-            v-model="password"
-            filled
-            :type="isPwd ? 'password' : 'text'"
-            label="Password"
-            autocomplete="current-password"
-            :rules="[(val) => !!val || 'Password obbligatoria']"
-          >
-            <template #append>
-              <q-icon
-                :name="isPwd ? 'visibility_off' : 'visibility'"
-                class="cursor-pointer"
-                @click="isPwd = !isPwd"
-              />
-            </template>
-          </q-input>
-
-          <div v-if="errorMessage" class="text-negative">
-            {{ errorMessage }}
-          </div>
-
-          <q-btn
-            type="submit"
-            label="Accedi"
-            color="primary"
-            :loading="loading"
-            class="full-width"
-          />
-
-          <div class="row justify-between text-caption q-mt-md">
-            <q-btn
-              flat
-              dense
-              no-caps
-              label="Password dimenticata?"
-              color="primary"
-              @click="showResetDialog = true"
-            />
-            <q-btn
-              flat
-              dense
-              no-caps
-              label="Non hai un account? Registrati"
-              color="primary"
-              @click="$router.push('/register')"
-            />
-          </div>
-        </q-form>
-      </q-card-section>
-    </q-card>
-
-    <!-- Dialog for Password Reset -->
-    <q-dialog v-model="showResetDialog" persistent>
-      <q-card style="min-width: 350px">
-        <q-card-section>
-          <div class="text-h6">Recupera Password</div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-none">
-          <p class="text-body2">
-            Inserisci l'indirizzo email associato al tuo account. Ti invieremo un link per
-            reimpostare la tua password.
-          </p>
-          <q-input
-            dense
-            v-model="resetEmail"
-            type="email"
-            autofocus
-            placeholder="La tua email..."
-            @keyup.enter="handleResetPassword"
-          />
-        </q-card-section>
-
-        <q-card-actions align="right" class="text-primary">
-          <q-btn flat label="Annulla" v-close-popup />
-          <q-btn flat label="Invia Email" :loading="resetLoading" @click="handleResetPassword" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-  </div>
-</template>
-
+/**
+ * @file LoginPage.vue
+ * @description Entry point for user authentication. Handles login and password recovery.
+ * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-27
+ * @notes
+ * - Integrates with Firebase Auth for secure credentials management.
+ * - Handles email verification and role-based initial redirection.
+ * - Includes a dialog for password reset via email.
+ */
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -189,3 +95,66 @@ async function handleLogin() {
   }
 }
 </script>
+<template>
+  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
+    <q-card class="q-pa-md" style="width: 400px; max-width: 90vw">
+      <div class="text-h5 text-center q-mb-sm">Accedi a</div>
+      <q-card-section>
+        <div class="row justify-center">
+          <q-avatar size="100px" color="primary" text-color="white">
+            <q-img src="../assets/icon.png" />
+          </q-avatar>
+        </div>
+      </q-card-section>
+
+      <q-card-section>
+        <q-form @submit="handleLogin" class="q-gutter-md">
+          <q-input v-model="email" filled type="email" label="Email" autocomplete="email"
+            :rules="[(val) => !!val || 'Email obbligatoria']" />
+
+          <q-input v-model="password" filled :type="isPwd ? 'password' : 'text'" label="Password"
+            autocomplete="current-password" :rules="[(val) => !!val || 'Password obbligatoria']">
+            <template #append>
+              <q-icon :name="isPwd ? 'visibility_off' : 'visibility'" class="cursor-pointer" @click="isPwd = !isPwd" />
+            </template>
+          </q-input>
+
+          <div v-if="errorMessage" class="text-negative">
+            {{ errorMessage }}
+          </div>
+
+          <q-btn type="submit" label="Accedi" color="primary" :loading="loading" class="full-width" />
+
+          <div class="row justify-between text-caption q-mt-md">
+            <q-btn flat dense no-caps label="Password dimenticata?" color="primary" @click="showResetDialog = true" />
+            <q-btn flat dense no-caps label="Non hai un account? Registrati" color="primary"
+              @click="$router.push('/register')" />
+          </div>
+        </q-form>
+      </q-card-section>
+    </q-card>
+
+    <!-- Dialog for Password Reset -->
+    <q-dialog v-model="showResetDialog" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Recupera Password</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <p class="text-body2">
+            Inserisci l'indirizzo email associato al tuo account. Ti invieremo un link per
+            reimpostare la tua password.
+          </p>
+          <q-input dense v-model="resetEmail" type="email" autofocus placeholder="La tua email..."
+            @keyup.enter="handleResetPassword" />
+        </q-card-section>
+
+        <q-card-actions align="right" class="text-primary">
+          <q-btn flat label="Annulla" v-close-popup />
+          <q-btn flat label="Invia Email" :loading="resetLoading" @click="handleResetPassword" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </div>
+</template>

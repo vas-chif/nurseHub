@@ -1,9 +1,14 @@
 /**
  * @file firebase.ts
- * @description Firebase initialization boot file
+ * @description Quasar boot file for Firebase initialization (Auth, Firestore, Messaging).
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-04-20
+ * @modified 2026-04-27
+ * @notes
+ * - Implements persistent multi-tab local cache for Firestore.
+ * - Configures IndexedDB-first auth persistence for reliable PWA sessions.
+ * - Initializes Web Push (FCM) messaging with foreground notification handlers.
+ * - Uses smartEnvironment for validated configuration retrieval.
  */
 import { boot } from 'quasar/wrappers';
 import { initializeApp } from 'firebase/app';

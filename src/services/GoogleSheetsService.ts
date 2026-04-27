@@ -1,7 +1,13 @@
 /**
  * @file GoogleSheetsService.ts
- * @description Service to fetch and parse data from Google Sheets via Gviz API
+ * @description Core service for bidirectional synchronization with Google Sheets.
  * @author Nurse Hub Team
+ * @created 2026-02-15
+ * @modified 2026-04-27
+ * @notes
+ * - Uses Gviz API for read-only parsing of public/private spreadsheets.
+ * - Integrates with Google Apps Script (GAS) Web Apps for secure write operations.
+ * - Handles complex date parsing from varied sheet formats (Excel serials, Gviz strings).
  */
 
 import type { AppConfig, Operator } from '../types/models';

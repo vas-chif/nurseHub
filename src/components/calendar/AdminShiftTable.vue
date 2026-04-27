@@ -1,211 +1,14 @@
-<template>
-  <div class="column full-height col">
-    <!-- Filters Header -->
-    <div class="row q-col-gutter-sm q-mb-md items-center">
-      <div class="col-12 col-md-3">
-        <q-select v-model="selectedOperators" :options="operatorOptions" label="Filtra Personale" dense outlined
-          multiple use-chips use-input emit-value map-options option-value="id" option-label="name"
-          @filter="filterOperators">
-          <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
-            <q-item v-bind="itemProps">
-              <q-item-section>
-                <q-item-label>{{ opt.name }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-checkbox :model-value="selected" @update:model-value="toggleOption(opt)" />
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
-      </div>
-
-      <div class="col-12 col-md-2">
-        <q-input :model-value="formatDate(startDate)" label="Data Inizio" outlined dense readonly
-          class="cursor-pointer">
-          <template v-slot:append>
-            <q-icon name="event" class="cursor-pointer">
-              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                <q-date v-model="startDate" mask="YYYY-MM-DD" :locale="itLocale">
-                  <div class="row items-center justify-end">
-                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                  </div>
-                </q-date>
-              </q-popup-proxy>
-            </q-icon>
-          </template>
-        </q-input>
-      </div>
-
-      <div class="col-6 col-md-2">
-        <q-input v-model.number="daysToShow" label="Giorni" type="number" dense outlined />
-      </div>
-
-      <div class="col-6 col-md-2">
-        <q-select v-model="selectedShiftCodes" :options="shiftCodeOptions" label="Filtra Turni" dense outlined multiple
-          use-chips />
-      </div>
-
-      <div class="col-12 col-md-3 row no-wrap items-center justify-end q-gutter-x-sm">
-        <GlobalSyncBtn size="md" />
-        <q-btn icon="refresh" label="Aggiorna" outline dense color="primary" @click="() => fetchData(true)" no-caps>
-          <q-tooltip>Ricarica Dati Locale</q-tooltip>
-        </q-btn>
-        <q-btn icon="info" round flat dense color="info" @click="showLegend = true">
-          <q-tooltip>Legenda Turni</q-tooltip>
-        </q-btn>
-      </div>
-    </div>
-    <!-- Table -->
-    <div class="col relative-position">
-      <q-table title="Calendario Turni Completo" :rows="filteredRows" :columns="columns" row-key="id"
-        :pagination="pagination" dense separator="cell" class="sticky-header-table absolute-full" flat bordered
-        virtual-scroll :rows-per-page-options="[0]">
-        <!-- Custom Header -->
-        <template v-slot:header="props">
-          <q-tr :props="props">
-            <!-- Operator Name Header -->
-            <q-th key="operatorName" :props="props" class="sticky-column-z5" style="background: white">
-              Personale
-            </q-th>
-
-            <!-- Dynamic Date Headers -->
-            <q-th v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-xs"
-              :class="{ 'bg-red-1': col.isHoliday, 'bg-grey-1': !col.isHoliday }">
-              <div class="column items-center justify-center" style="line-height: 1.1">
-                <div class="text-bold text-subtitle2">{{ col.dayNum }}</div>
-                <div class="text-uppercase text-caption" style="font-size: 0.65rem">
-                  {{ col.month }}
-                </div>
-                <div class="text-lowercase text-caption text-grey-7" style="font-size: 0.65rem">
-                  {{ col.weekday }}
-                </div>
-              </div>
-            </q-th>
-          </q-tr>
-
-          <!-- Validation Mattina -->
-          <q-tr class="bg-amber-1" style="height: 28px">
-            <q-th class="sticky-column-z5 bg-amber-1 text-left text-black text-weight-bold">
-              Mattina
-            </q-th>
-            <q-th v-for="col in dateColumns" :key="'m-' + col.name" class="text-center q-pa-none"
-              style="padding: 1px !important">
-              <span :class="{
-                'text-red-8 text-weight-bold': shiftCounts[col.name]?.M !== 6,
-                'text-amber-9': shiftCounts[col.name]?.M === 6,
-              }">
-                {{ shiftCounts[col.name]?.M || 0 }}
-              </span>
-            </q-th>
-          </q-tr>
-
-          <!-- Validation Pomeriggio -->
-          <q-tr class="bg-deep-orange-1" style="height: 28px">
-            <q-th class="sticky-column-z5 bg-deep-orange-1 text-left text-white text-weight-bold">
-              Pomeriggio
-            </q-th>
-            <q-th v-for="col in dateColumns" :key="'p-' + col.name" class="text-center q-pa-none"
-              style="padding: 1px !important">
-              <span :class="{
-                'text-red-8 text-weight-bold': shiftCounts[col.name]?.P !== 6,
-                'text-deep-orange-6 text-weight-bold': shiftCounts[col.name]?.P === 6,
-              }">
-                {{ shiftCounts[col.name]?.P || 0 }}
-              </span>
-            </q-th>
-          </q-tr>
-
-          <!-- Validation Notte -->
-          <q-tr class="bg-blue-1" style="height: 28px">
-            <q-th class="sticky-column-z5 bg-blue-1 text-left text-white text-weight-bold">
-              Notte
-            </q-th>
-            <q-th v-for="col in dateColumns" :key="'n-' + col.name" class="text-center q-pa-none"
-              style="padding: 1px !important">
-              <span :class="{
-                'text-red-8 text-weight-bold': shiftCounts[col.name]?.N !== 6,
-                'text-blue-10 text-weight-bold': shiftCounts[col.name]?.N === 6,
-              }">
-                {{ shiftCounts[col.name]?.N || 0 }}
-              </span>
-            </q-th>
-          </q-tr>
-        </template>
-
-        <!-- Custom Body -->
-        <template v-slot:body="props">
-          <q-tr :props="props">
-            <q-td key="operatorName" :props="props" class="sticky-column text-weight-bold">
-              <div class="text-weight-bold ellipsis" style="max-width: 190px" :title="props.row.operatorName">
-                {{ props.row.operatorName }}
-              </div>
-            </q-td>
-
-            <q-td v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-none" :class="{
-              'bg-red-1': col.isHoliday,
-            }" style="padding: 1px !important">
-              <!-- Highlight badge only if it matches filter or no filter set -->
-              <q-badge v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
-                :color="getShiftColor(props.row[col.name])" class="cursor-pointer shadow-1 full-width flex flex-center"
-                style="height: 24px; font-size: 0.75rem; border-radius: 4px">
-                {{ props.row[col.name] }}
-              </q-badge>
-              <!-- Empty spacer or grey text if filtered out -->
-              <span v-else-if="props.row[col.name]" class="text-grey-3 text-caption"> - </span>
-            </q-td>
-          </q-tr>
-        </template>
-      </q-table>
-    </div>
-
-    <!-- Legend Dialog -->
-    <q-dialog v-model="showLegend">
-      <q-card style="min-width: 400px">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">Legenda Turni</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-
-        <q-card-section>
-          <div class="column q-gutter-sm">
-            <div class="row items-center">
-              <q-badge color="amber-9" class="text-black" style="width: 40px">M</q-badge>
-              <span class="q-ml-md">
-                Mattina (tutti i codici che iniziano con M: M, MRDN, etc.)
-              </span>
-            </div>
-            <div class="row items-center">
-              <q-badge color="deep-orange-6" class="text-white" style="width: 40px">P</q-badge>
-              <span class="q-ml-md">Pomeriggio (tutti i codici che iniziano con P)</span>
-            </div>
-            <div class="row items-center">
-              <q-badge color="blue-10" class="text-white" style="width: 40px">N</q-badge>
-              <span class="q-ml-md">Notte (tutti i codici che iniziano con N)</span>
-            </div>
-            <div class="row items-center">
-              <q-badge color="green-6" class="text-white" style="width: 40px">S</q-badge>
-              <span class="q-ml-md">Smonto (tutti i codici che iniziano con S: SDRN, etc.)</span>
-            </div>
-            <div class="row items-center">
-              <q-badge color="grey-4" class="text-black" style="width: 40px">R</q-badge>
-              <span class="q-ml-md">Riposo (tutti i codici che iniziano con R: R, RRDG, RDM, etc.)</span>
-            </div>
-            <div class="row items-center">
-              <q-badge color="yellow-7" class="text-black" style="width: 40px">A</q-badge>
-              <span class="q-ml-md">Assenza/Ferie (tutti i codici che iniziano con A)</span>
-            </div>
-          </div>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn flat label="Chiudi" color="primary" v-close-popup />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-  </div>
-</template>
-
+/**
+ * @file AdminShiftTable.vue
+ * @description Advanced administrative table for managing operator shifts with virtual scrolling.
+ * @author Nurse Hub Team
+ * @created 2026-03-15
+ * @modified 2026-04-27
+ * @notes
+ * - Uses Quasar QTable with virtual-scroll for high performance.
+ * - Dynamic columns based on date range.
+ * - Integrated with scheduleStore and global sync logic.
+ */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { date as qDate, type QTableColumn } from 'quasar';
@@ -496,6 +299,230 @@ function getShiftColor(code: ShiftCode): string {
   return 'primary text-white';
 }
 </script>
+
+
+<template>
+  <div class="column full-height col">
+    <!-- Filters Header -->
+    <div class="row q-col-gutter-sm q-mb-md items-center">
+      <div class="col-12 col-md-3">
+        <q-select v-model="selectedOperators" :options="operatorOptions" label="Filtra Personale" dense outlined
+          multiple use-chips use-input emit-value map-options option-value="id" option-label="name"
+          @filter="filterOperators">
+          <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
+            <q-item v-bind="itemProps">
+              <q-item-section>
+                <q-item-label>{{ opt.name }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-checkbox :model-value="selected" @update:model-value="toggleOption(opt)" />
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
+      </div>
+
+      <div class="col-12 col-md-2">
+        <q-input :model-value="formatDate(startDate)" label="Data Inizio" outlined dense readonly
+          class="cursor-pointer">
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="startDate" mask="YYYY-MM-DD" :locale="itLocale">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <q-input v-model.number="daysToShow" label="Giorni" type="number" dense outlined />
+      </div>
+
+      <div class="col-6 col-md-2">
+        <q-select v-model="selectedShiftCodes" :options="shiftCodeOptions" label="Filtra Turni" dense outlined multiple
+          use-chips />
+      </div>
+
+      <div class="col-12 col-md-3 row no-wrap items-center justify-end q-gutter-x-sm">
+        <GlobalSyncBtn size="md" />
+        <q-btn icon="refresh" label="Aggiorna" outline dense color="primary" @click="() => fetchData(true)" no-caps>
+          <q-tooltip>Ricarica Dati Locale</q-tooltip>
+        </q-btn>
+        <q-btn icon="info" round flat dense color="info" @click="showLegend = true">
+          <q-tooltip>Legenda Turni</q-tooltip>
+        </q-btn>
+      </div>
+    </div>
+    <!-- Table -->
+    <div class="col relative-position">
+      <q-table title="Calendario Turni Completo" :rows="filteredRows" :columns="columns" row-key="id"
+        :pagination="pagination" dense separator="cell" class="sticky-header-table absolute-full" flat bordered
+        virtual-scroll :rows-per-page-options="[0]" :loading="scheduleStore.loading">
+        <!-- Loading Skeleton Slot -->
+        <template v-slot:loading>
+          <div class="absolute-full bg-white q-pa-none" style="z-index: 10">
+            <div v-for="r in 10" :key="r" class="row no-wrap q-mb-xs">
+              <div class="col-2 q-pa-sm">
+                <q-skeleton type="text" />
+              </div>
+              <div v-for="c in 15" :key="c" class="col q-pa-xs">
+                <q-skeleton type="rect" height="24px" />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Custom Header -->
+        <template v-slot:header="props">
+          <q-tr :props="props">
+            <!-- Operator Name Header -->
+            <q-th key="operatorName" :props="props" class="sticky-column-z5" style="background: white">
+              Personale
+            </q-th>
+
+            <!-- Dynamic Date Headers -->
+            <q-th v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-xs"
+              :class="{ 'bg-red-1': col.isHoliday, 'bg-grey-1': !col.isHoliday }">
+              <div class="column items-center justify-center" style="line-height: 1.1">
+                <div class="text-bold text-subtitle2">{{ col.dayNum }}</div>
+                <div class="text-uppercase text-caption" style="font-size: 0.65rem">
+                  {{ col.month }}
+                </div>
+                <div class="text-lowercase text-caption text-grey-7" style="font-size: 0.65rem">
+                  {{ col.weekday }}
+                </div>
+              </div>
+            </q-th>
+          </q-tr>
+
+          <!-- Validation Mattina -->
+          <q-tr class="bg-amber-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-amber-1 text-left text-black text-weight-bold">
+              Mattina
+            </q-th>
+            <q-th v-for="col in dateColumns" :key="'m-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.M !== 6,
+                'text-amber-9': shiftCounts[col.name]?.M === 6,
+              }">
+                {{ shiftCounts[col.name]?.M || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
+
+          <!-- Validation Pomeriggio -->
+          <q-tr class="bg-deep-orange-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-deep-orange-1 text-left text-white text-weight-bold">
+              Pomeriggio
+            </q-th>
+            <q-th v-for="col in dateColumns" :key="'p-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.P !== 6,
+                'text-deep-orange-6 text-weight-bold': shiftCounts[col.name]?.P === 6,
+              }">
+                {{ shiftCounts[col.name]?.P || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
+
+          <!-- Validation Notte -->
+          <q-tr class="bg-blue-1" style="height: 28px">
+            <q-th class="sticky-column-z5 bg-blue-1 text-left text-white text-weight-bold">
+              Notte
+            </q-th>
+            <q-th v-for="col in dateColumns" :key="'n-' + col.name" class="text-center q-pa-none"
+              style="padding: 1px !important">
+              <span :class="{
+                'text-red-8 text-weight-bold': shiftCounts[col.name]?.N !== 6,
+                'text-blue-10 text-weight-bold': shiftCounts[col.name]?.N === 6,
+              }">
+                {{ shiftCounts[col.name]?.N || 0 }}
+              </span>
+            </q-th>
+          </q-tr>
+        </template>
+
+        <!-- Custom Body -->
+        <template v-slot:body="props">
+          <q-tr :props="props">
+            <q-td key="operatorName" :props="props" class="sticky-column text-weight-bold">
+              <div class="text-weight-bold ellipsis" style="max-width: 190px" :title="props.row.operatorName">
+                {{ props.row.operatorName }}
+              </div>
+            </q-td>
+
+            <q-td v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-none" :class="{
+              'bg-red-1': col.isHoliday,
+            }" style="padding: 1px !important">
+              <!-- Highlight badge only if it matches filter or no filter set -->
+              <q-badge v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
+                :color="getShiftColor(props.row[col.name])" class="cursor-pointer shadow-1 full-width flex flex-center"
+                style="height: 24px; font-size: 0.75rem; border-radius: 4px">
+                {{ props.row[col.name] }}
+              </q-badge>
+              <!-- Empty spacer or grey text if filtered out -->
+              <span v-else-if="props.row[col.name]" class="text-grey-3 text-caption"> - </span>
+            </q-td>
+          </q-tr>
+        </template>
+      </q-table>
+    </div>
+
+    <!-- Legend Dialog -->
+    <q-dialog v-model="showLegend">
+      <q-card style="min-width: 400px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Legenda Turni</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="column q-gutter-sm">
+            <div class="row items-center">
+              <q-badge color="amber-9" class="text-black" style="width: 40px">M</q-badge>
+              <span class="q-ml-md">
+                Mattina (tutti i codici che iniziano con M: M, MRDN, etc.)
+              </span>
+            </div>
+            <div class="row items-center">
+              <q-badge color="deep-orange-6" class="text-white" style="width: 40px">P</q-badge>
+              <span class="q-ml-md">Pomeriggio (tutti i codici che iniziano con P)</span>
+            </div>
+            <div class="row items-center">
+              <q-badge color="blue-10" class="text-white" style="width: 40px">N</q-badge>
+              <span class="q-ml-md">Notte (tutti i codici che iniziano con N)</span>
+            </div>
+            <div class="row items-center">
+              <q-badge color="green-6" class="text-white" style="width: 40px">S</q-badge>
+              <span class="q-ml-md">Smonto (tutti i codici che iniziano con S: SDRN, etc.)</span>
+            </div>
+            <div class="row items-center">
+              <q-badge color="grey-4" class="text-black" style="width: 40px">R</q-badge>
+              <span class="q-ml-md">Riposo (tutti i codici che iniziano con R: R, RRDG, RDM, etc.)</span>
+            </div>
+            <div class="row items-center">
+              <q-badge color="yellow-7" class="text-black" style="width: 40px">A</q-badge>
+              <span class="q-ml-md">Assenza/Ferie (tutti i codici che iniziano con A)</span>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Chiudi" color="primary" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </div>
+</template>
+
 
 <style scoped>
 .sticky-header-table {

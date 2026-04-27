@@ -1,3 +1,14 @@
+/**
+ * @file useShiftLogic.ts
+ * @description Composable containing the core business logic for shift compliance, replacement compatibility, and request expiration.
+ * @author Nurse Hub Team
+ * @created 2026-02-15
+ * @modified 2026-04-27
+ * @notes
+ * - Evaluates legal constraints (e.g., Night shift cannot precede Morning shift).
+ * - Maps shift shortages to valid replacement scenarios based on complex hierarchical roles.
+ * - Handles shift-specific expiration timestamps (M/P/N).
+ */
 import { useScenarioStore } from '../stores/scenarioStore';
 import type {
   ShiftCode,

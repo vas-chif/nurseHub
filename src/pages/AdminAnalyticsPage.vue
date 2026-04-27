@@ -4,9 +4,13 @@
  * @description Dashboard for administrative analytics and request trends.
  * @author Nurse Hub Team
  * @created 2026-03-20
- * @modified 2026-04-23
+ * @modified 2026-04-27
+ * @notes
+ * - Uses ApexCharts for data visualization.
+ * - Integrated with Firestore for real-time request tracking.
+ * - Systematic skeleton loading for reduced layout shift.
  */
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import { useAnalytics } from 'src/composables/useAnalytics';
 import { useSecureLogger } from 'src/utils/secureLogger';
 
@@ -17,13 +21,15 @@ import { useConfigStore } from 'src/stores/configStore';
 import { operatorsService } from 'src/services/OperatorsService';
 import type { ShiftRequest, Operator } from 'src/types/models';
 import { exportFile, useQuasar } from 'quasar';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const $q = useQuasar();
 
 const configStore = useConfigStore();
 
 const { setRequests, metrics, charts, rawRequests } = useAnalytics();
-const loading = ref(false);
+const loading = ref(true); // Start as true to prevent premature chart mounting
 
 const filters = ref({
   dateFrom: '',
@@ -90,7 +96,67 @@ function exportCSV() {
   }
 }
 
+function exportPDF() {
+  if (rawRequests.value.length === 0) return;
+
+  const doc = new jsPDF();
+  const configName = configStore.activeConfig?.name || 'Reparto';
+
+  // --- Header ---
+  doc.setFontSize(22);
+  doc.setTextColor(26, 35, 126); // Primary Navy
+  doc.text('NurseHub - Report Analytics', 14, 22);
+  
+  doc.setFontSize(12);
+  doc.setTextColor(100);
+  doc.text(`Reparto: ${configName}`, 14, 30);
+  doc.text(`Periodo: ${filters.value.dateFrom} - ${filters.value.dateTo}`, 14, 37);
+  doc.text(`Generato il: ${new Date().toLocaleString()}`, 14, 44);
+
+  // --- KPI Section ---
+  doc.setDrawColor(200);
+  doc.line(14, 50, 196, 50);
+
+  doc.setFontSize(14);
+  doc.setTextColor(26, 35, 126);
+  doc.text('Indicatori Chiave (KPI)', 14, 60);
+
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  const kpiY = 70;
+  doc.text(`Totale Richieste: ${metrics.total.value}`, 14, kpiY);
+  doc.text(`In Attesa: ${metrics.pending.value}`, 60, kpiY);
+  doc.text(`Tasso Approvazione: ${metrics.approvalRate.value}%`, 110, kpiY);
+  doc.text(`Tempo Medio: ${metrics.avgTime.value}`, 160, kpiY);
+
+  // --- Data Table ---
+  const tableData = rawRequests.value.map(row => [
+    row.date,
+    row.absentOperatorName || 'N/D',
+    row.originalShift,
+    row.reason || '',
+    row.status,
+  ]);
+
+  autoTable(doc, {
+    startY: 80,
+    head: [['Data', 'Operatore', 'Turno', 'Motivo', 'Stato']],
+    body: tableData,
+    headStyles: { fillColor: [26, 35, 126] },
+    alternateRowStyles: { fillColor: [240, 240, 240] },
+    margin: { top: 80 },
+  });
+
+  doc.save(`analytics_report_${filters.value.dateFrom}_${filters.value.dateTo}.pdf`);
+}
+
 async function refreshData() {
+  if (!configStore.activeConfigId) {
+    logger.warn('Attempted to refresh analytics without an active configId');
+    loading.value = false;
+    return;
+  }
+
   loading.value = true;
   try {
     // 1. Fetch Requests
@@ -109,11 +175,6 @@ async function refreshData() {
     }
 
     // 2. Fetch Operators for names
-    if (!configStore.activeConfigId) {
-      logger.warn('No active config for analytics');
-      return;
-    }
-
     const operatorsList = await operatorsService.getOperatorsByConfig(configStore.activeConfigId);
     const operators: Record<string, Operator> = {};
     operatorsList.forEach((op: Operator) => {
@@ -121,6 +182,9 @@ async function refreshData() {
     });
 
     setRequests(requests, operators);
+    
+    // Ensure DOM is ready before making charts visible
+    await nextTick();
   } catch (e) {
     logger.error('Error fetching analytics', e);
   } finally {
@@ -128,8 +192,18 @@ async function refreshData() {
   }
 }
 
+// Watch for config changes (e.g. from SuperAdmin selector or initial load)
+watch(() => configStore.activeConfigId, (newId) => {
+  if (newId) {
+    void refreshData();
+  }
+}, { immediate: true });
+
 onMounted(() => {
-  void refreshData();
+  // If config is already there, trigger it. If not, the watcher will catch it.
+  if (configStore.activeConfigId) {
+    void refreshData();
+  }
 });
 </script>
 
@@ -148,6 +222,8 @@ onMounted(() => {
         <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
         <q-btn icon="download" label="Esporta CSV" color="secondary" outline @click="exportCSV"
           :disable="metrics.total.value === 0" />
+        <q-btn icon="picture_as_pdf" label="Esporta PDF" color="accent" outline @click="exportPDF"
+          :disable="metrics.total.value === 0" />
       </div>
     </div>
 
@@ -157,7 +233,10 @@ onMounted(() => {
         <q-card class="bg-primary text-white">
           <q-card-section>
             <div class="text-subtitle2">Totale Richieste</div>
-            <div class="text-h4">{{ metrics.total }}</div>
+            <div class="text-h4">
+              <q-skeleton v-if="loading" type="text" width="60px" />
+              <template v-else>{{ metrics.total }}</template>
+            </div>
           </q-card-section>
         </q-card>
       </div>
@@ -165,7 +244,10 @@ onMounted(() => {
         <q-card class="bg-warning text-white">
           <q-card-section>
             <div class="text-subtitle2">In Attesa</div>
-            <div class="text-h4">{{ metrics.pending }}</div>
+            <div class="text-h4">
+              <q-skeleton v-if="loading" type="text" width="60px" />
+              <template v-else>{{ metrics.pending }}</template>
+            </div>
           </q-card-section>
         </q-card>
       </div>
@@ -173,7 +255,10 @@ onMounted(() => {
         <q-card class="bg-positive text-white">
           <q-card-section>
             <div class="text-subtitle2">Tasso Approvazione</div>
-            <div class="text-h4">{{ metrics.approvalRate }}%</div>
+            <div class="text-h4">
+              <q-skeleton v-if="loading" type="text" width="60px" />
+              <template v-else>{{ metrics.approvalRate }}%</template>
+            </div>
           </q-card-section>
         </q-card>
       </div>
@@ -181,7 +266,10 @@ onMounted(() => {
         <q-card class="bg-info text-white">
           <q-card-section>
             <div class="text-subtitle2">Tempo Medio Risposta</div>
-            <div class="text-h4">{{ metrics.avgTime }}</div>
+            <div class="text-h4">
+              <q-skeleton v-if="loading" type="text" width="80px" />
+              <template v-else>{{ metrics.avgTime }}</template>
+            </div>
           </q-card-section>
         </q-card>
       </div>
@@ -196,7 +284,8 @@ onMounted(() => {
             <div class="text-h6">Stato Richieste</div>
           </q-card-section>
           <q-card-section>
-            <apexchart type="donut" :options="charts.status.value.options" :series="charts.status.value.series" />
+            <q-skeleton v-if="loading || !configStore.activeConfigId" type="circle" size="180px" class="q-mx-auto" />
+            <apexchart v-else :key="loading" type="donut" :options="charts.status.value.options" :series="charts.status.value.series" />
           </q-card-section>
         </q-card>
       </div>
@@ -208,7 +297,8 @@ onMounted(() => {
             <div class="text-h6">Andamento Giornaliero</div>
           </q-card-section>
           <q-card-section>
-            <apexchart type="line" height="300" :options="charts.trend.value.options"
+            <q-skeleton v-if="loading || !configStore.activeConfigId" type="rect" height="300px" />
+            <apexchart v-else :key="loading" type="line" height="300" :options="charts.trend.value.options"
               :series="charts.trend.value.series" />
           </q-card-section>
         </q-card>
@@ -224,7 +314,8 @@ onMounted(() => {
             <div class="text-h6">Top 5 Operatori</div>
           </q-card-section>
           <q-card-section>
-            <apexchart type="bar" height="250" :options="charts.topOperators.value.options"
+            <q-skeleton v-if="loading || !configStore.activeConfigId" type="rect" height="250px" />
+            <apexchart v-else :key="loading" type="bar" height="250" :options="charts.topOperators.value.options"
               :series="charts.topOperators.value.series" />
           </q-card-section>
         </q-card>

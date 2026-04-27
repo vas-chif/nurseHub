@@ -1,3 +1,14 @@
+/**
+ * @file CalendarPage.vue
+ * @description Main calendar page that toggles between personal month view and administrative table view.
+ * @author Nurse Hub Team
+ * @created 2026-03-01
+ * @modified 2026-04-27
+ * @notes
+ * - Renders ShiftMonthView for regular users.
+ * - Renders AdminShiftTable for administrators (SuperAdmin/Admin).
+ * - Integrates DailyRosterCard for quick status checks.
+ */
 <script setup lang="ts">
 import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
 import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';

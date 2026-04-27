@@ -1,119 +1,14 @@
-<template>
-  <q-page class="q-pa-md">
-    <div class="row items-center q-mb-md">
-      <h1 class="text-h4 q-my-none">Profilo Utente</h1>
-    </div>
-
-    <div class="row justify-center q-mb-lg">
-      <div class="column items-center">
-        <q-avatar size="120px" class="q-mb-md shadow-2">
-          <q-img :src="avatarUrl || 'https://cdn.quasar.dev/img/boy-avatar.png'" />
-          <q-btn
-            round
-            color="primary"
-            icon="edit"
-            size="sm"
-            class="absolute-bottom-right"
-            style="bottom: 0; right: 0"
-            @click="triggerFilePicker"
-            v-if="isEditing"
-          />
-        </q-avatar>
-        <div class="text-h6">{{ user?.firstName }} {{ user?.lastName }}</div>
-        <div class="text-caption text-grey">{{ user?.email }}</div>
-      </div>
-      <input
-        type="file"
-        ref="fileInput"
-        accept="image/*"
-        style="display: none"
-        @change="handleFileChange"
-      />
-    </div>
-
-    <q-card class="max-width-600 q-mx-auto">
-      <q-card-section>
-        <div class="text-h6 q-mb-md">Dati Personali</div>
-        <q-form @submit="saveProfile" class="q-gutter-md">
-          <q-input
-            v-model="formData.firstName"
-            label="Nome"
-            outlined
-            dense
-            :readonly="!isEditing"
-          />
-          <q-input
-            v-model="formData.lastName"
-            label="Cognome"
-            outlined
-            dense
-            :readonly="!isEditing"
-          />
-          <q-input
-            v-model="formData.phoneNumber"
-            label="Numero di Telefono"
-            outlined
-            dense
-            mask="### ### ####"
-            fill-mask
-            hint="Formato: 333 123 4567"
-            :readonly="!isEditing"
-          />
-          <q-input
-            v-model="formData.email"
-            label="Email"
-            outlined
-            dense
-            readonly
-            hint="L'email non può essere modificata"
-          />
-          <q-input
-            :model-value="formatDate(formData.dateOfBirth)"
-            label="Data di Nascita"
-            outlined
-            dense
-            readonly
-          >
-            <template v-slot:append v-if="isEditing">
-              <q-icon name="event" class="cursor-pointer">
-                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                  <q-date v-model="formData.dateOfBirth" mask="YYYY-MM-DD" :locale="itLocale">
-                    <div class="row items-center justify-end">
-                      <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                    </div>
-                  </q-date>
-                </q-popup-proxy>
-              </q-icon>
-            </template>
-          </q-input>
-
-          <q-input
-            :model-value="user?.role"
-            label="Ruolo di Sistema"
-            outlined
-            dense
-            readonly
-            class="text-uppercase"
-          />
-
-          <q-input
-            v-if="user?.profession"
-            :model-value="user?.profession"
-            label="Professione"
-            outlined
-            dense
-            readonly
-          />
-
-          <div class="row justify-end q-mt-lg" v-if="isEditing">
-            <q-btn label="Salva Modifiche" type="submit" color="primary" :loading="saving" />
-          </div>
-        </q-form>
-      </q-card-section>
-    </q-card>
-  </q-page>
-</template>
-
+/**
+ * @file ProfilePage.vue
+ * @description User profile management page. Allows viewing and editing personal data and avatar.
+ * @author Nurse Hub Team
+ * @created 2026-03-02
+ * @modified 2026-04-27
+ * @notes
+ * - Handles image resizing (canvas) for avatar uploads to minimize Firestore storage.
+ * - Enforces date formatting (DD/MM/YYYY) for display.
+ * - Read-only fields for critical system data (email, role, profession).
+ */
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useAuthStore } from '../stores/authStore';
@@ -278,6 +173,62 @@ function resizeImage(file: File): Promise<string> {
   });
 }
 </script>
+<template>
+  <q-page class="q-pa-md">
+    <div class="row items-center q-mb-md">
+      <h1 class="text-h4 q-my-none">Profilo Utente</h1>
+    </div>
+
+    <div class="row justify-center q-mb-lg">
+      <div class="column items-center">
+        <q-avatar size="120px" class="q-mb-md shadow-2">
+          <q-img :src="avatarUrl || 'https://cdn.quasar.dev/img/boy-avatar.png'" />
+          <q-btn round color="primary" icon="edit" size="sm" class="absolute-bottom-right" style="bottom: 0; right: 0"
+            @click="triggerFilePicker" v-if="isEditing" />
+        </q-avatar>
+        <div class="text-h6">{{ user?.firstName }} {{ user?.lastName }}</div>
+        <div class="text-caption text-grey">{{ user?.email }}</div>
+      </div>
+      <input type="file" ref="fileInput" accept="image/*" style="display: none" @change="handleFileChange" />
+    </div>
+
+    <q-card class="max-width-600 q-mx-auto">
+      <q-card-section>
+        <div class="text-h6 q-mb-md">Dati Personali</div>
+        <q-form @submit="saveProfile" class="q-gutter-md">
+          <q-input v-model="formData.firstName" label="Nome" outlined dense :readonly="!isEditing" />
+          <q-input v-model="formData.lastName" label="Cognome" outlined dense :readonly="!isEditing" />
+          <q-input v-model="formData.phoneNumber" label="Numero di Telefono" outlined dense mask="### ### ####"
+            fill-mask hint="Formato: 333 123 4567" :readonly="!isEditing" />
+          <q-input v-model="formData.email" label="Email" outlined dense readonly
+            hint="L'email non può essere modificata" />
+          <q-input :model-value="formatDate(formData.dateOfBirth)" label="Data di Nascita" outlined dense readonly>
+            <template v-slot:append v-if="isEditing">
+              <q-icon name="event" class="cursor-pointer">
+                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                  <q-date v-model="formData.dateOfBirth" mask="YYYY-MM-DD" :locale="itLocale">
+                    <div class="row items-center justify-end">
+                      <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                    </div>
+                  </q-date>
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
+
+          <q-input :model-value="user?.role" label="Ruolo di Sistema" outlined dense readonly class="text-uppercase" />
+
+          <q-input v-if="user?.profession" :model-value="user?.profession" label="Professione" outlined dense
+            readonly />
+
+          <div class="row justify-end q-mt-lg" v-if="isEditing">
+            <q-btn label="Salva Modifiche" type="submit" color="primary" :loading="saving" />
+          </div>
+        </q-form>
+      </q-card-section>
+    </q-card>
+  </q-page>
+</template>
 
 <style scoped>
 .max-width-600 {

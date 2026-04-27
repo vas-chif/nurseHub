@@ -1,66 +1,3 @@
-<template>
-  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
-    <q-card class="q-pa-md" style="width: 400px; max-width: 90vw">
-      <q-card-section class="text-center">
-        <q-icon name="hourglass_empty" size="64px" color="orange" />
-        <div class="text-h5 q-mt-md">Account in Verifica</div>
-      </q-card-section>
-
-      <q-card-section>
-        <p class="text-body1">
-          Il tuo account è in attesa di verifica da parte dell'amministratore.
-        </p>
-        <p class="text-body2 text-grey-7">
-          Un amministratore deve collegare il tuo account al profilo operatore esistente. Riceverai
-          una notifica via email quando l'account sarà attivato.
-        </p>
-      </q-card-section>
-
-      <q-card-section v-if="currentUser">
-        <q-list bordered separator>
-          <q-item>
-            <q-item-section>
-              <q-item-label caption>Email</q-item-label>
-              <q-item-label>{{ currentUser.email }}</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item>
-            <q-item-section>
-              <q-item-label caption>Nome</q-item-label>
-              <q-item-label>{{ currentUser.firstName }} {{ currentUser.lastName }}</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item>
-            <q-item-section>
-              <q-item-label caption>Data Registrazione</q-item-label>
-              <q-item-label>{{ formatDate(currentUser.createdAt) }}</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
-
-      <!-- Sync Operator Card -->
-      <q-card-section>
-        <SyncOperatorCard />
-      </q-card-section>
-
-      <q-separator />
-
-      <q-card-actions align="center">
-        <q-btn
-          label="Aggiorna"
-          icon="refresh"
-          color="primary"
-          outline
-          @click="checkVerificationStatus"
-          :loading="checking"
-        />
-        <q-btn label="Esci" icon="logout" color="negative" outline @click="handleLogout" />
-      </q-card-actions>
-    </q-card>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -118,3 +55,59 @@ function formatDate(timestamp: number): string {
   });
 }
 </script>
+<template>
+  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
+    <q-card class="q-pa-md" style="width: 400px; max-width: 90vw">
+      <q-card-section class="text-center">
+        <q-icon name="hourglass_empty" size="64px" color="orange" />
+        <div class="text-h5 q-mt-md">Account in Verifica</div>
+      </q-card-section>
+
+      <q-card-section>
+        <p class="text-body1">
+          Il tuo account è in attesa di verifica da parte dell'amministratore.
+        </p>
+        <p class="text-body2 text-grey-7">
+          Un amministratore deve collegare il tuo account al profilo operatore esistente. Riceverai
+          una notifica via email quando l'account sarà attivato.
+        </p>
+      </q-card-section>
+
+      <q-card-section v-if="currentUser">
+        <q-list bordered separator>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>Email</q-item-label>
+              <q-item-label>{{ currentUser.email }}</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>Nome</q-item-label>
+              <q-item-label>{{ currentUser.firstName }} {{ currentUser.lastName }}</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>Data Registrazione</q-item-label>
+              <q-item-label>{{ formatDate(currentUser.createdAt) }}</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+
+      <!-- Sync Operator Card -->
+      <q-card-section>
+        <SyncOperatorCard />
+      </q-card-section>
+
+      <q-separator />
+
+      <q-card-actions align="center">
+        <q-btn label="Aggiorna" icon="refresh" color="primary" outline @click="checkVerificationStatus"
+          :loading="checking" />
+        <q-btn label="Esci" icon="logout" color="negative" outline @click="handleLogout" />
+      </q-card-actions>
+    </q-card>
+  </div>
+</template>

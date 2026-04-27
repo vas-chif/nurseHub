@@ -1,18 +1,14 @@
 /**
  * @file authStore.ts
- * @description Pinia store for authentication state and user management.
+ * @description Centralized Pinia store for authentication, session management, and role-based access control (RBAC).
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-04-20
+ * @modified 2026-04-27
  * @notes
- * - Phase 25: JWT-First Authorization (§1.10). Role is read from Custom Claims.
- * - Firestore `role` field kept as backup/audit trail.
- * - isAdmin computed: JWT claim (primary) > Firestore field (fallback).
- * - After role change: getIdToken(true) forces immediate JWT refresh.
- * @dependencies
- * - firebase/auth
- * - src/services/UserService.ts
- * - src/services/OperatorsService.ts
+ * - Implements JWT-First Authorization (§1.10): roles and permissions are read from Custom Claims.
+ * - Manages the lifecycle of the authenticated user (Firebase Auth + Firestore Profile).
+ * - Coordinates role promotion flows with automatic token refreshing.
+ * - Handles operator linking and configuration-based management fencing.
  */
 
 import { defineStore } from 'pinia';

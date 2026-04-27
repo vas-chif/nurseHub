@@ -1,3 +1,14 @@
+/**
+ * @file OperatorsService.ts
+ * @description Service for managing operator profiles within specific system configurations.
+ * @author Nurse Hub Team
+ * @created 2026-03-10
+ * @modified 2026-04-27
+ * @notes
+ * - Accesses operators stored in sub-collections of the systemConfigurations collection.
+ * - Supports retrieval of all operators for a config or specific operator by ID.
+ * - Essential for mapping users to their professional shift schedules.
+ */
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import type { Operator } from '../types/models';

@@ -1,9 +1,12 @@
 /**
 * @file SwapOpportunitiesCard.vue
-* @description Dashboard component highlighting potential shift swaps.
+* @description Dashboard component for browsing and accepting shift swap proposals from colleagues.
 * @author Nurse Hub Team
-* @created 2026-04-05
-* @modified 2026-04-23
+* @created 2026-03-12
+* @modified 2026-04-27
+* @notes
+* - Filters swaps based on compatibility with user's own schedule.
+* - Implements skeleton loading to maintain layout stability during data fetch.
 */
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
@@ -233,8 +236,20 @@ function acceptSwap(swap: ShiftSwap) {
         Proposte disponibili per te
       </div>
 
-      <div v-if="loading" class="text-center q-py-sm">
-        <q-spinner color="primary" size="1.2em" />
+      <div v-if="loading" class="q-gutter-xs q-mb-md">
+        <q-card v-for="n in 2" :key="n" flat class="q-pa-sm bg-blue-1 rounded-borders">
+          <div class="row items-center justify-between">
+            <div class="col">
+              <q-skeleton type="text" width="30%" class="q-mb-xs" />
+              <div class="row items-center q-gutter-xs">
+                <q-skeleton type="rect" width="30px" height="20px" />
+                <q-skeleton type="text" width="40px" />
+                <q-skeleton type="rect" width="30px" height="20px" />
+              </div>
+            </div>
+            <q-skeleton type="rect" width="60px" height="28px" class="q-ml-sm" />
+          </div>
+        </q-card>
       </div>
 
       <div v-else-if="compatibleSwaps.length === 0" class="text-grey text-caption q-mb-md q-pl-sm">

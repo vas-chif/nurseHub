@@ -1,3 +1,13 @@
+/**
+ * @file router/index.ts
+ * @description Vue Router initialization and global navigation guard registration.
+ * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-27
+ * @notes
+ * - Integrates authGuard for session persistence checks.
+ * - Integrates roleGuard for hierarchical access control and config-fencing.
+ */
 import { defineRouter } from '#q-app/wrappers';
 import {
   createMemoryHistory,

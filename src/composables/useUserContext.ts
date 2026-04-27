@@ -1,7 +1,13 @@
 /**
  * @file useUserContext.ts
- * @description Composable for determining active operator context and permissions
+ * @description Composable for managing user permissions, request visibility, and active operator context.
  * @author Nurse Hub Team
+ * @created 2026-03-10
+ * @modified 2026-04-27
+ * @notes
+ * - Evaluates visibility of shift requests based on operator compatibility and admin roles.
+ * - Manages the transition between personal user context and administrative operator views.
+ * - Provides helper methods for role verification (isAdmin, isSuperAdmin, isVerified).
  */
 
 import { computed } from 'vue';

@@ -1,16 +1,13 @@
 /**
  * @file useOnboarding.ts
- * @description Composable for managing the onboarding wizard state
+ * @description Composable for managing the first-time user experience (tutorial wizard) and its persistence.
  * @author Nurse Hub Team
  * @created 2026-04-19
- * @modified 2026-04-19
- * @example
- * const { showTutorial, completeOnboarding } = useOnboarding(computed(() => user.uid));
+ * @modified 2026-04-27
  * @notes
- * - Zero Firebase costs (client-side localStorage only)
- * - Persists per-user using UID in localStorage key
- * @dependencies
- * - vue
+ * - Uses client-side persistence (localStorage/sessionStorage) to eliminate Firestore costs for UX state.
+ * - Stores completion status per user UID to support multi-user devices.
+ * - Supports temporary dismissal during the current session.
  */
 
 import { ref, watch, type Ref } from 'vue';

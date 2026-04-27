@@ -1,9 +1,12 @@
 /**
 * @file ActiveRequestsCard.vue
-* @description Dashboard widget listing current open shift coverage requests.
+* @description Dashboard component for users to view and apply for uncovered shift opportunities.
 * @author Nurse Hub Team
-* @created 2026-04-10
-* @modified 2026-04-23
+* @created 2026-03-10
+* @modified 2026-04-27
+* @notes
+* - Displays real-time opportunities and personal application history.
+* - Uses systematic skeleton loading for optimized perceived performance.
 */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
@@ -401,7 +404,7 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
                     {{ formatDate(req.date) }} -
                     <q-badge :color="getShiftColor(req.originalShift)">{{
                       req.originalShift
-                    }}</q-badge>
+                      }}</q-badge>
                   </q-item-label>
                   <q-item-label caption lines="1">
                     {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
@@ -427,8 +430,19 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
               </q-btn>
             </div>
 
-            <div v-if="loading" class="row justify-center q-pa-md">
-              <q-spinner color="primary" size="2em" />
+            <div v-if="loading" class="q-pa-sm">
+              <q-item v-for="n in 2" :key="n" class="q-mb-xs">
+                <q-item-section avatar>
+                  <q-skeleton type="QAvatar" size="32px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-skeleton type="text" width="50%" />
+                  <q-skeleton type="text" width="30%" />
+                </q-item-section>
+                <q-item-section side>
+                  <q-skeleton type="rect" width="60px" height="24px" />
+                </q-item-section>
+              </q-item>
             </div>
 
             <div v-else-if="otherRequests.length === 0 && urgentRequests.length === 0"
@@ -446,7 +460,7 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
                     {{ formatDate(req.date) }} -
                     <q-badge :color="getShiftColor(req.originalShift)">{{
                       req.originalShift
-                    }}</q-badge>
+                      }}</q-badge>
                   </q-item-label>
                   <q-item-label caption lines="1">
                     {{ req.reason === 'SHORTAGE' ? 'Carenza Personale' : 'Assenza' }}
@@ -466,8 +480,16 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
 
         <!-- TAB 2: Le mie Candidature (History) -->
         <q-tab-panel name="history" class="q-pa-none">
-          <div v-if="loading" class="row justify-center q-pa-md">
-            <q-spinner color="primary" size="2em" />
+          <div v-if="loading" class="q-pa-md">
+            <q-item v-for="n in 3" :key="n" class="q-mb-sm">
+              <q-item-section avatar>
+                <q-skeleton type="QAvatar" />
+              </q-item-section>
+              <q-item-section>
+                <q-skeleton type="text" width="40%" />
+                <q-skeleton type="text" width="60%" />
+              </q-item-section>
+            </q-item>
           </div>
           <div v-else-if="myHistoryRequests.length === 0" class="text-center text-grey q-pa-lg">
             Nessuna candidatura inviata di recente.

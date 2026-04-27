@@ -1,147 +1,3 @@
-<template>
-  <div class="q-pa-md">
-    <div class="row items-center justify-between q-mb-md">
-      <div>
-        <div class="text-h6">Gestione Backup & Ripristino</div>
-        <div class="text-caption text-grey">Protezione dati e continuità operativa (GDPR Art. 30)</div>
-      </div>
-      <div class="row q-gutter-sm">
-        <q-btn flat round icon="refresh" @click="loadBackups" :loading="loading">
-          <q-tooltip>Aggiorna lista</q-tooltip>
-        </q-btn>
-        <q-btn color="primary" icon="cloud_upload" label="Backup Manuale" @click="confirmManualBackup" />
-      </div>
-    </div>
-
-    <!-- Stats / Auto-Backup Toggle -->
-    <q-card flat bordered class="q-mb-lg bg-blue-grey-1">
-      <q-card-section class="row items-center justify-between">
-        <div class="row items-center">
-          <q-icon name="auto_mode" size="md" color="primary" class="q-mr-md" />
-          <div>
-            <div class="text-subtitle2">Automazione Backup Schedulato</div>
-            <div class="text-caption">Eseguito ogni notte alle 02:00 (Europe/Rome)</div>
-          </div>
-        </div>
-        <div v-if="loading" class="row items-center">
-          <q-skeleton type="rect" width="80px" height="30px" class="q-ml-md" />
-        </div>
-        <q-toggle
-          v-else
-          v-model="autoBackupEnabled"
-          label="Attivo"
-          color="green"
-          @update:model-value="toggleAutomation"
-        />
-      </q-card-section>
-    </q-card>
-
-    <!-- Backup List -->
-    <q-table
-      title="Backup Disponibili (GCS)"
-      :rows="backups"
-      :columns="columns"
-      row-key="path"
-      :loading="loading"
-      flat
-      bordered
-      :pagination="{ rowsPerPage: 10 }"
-    >
-      <template v-slot:body-cell-status="props">
-        <q-td :props="props">
-          <q-badge :color="props.row.isToday ? 'green' : 'blue'" :label="props.row.isToday ? 'Recente' : 'Archivio'" />
-        </q-td>
-      </template>
-
-      <template v-slot:body-cell-actions="props">
-        <q-td :props="props" class="q-gutter-xs">
-          <q-btn flat round dense icon="restore" color="orange" @click="confirmRestore(props.row)">
-            <q-tooltip>Ripristina da questo backup</q-tooltip>
-          </q-btn>
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)">
-            <q-tooltip>Elimina definitivamente</q-tooltip>
-          </q-btn>
-        </q-td>
-      </template>
-    </q-table>
-
-    <!-- Recent Logs Section -->
-    <div class="text-subtitle1 q-mt-xl q-mb-md text-weight-bold">Ultimi Log Operativi</div>
-    <div class="row q-col-gutter-md">
-      <div class="col-12 col-md-6">
-        <q-card flat bordered style="height: 300px; overflow-y: auto;">
-          <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Backup</q-card-section>
-          <q-list separator>
-            <template v-if="loading && backupLogs.length === 0">
-              <q-item v-for="n in 5" :key="`sk-b-${n}`">
-                <q-item-section avatar>
-                  <q-skeleton type="QAvatar" size="24px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-skeleton type="text" width="70%" />
-                  <q-skeleton type="text" width="40%" />
-                </q-item-section>
-              </q-item>
-            </template>
-            <template v-else>
-              <q-item v-for="log in backupLogs" :key="log.id">
-                <q-item-section avatar>
-                  <q-icon :name="log.status === 'SUCCESS' ? 'check_circle' : 'error'" :color="log.status === 'SUCCESS' ? 'green' : 'red'" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label>{{ log.triggerType }} - {{ log.status }}</q-item-label>
-                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
-                </q-item-section>
-                <q-item-section side v-if="log.executionTime">
-                  <q-badge color="grey-7" :label="`${(log.executionTime / 1000).toFixed(1)}s`" />
-                </q-item-section>
-              </q-item>
-              <q-item v-if="backupLogs.length === 0">
-                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
-              </q-item>
-            </template>
-          </q-list>
-        </q-card>
-      </div>
-      <div class="col-12 col-md-6">
-        <q-card flat bordered style="height: 300px; overflow-y: auto;">
-          <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Ripristini</q-card-section>
-          <q-list separator>
-            <template v-if="loading && restoreLogs.length === 0">
-              <q-item v-for="n in 3" :key="`sk-r-${n}`">
-                <q-item-section avatar>
-                  <q-skeleton type="QAvatar" size="24px" />
-                </q-item-section>
-                <q-item-section>
-                  <q-skeleton type="text" width="60%" />
-                  <q-skeleton type="text" width="30%" />
-                </q-item-section>
-              </q-item>
-            </template>
-            <template v-else>
-              <q-item v-for="log in restoreLogs" :key="log.id">
-                <q-item-section avatar>
-                  <q-icon name="settings_backup_restore" color="orange" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label>{{ log.type === 'full' ? 'Full Restore' : 'Restore Parziale' }}</q-item-label>
-                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <q-badge :color="log.status === 'SUCCESS' ? 'green' : 'red'" :label="log.status" />
-                </q-item-section>
-              </q-item>
-              <q-item v-if="restoreLogs.length === 0">
-                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
-              </q-item>
-            </template>
-          </q-list>
-        </q-card>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
@@ -249,9 +105,9 @@ function toggleAutomation(val: boolean) {
     void (async () => {
       try {
         await backupService.toggleAutoBackup(
-          val, 
-          reason, 
-          authStore.currentUser!.uid, 
+          val,
+          reason,
+          authStore.currentUser!.uid,
           authStore.currentUser!.email
         );
         $q.notify({ type: 'positive', message: `Automazione ${val ? 'attivata' : 'disattivata'}` });
@@ -281,7 +137,7 @@ function confirmManualBackup() {
       $q.loading.show({ message: 'Avvio backup in corso... Potrebbero volerci alcuni minuti.' });
       try {
         await backupService.triggerManualBackup(
-          authStore.currentUser!.uid, 
+          authStore.currentUser!.uid,
           authStore.currentUser!.email,
           reason
         );
@@ -315,7 +171,7 @@ function confirmDelete(backup: BackupMetadata) {
       $q.loading.show({ message: 'Cancellazione in corso...' });
       try {
         await backupService.deleteBackup(
-          backup.path, 
+          backup.path,
           '', // We don't have logId from the listing
           reason,
           authStore.currentUser!.uid,
@@ -347,22 +203,22 @@ function confirmRestore(backup: BackupMetadata) {
     persistent: true
   }).onOk((reason: string) => {
     void (async () => {
-      $q.loading.show({ 
+      $q.loading.show({
         message: 'RIPRISTINO IN CORSO... NON CHIUDERE LA PAGINA.<br>Verrà creato un backup di emergenza prima del ripristino.',
         html: true
       });
       try {
         await backupService.restoreBackup(
-          backup.path, 
-          'full', 
-          null, 
+          backup.path,
+          'full',
+          null,
           reason,
           authStore.currentUser!.uid,
           authStore.currentUser!.email
         );
-        $q.notify({ 
-          type: 'positive', 
-          message: 'Ripristino completato!', 
+        $q.notify({
+          type: 'positive',
+          message: 'Ripristino completato!',
           timeout: 10000,
           actions: [{ label: 'OK', color: 'white' }]
         });
@@ -377,7 +233,139 @@ function confirmRestore(backup: BackupMetadata) {
   });
 }
 </script>
+<template>
+  <div class="q-pa-md">
+    <div class="row items-center justify-between q-mb-md">
+      <div>
+        <div class="text-h6">Gestione Backup & Ripristino</div>
+        <div class="text-caption text-grey">Protezione dati e continuità operativa (GDPR Art. 30)</div>
+      </div>
+      <div class="row q-gutter-sm">
+        <q-btn flat round icon="refresh" @click="loadBackups" :loading="loading">
+          <q-tooltip>Aggiorna lista</q-tooltip>
+        </q-btn>
+        <q-btn color="primary" icon="cloud_upload" label="Backup Manuale" @click="confirmManualBackup" />
+      </div>
+    </div>
 
+    <!-- Stats / Auto-Backup Toggle -->
+    <q-card flat bordered class="q-mb-lg bg-blue-grey-1">
+      <q-card-section class="row items-center justify-between">
+        <div class="row items-center">
+          <q-icon name="auto_mode" size="md" color="primary" class="q-mr-md" />
+          <div>
+            <div class="text-subtitle2">Automazione Backup Schedulato</div>
+            <div class="text-caption">Eseguito ogni notte alle 02:00 (Europe/Rome)</div>
+          </div>
+        </div>
+        <div v-if="loading" class="row items-center">
+          <q-skeleton type="rect" width="80px" height="30px" class="q-ml-md" />
+        </div>
+        <q-toggle v-else v-model="autoBackupEnabled" label="Attivo" color="green"
+          @update:model-value="toggleAutomation" />
+      </q-card-section>
+    </q-card>
+
+    <!-- Backup List -->
+    <q-table title="Backup Disponibili (GCS)" :rows="backups" :columns="columns" row-key="path" :loading="loading" flat
+      bordered :pagination="{ rowsPerPage: 10 }">
+      <template v-slot:body-cell-status="props">
+        <q-td :props="props">
+          <q-badge :color="props.row.isToday ? 'green' : 'blue'" :label="props.row.isToday ? 'Recente' : 'Archivio'" />
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-actions="props">
+        <q-td :props="props" class="q-gutter-xs">
+          <q-btn flat round dense icon="restore" color="orange" @click="confirmRestore(props.row)">
+            <q-tooltip>Ripristina da questo backup</q-tooltip>
+          </q-btn>
+          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)">
+            <q-tooltip>Elimina definitivamente</q-tooltip>
+          </q-btn>
+        </q-td>
+      </template>
+    </q-table>
+
+    <!-- Recent Logs Section -->
+    <div class="text-subtitle1 q-mt-xl q-mb-md text-weight-bold">Ultimi Log Operativi</div>
+    <div class="row q-col-gutter-md">
+      <div class="col-12 col-md-6">
+        <q-card flat bordered style="height: 300px; overflow-y: auto;">
+          <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Backup</q-card-section>
+          <q-list separator>
+            <template v-if="loading && backupLogs.length === 0">
+              <q-item v-for="n in 5" :key="`sk-b-${n}`">
+                <q-item-section avatar>
+                  <q-skeleton type="QAvatar" size="24px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-skeleton type="text" width="70%" />
+                  <q-skeleton type="text" width="40%" />
+                </q-item-section>
+              </q-item>
+            </template>
+            <template v-else>
+              <q-item v-for="log in backupLogs" :key="log.id">
+                <q-item-section avatar>
+                  <q-icon :name="log.status === 'SUCCESS' ? 'check_circle' : 'error'"
+                    :color="log.status === 'SUCCESS' ? 'green' : 'red'" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ log.triggerType }} - {{ log.status }}</q-item-label>
+                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="log.executionTime">
+                  <q-badge color="grey-7" :label="`${(log.executionTime / 1000).toFixed(1)}s`" />
+                </q-item-section>
+              </q-item>
+              <q-item v-if="backupLogs.length === 0">
+                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
+              </q-item>
+            </template>
+          </q-list>
+        </q-card>
+      </div>
+      <div class="col-12 col-md-6">
+        <q-card flat bordered style="height: 300px; overflow-y: auto;">
+          <q-card-section class="bg-grey-2 q-py-xs text-weight-bold">Ultimi Ripristini</q-card-section>
+          <q-list separator>
+            <template v-if="loading && restoreLogs.length === 0">
+              <q-item v-for="n in 3" :key="`sk-r-${n}`">
+                <q-item-section avatar>
+                  <q-skeleton type="QAvatar" size="24px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-skeleton type="text" width="60%" />
+                  <q-skeleton type="text" width="30%" />
+                </q-item-section>
+              </q-item>
+            </template>
+            <template v-else>
+              <q-item v-for="log in restoreLogs" :key="log.id">
+                <q-item-section avatar>
+                  <q-icon name="settings_backup_restore" color="orange" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ log.type === 'full' ? 'Full Restore' : 'Restore Parziale' }}</q-item-label>
+                  <q-item-label caption>{{ formatFullDate(log.timestamp) }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-badge :color="log.status === 'SUCCESS' ? 'green' : 'red'" :label="log.status" />
+                </q-item-section>
+              </q-item>
+              <q-item v-if="restoreLogs.length === 0">
+                <q-item-section class="text-grey italic text-center">Nessun log trovato</q-item-section>
+              </q-item>
+            </template>
+          </q-list>
+        </q-card>
+      </div>
+    </div>
+  </div>
+</template>
 <style scoped>
-.italic { font-style: italic; }
+.italic {
+  font-style: italic;
+}
 </style>

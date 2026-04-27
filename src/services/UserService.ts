@@ -1,7 +1,14 @@
 /**
  * @file UserService.ts
- * @description Manages Firebase Auth users and their Firestore documents with operator linking
+ * @description Service for managing user identities, profile data, and administrative role hierarchies.
  * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-27
+ * @notes
+ * - Handles complex operator matching during user synchronization.
+ * - Manages administrative promotions and JWT Custom Claims via Vercel integration.
+ * - Implements profile updates (avatar, DOB, phone) with Firestore persistence.
+ * - Provides audit-friendly user blocking and unlinking capabilities.
  */
 
 import {

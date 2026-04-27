@@ -1,7 +1,13 @@
 /**
  * @file BackupService.ts
- * @description Frontend service for interacting with Vercel backup API endpoints.
+ * @description Proxy service for interacting with administrative backup/restore APIs on Vercel.
  * @author Nurse Hub Team
+ * @created 2026-03-20
+ * @modified 2026-04-27
+ * @notes
+ * - Manages Firestore backups stored in Google Cloud Storage (GCS).
+ * - Triggers manual backups, list history, and performs full or collection-level restores.
+ * - Requires administrative JWT claims and a secure API secret for Vercel communication.
  */
 
 import { useSecureLogger } from '../utils/secureLogger';

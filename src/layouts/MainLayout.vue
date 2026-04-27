@@ -1,3 +1,15 @@
+/**
+ * @file MainLayout.vue
+ * @description Primary application layout. Orchestrates global navigation, notification listeners, and PWA interactions.
+ * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-04-27
+ * @notes
+ * - Manages real-time Firebase listeners for in-app and administrative notifications.
+ * - Implements gesture-based (swipe) navigation with dynamic route discovery.
+ * - Handles role-based visibility for navigation tabs (Tab-Fencing).
+ * - Centralizes the "Department Switcher" (ConfigSelector) for SuperAdmins.
+ */
 <script setup lang="ts">
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -229,8 +241,8 @@ function goBack() {
 
         </q-toolbar-title>
 
-        <!-- Global Config Selector (Admin Only) -->
-        <ConfigSelector class="q-mr-md" />
+        <!-- Global Config Selector (SuperAdmin Only) -->
+        <ConfigSelector v-if="authStore.isSuperAdmin" class="q-mr-md" />
 
         <!-- In-App Notifications Badge -->
         <q-btn flat round dense icon="notifications" class="q-mr-sm">

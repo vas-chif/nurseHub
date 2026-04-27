@@ -1,7 +1,13 @@
 /**
  * @file SyncService.ts
- * @description Handles synchronization between Google Sheets (Source of Truth) and Firestore (Operational DB)
+ * @description Orchestrates data synchronization between Google Sheets (Source of Truth) and Firestore.
  * @author Nurse Hub Team
+ * @created 2026-02-15
+ * @modified 2026-04-27
+ * @notes
+ * - Implements "Mirror Logic" for operators and schedules (Phase 25).
+ * - Handles bulk batch writes and individual operator refreshes.
+ * - Manages data ownership (UID-operator matching) during synchronization.
  */
 import type { FieldValue } from 'firebase/firestore';
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';

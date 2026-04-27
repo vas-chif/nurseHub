@@ -1,11 +1,14 @@
 /**
- * @file AdminRequestsPage.vue
- * @description Administrative dashboard for managing shift requests, coverage, and approval workflows.
- * @author Nurse Hub Team
- * @created 2026-02-20
- * @modified 2026-04-23
- */
-
+* @file AdminRequestsPage.vue
+* @description Centralized administrative page for managing absence and swap requests.
+* @author Nurse Hub Team
+* @created 2026-03-22
+* @modified 2026-04-27
+* @notes
+* - Features tabbed navigation for pending, history, and swap proposals.
+* - Real-time Firestore synchronization for request states.
+* - Integrated skeleton loading for smooth transitions.
+*/
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
@@ -1168,7 +1171,7 @@ async function processSwapApproval() {
         // Sync Counterpart
         const counterpartName = swap.counterpartName || 'Collega';
         await syncToSheets(counterpartName, swap.date, swap.offeredShift);
-        
+
         $q.notify({ type: 'positive', message: 'Sincronizzazione Google Sheets completata (via GAS)!' });
       } catch (e) {
         logger.error('Error syncing swap to sheets', e);
@@ -1362,7 +1365,7 @@ watch(activeTab, (val) => {
       <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
         <q-badge v-if="pendingSwaps.length > 0" color="red" floating>{{
           pendingSwaps.length
-          }}</q-badge>
+        }}</q-badge>
       </q-tab>
     </q-tabs>
 
@@ -1370,8 +1373,19 @@ watch(activeTab, (val) => {
 
     <q-tab-panels v-model="activeTab" animated>
       <q-tab-panel name="pending" class="q-pa-none">
-        <div v-if="loading" class="row justify-center q-pa-md">
-          <q-spinner color="primary" size="3em" />
+        <div v-if="loading" class="q-pa-md">
+          <q-item v-for="n in 3" :key="n" class="q-mb-sm bg-white shadow-1">
+            <q-item-section avatar>
+              <q-skeleton type="QCheckbox" />
+            </q-item-section>
+            <q-item-section avatar>
+              <q-skeleton type="QAvatar" />
+            </q-item-section>
+            <q-item-section>
+              <q-skeleton type="text" width="40%" />
+              <q-skeleton type="text" width="60%" />
+            </q-item-section>
+          </q-item>
         </div>
 
         <div v-else-if="filteredPendingRequests.length === 0" class="text-center text-grey q-pa-lg">
@@ -1461,7 +1475,7 @@ watch(activeTab, (val) => {
                         <q-item-section>
                           <q-item-label class="text-weight-bold">{{
                             offer.operatorName || 'Operatore'
-                            }}</q-item-label>
+                          }}</q-item-label>
                           <q-item-label caption>
                             Offerta per: {{ formatDate(req.date) }} -
                             <q-badge :label="req.originalShift" color="primary" />
@@ -1595,8 +1609,16 @@ watch(activeTab, (val) => {
           </div>
         </div>
 
-        <div v-if="loading" class="row justify-center q-pa-md">
-          <q-spinner color="primary" size="3em" />
+        <div v-if="loading" class="q-pa-md">
+          <q-item v-for="n in 5" :key="n" class="q-mb-sm">
+            <q-item-section avatar>
+              <q-skeleton type="QAvatar" />
+            </q-item-section>
+            <q-item-section>
+              <q-skeleton type="text" width="30%" />
+              <q-skeleton type="text" width="50%" />
+            </q-item-section>
+          </q-item>
         </div>
         <div v-else-if="visibleHistoryRequests.length === 0" class="text-center text-grey q-pa-lg">
           Nessuna richiesta visibile nello storico.
@@ -1615,7 +1637,7 @@ watch(activeTab, (val) => {
                   {{ formatDate(req.date) }} -
                   <q-badge :color="getShiftColor(req.originalShift)" size="xs">{{
                     req.originalShift
-                    }}</q-badge>
+                  }}</q-badge>
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
@@ -1735,8 +1757,16 @@ watch(activeTab, (val) => {
             :loading="swapLoading" />
         </div>
 
-        <div v-if="swapLoading" class="text-center q-pa-lg">
-          <q-spinner color="primary" size="2em" />
+        <div v-if="swapLoading" class="q-pa-md">
+          <q-item v-for="n in 3" :key="n" class="q-mb-sm bg-white shadow-1">
+            <q-item-section avatar>
+              <q-skeleton type="QAvatar" />
+            </q-item-section>
+            <q-item-section>
+              <q-skeleton type="text" width="60%" />
+              <q-skeleton type="text" width="40%" />
+            </q-item-section>
+          </q-item>
         </div>
 
         <div v-else-if="pendingSwaps.length === 0" class="text-center text-grey q-pa-lg">
@@ -1756,17 +1786,17 @@ watch(activeTab, (val) => {
                   <q-icon name="person" />
                   <strong>{{ swap.creatorName || swap.creatorId }}</strong> cede
                   <q-chip size="xs" dense :color="swap.offeredShift === 'M'
-                      ? 'amber-9'
-                      : swap.offeredShift === 'P'
-                        ? 'deep-orange-6'
-                        : 'blue-8'
+                    ? 'amber-9'
+                    : swap.offeredShift === 'P'
+                      ? 'deep-orange-6'
+                      : 'blue-8'
                     " text-color="white">{{ swap.offeredShift }}</q-chip>
                   in cambio di
                   <q-chip size="xs" dense :color="swap.desiredShift === 'M'
-                      ? 'amber-9'
-                      : swap.desiredShift === 'P'
-                        ? 'deep-orange-6'
-                        : 'blue-8'
+                    ? 'amber-9'
+                    : swap.desiredShift === 'P'
+                      ? 'deep-orange-6'
+                      : 'blue-8'
                     " text-color="white">{{ swap.desiredShift }}</q-chip>
                 </div>
                 <div v-if="swap.counterpartName" class="text-caption q-mt-xs">
@@ -1797,11 +1827,11 @@ watch(activeTab, (val) => {
                   <div class="row items-center q-gutter-xs">
                     <q-chip size="xs" dense color="amber-9" text-color="white">{{
                       s.offeredShift
-                      }}</q-chip>
+                    }}</q-chip>
                     <q-icon name="swap_horiz" size="xs" />
                     <q-chip size="xs" dense color="deep-orange-6" text-color="white">{{
                       s.desiredShift
-                      }}</q-chip>
+                    }}</q-chip>
                   </div>
                   <div class="text-caption q-mt-xs">
                     <q-icon name="person" size="xs" />
@@ -1814,19 +1844,19 @@ watch(activeTab, (val) => {
                   </div>
                 </div>
                 <q-badge :color="s.status === 'APPROVED'
-                    ? 'positive'
-                    : s.status === 'REJECTED'
-                      ? 'negative'
-                      : s.status === 'PENDING_ADMIN'
-                        ? 'orange'
-                        : 'primary'
+                  ? 'positive'
+                  : s.status === 'REJECTED'
+                    ? 'negative'
+                    : s.status === 'PENDING_ADMIN'
+                      ? 'orange'
+                      : 'primary'
                   " :label="s.status === 'APPROVED'
-                      ? 'Approvato'
-                      : s.status === 'REJECTED'
-                        ? 'Rifiutato'
-                        : s.status === 'PENDING_ADMIN'
-                          ? 'In revisione'
-                          : 'Aperto'
+                    ? 'Approvato'
+                    : s.status === 'REJECTED'
+                      ? 'Rifiutato'
+                      : s.status === 'PENDING_ADMIN'
+                        ? 'In revisione'
+                        : 'Aperto'
                     " class="q-ml-sm" />
               </div>
             </q-card-section>
@@ -1871,7 +1901,7 @@ watch(activeTab, (val) => {
             Stai confermando la copertura per
             <strong>{{
               getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req)
-              }}</strong>.
+            }}</strong>.
           </div>
 
           <div class="bg-grey-2 q-pa-md rounded-borders">
@@ -1917,7 +1947,7 @@ watch(activeTab, (val) => {
               approvalSwapContext.counterpartName ||
               approvalSwapContext.counterpartId ||
               'Assegnazione'
-              }}</strong>.
+            }}</strong>.
           </div>
 
           <div class="bg-grey-2 q-pa-md rounded-borders">

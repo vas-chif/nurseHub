@@ -1,3 +1,14 @@
+/**
+ * @file useAnalytics.ts
+ * @description Composable for computing analytics metrics and chart data from shift requests.
+ * @author Nurse Hub Team
+ * @created 2026-03-20
+ * @modified 2026-04-27
+ * @notes
+ * - Processes Firestore shiftRequests documents into metrics (total, pending, rate).
+ * - Generates formatted data for ApexCharts (donut, line, bar).
+ * - Reactively updates based on filtered request data.
+ */
 import { computed, ref } from 'vue';
 import type { ShiftRequest, Operator } from '../types/models';
 import { date } from 'quasar';
