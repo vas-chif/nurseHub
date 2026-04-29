@@ -54,7 +54,10 @@ service cloud.firestore {
     // Shift Requests
     match /shiftRequests/{requestId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      // Only admins can create ABSENCE requests
+      allow create: if isAuthenticated() && (
+        request.resource.data.reason != 'ABSENCE' || isAnyAdmin()
+      );
       // Config-Fencing for updates (approvals, rejections)
       allow update: if hasConfigAuthority(resource.data.configId) || (
         isAuthenticated() && 

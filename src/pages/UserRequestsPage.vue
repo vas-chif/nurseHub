@@ -71,7 +71,10 @@ const loading = ref(false);
 let unsubscribe: Unsubscribe | null = null;
 
 // Page tab: absence | swap
-const pageTab = ref<'absence' | 'swap'>(uiStore.getActiveTab(route.path, 'absence') as 'absence' | 'swap');
+const defaultTab = authStore.isAnyAdmin ? 'absence' : 'swap';
+const savedTab = uiStore.getActiveTab(route.path, defaultTab) as 'absence' | 'swap';
+const initialTab = (!authStore.isAnyAdmin && savedTab === 'absence') ? 'swap' : savedTab;
+const pageTab = ref<'absence' | 'swap'>(initialTab);
 
 // Watch and save tab changes
 watch(pageTab, (newVal) => {
@@ -652,7 +655,7 @@ function getStatusLabel(req: ShiftRequest) {
 
     <!-- Page-level Tab Toggle: Assenza | Cambio Turno -->
     <q-tabs v-model="pageTab" dense class="q-mb-md" active-color="primary" indicator-color="primary" align="justify">
-      <q-tab name="absence" label="Assenza" icon="event_busy" />
+      <q-tab v-if="authStore.isAnyAdmin" name="absence" label="Assenza" icon="event_busy" />
       <q-tab name="swap" label="Cambio Turno" icon="swap_horiz" />
     </q-tabs>
 

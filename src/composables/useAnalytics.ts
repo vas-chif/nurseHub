@@ -11,19 +11,41 @@
  */
 import { computed, ref } from 'vue';
 import type { ShiftRequest, Operator } from '../types/models';
-import { date } from 'quasar';
+
 
 export function useAnalytics() {
   const requests = ref<ShiftRequest[]>([]);
   const operatorsMap = ref<Record<string, Operator>>({});
 
-  function setRequests(data: ShiftRequest[], operators: Record<string, Operator>) {
+  const dateFilters = ref({ from: '', to: '' });
+
+  function setRequests(data: ShiftRequest[], operators: Record<string, Operator>, from: string = '', to: string = '') {
     requests.value = data;
     operatorsMap.value = operators;
+    dateFilters.value = { from, to };
   }
 
   // --- Metrics ---
   const totalRequests = computed(() => requests.value.length);
+
+  const totalAbsences = computed(() => {
+    let count = 0;
+    const { from, to } = dateFilters.value;
+    if (!from || !to) return 0;
+
+    for (const opId in operatorsMap.value) {
+      const schedule = operatorsMap.value[opId]?.schedule;
+      if (!schedule) continue;
+
+      for (const [dateKey, code] of Object.entries(schedule)) {
+        // Count any code starting with 'A' as an absence in the filtered date range
+        if (dateKey >= from && dateKey <= to && typeof code === 'string' && code.startsWith('A')) {
+          count++;
+        }
+      }
+    }
+    return count;
+  });
 
   const pendingRequests = computed(() => requests.value.filter((r) => r.status === 'OPEN').length);
 
@@ -44,21 +66,23 @@ export function useAnalytics() {
     let count = 0;
 
     processed.forEach((r) => {
-      // createdAt is "YYYY-MM-DD HH:mm" string in model
-      // Safe cast or check if needed
-      const createdStr = String(r.createdAt);
-      const created = date.extractDate(createdStr, 'YYYY-MM-DD HH:mm');
+      const created = r.createdAt;
       const resolved = r.approvalTimestamp || r.rejectionTimestamp;
 
       if (created && resolved) {
-        totalMs += resolved - created.getTime();
+        totalMs += resolved - created;
         count++;
       }
     });
 
     if (count === 0) return '0h';
 
-    const avgHours = Math.round(totalMs / (1000 * 60 * 60));
+    const avgMs = totalMs / count;
+    if (avgMs < 1000 * 60 * 60) {
+      const avgMins = Math.round(avgMs / (1000 * 60));
+      return `${avgMins} min`;
+    }
+    const avgHours = Math.round(avgMs / (1000 * 60 * 60));
     return `${avgHours}h`;
   });
 
@@ -111,9 +135,16 @@ export function useAnalytics() {
     const counts: Record<string, number> = {};
 
     requests.value.forEach((r) => {
-      // Use absentOperatorId if available (who the request is FOR), else creator
-      const targetId = r.absentOperatorId || r.creatorId;
-      counts[targetId] = (counts[targetId] || 0) + 1;
+      // Conta chi si propone per coprire il turno (i salvatori), non chi è assente
+      if (r.offeringOperatorIds && r.offeringOperatorIds.length > 0) {
+        r.offeringOperatorIds.forEach((id) => {
+          counts[id] = (counts[id] || 0) + 1;
+        });
+      } else if (r.offers && r.offers.length > 0) {
+        r.offers.forEach((offer) => {
+          counts[offer.operatorId] = (counts[offer.operatorId] || 0) + 1;
+        });
+      }
     });
 
     // Sort and take top 5
@@ -127,7 +158,7 @@ export function useAnalytics() {
     return {
       series: [
         {
-          name: 'Richieste',
+          name: 'Proposte di Copertura',
           data: values,
         },
       ],
@@ -147,6 +178,7 @@ export function useAnalytics() {
     rawOperators: operatorsMap,
     metrics: {
       total: totalRequests,
+      totalAbsences,
       pending: pendingRequests,
       approvalRate,
       avgTime: avgResponseTime,

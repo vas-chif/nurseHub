@@ -87,6 +87,7 @@ function doPost(e) {
       .trim()
       .toUpperCase();
     var newShift = data.newShift;
+    var note = data.note;
 
     var colIndex = -1;
     var rowIndex = -1;
@@ -182,7 +183,15 @@ function doPost(e) {
     }
 
     if (rowIndex != -1 && colIndex != -1) {
-      sheet.getRange(rowIndex + 1, colIndex + 1).setValue(newShift);
+      var cell = sheet.getRange(rowIndex + 1, colIndex + 1);
+      cell.setValue(newShift);
+      
+      if (note && note.trim() !== '') {
+        cell.setNote(note);
+      } else {
+        cell.clearNote();
+      }
+
       return ContentService.createTextOutput(
         JSON.stringify({
           success: true,

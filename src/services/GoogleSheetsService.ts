@@ -327,24 +327,27 @@ export class GoogleSheetsService {
    * @param operatorName Name of the operator
    * @param date Date in YYYY-MM-DD format
    * @param newShift New shift code to set
+   * @param note Optional text to add as a cell note
    */
   public async updateShiftOnSheets(
     operatorName: string,
     date: string,
     newShift: string,
+    note?: string
   ): Promise<boolean> {
     const gasWebUrl = this.config.gasWebUrl;
     
     // 1. Prefer GAS Web App (Direct & Secure)
     if (gasWebUrl) {
       try {
-        logger.info('Updating shift via GAS Web App...', { operatorName, date, newShift });
+        logger.info('Updating shift via GAS Web App...', { operatorName, date, newShift, hasNote: !!note });
         const response = await fetch(gasWebUrl, {
           method: 'POST',
           body: JSON.stringify({
             operatorName,
             date,
             newShift,
+            note, // Pass the note to GAS
             dateRowIndex: this.config.dateRowIndex,
             nameColumnIndex: this.config.nameColumnIndex,
           }),

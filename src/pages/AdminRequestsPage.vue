@@ -410,7 +410,7 @@ const logger = useSecureLogger();
 /**
  * Syncs a shift update back to Google Sheets
  */
-async function syncToSheets(operatorName: string, date: string, newShift: string) {
+async function syncToSheets(operatorName: string, date: string, newShift: string, note?: string) {
   if (!configStore.activeConfigId) return;
 
   const appConfig = {
@@ -424,7 +424,7 @@ async function syncToSheets(operatorName: string, date: string, newShift: string
   const syncService = new SyncService(sheetsService);
 
   try {
-    const success = await syncService.syncShiftUpdate(operatorName, date, newShift);
+    const success = await syncService.syncShiftUpdate(operatorName, date, newShift, note);
     if (success) {
       logger.info('Synced shift update to Sheets', { date, newShift });
     }
@@ -782,11 +782,11 @@ async function processApproval() {
       if (req.absentOperatorId) {
         const absOpName = operators.value[req.absentOperatorId]?.name || req.absentOperatorName;
         if (absOpName) {
-          void syncToSheets(absOpName, req.date, 'A');
+          void syncToSheets(absOpName, req.date, 'A', req.requestNote);
         }
       }
       if (offer && offer.operatorName) {
-        void syncToSheets(offer.operatorName, req.date, req.originalShift);
+        void syncToSheets(offer.operatorName, req.date, req.originalShift, req.requestNote);
       }
     }
 

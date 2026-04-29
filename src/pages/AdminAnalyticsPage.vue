@@ -37,11 +37,27 @@ const filters = ref({
 });
 
 // Setup default month filters
+function getLocalYYYYMMDD(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const today = new Date();
 const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
 const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-filters.value.dateFrom = firstDay.toISOString().split('T')[0] as string;
-filters.value.dateTo = lastDay.toISOString().split('T')[0] as string;
+filters.value.dateFrom = getLocalYYYYMMDD(firstDay);
+filters.value.dateTo = getLocalYYYYMMDD(lastDay);
+
+function formatIT(dateStr: string) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
 
 function wrapCsvValue(val: string | number | boolean | null | undefined) {
   let formatted = val === void 0 || val === null ? '' : String(val);
@@ -167,6 +183,9 @@ async function refreshData() {
     let requests = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftRequest);
 
     // Client side filtering
+    // Assicuriamo che le richieste appartengano al reparto attivo
+    requests = requests.filter((r) => !r.configId || r.configId === configStore.activeConfigId);
+
     if (filters.value.dateFrom) {
       requests = requests.filter((r) => r.date >= filters.value.dateFrom);
     }
@@ -181,7 +200,7 @@ async function refreshData() {
       operators[op.id] = op;
     });
 
-    setRequests(requests, operators);
+    setRequests(requests, operators, filters.value.dateFrom, filters.value.dateTo);
     
     // Ensure DOM is ready before making charts visible
     await nextTick();
@@ -215,10 +234,34 @@ onMounted(() => {
 
       <!-- Date Filter -->
       <div class="row q-gutter-sm">
-        <q-input v-model="filters.dateFrom" label="Dal" dense outlined type="date" style="width: 150px"
-          @update:model-value="refreshData" />
-        <q-input v-model="filters.dateTo" label="Al" dense outlined type="date" style="width: 150px"
-          @update:model-value="refreshData" />
+        <q-input :model-value="formatIT(filters.dateFrom)" label="Dal" dense outlined readonly style="width: 150px">
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD" @update:model-value="refreshData">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+
+        <q-input :model-value="formatIT(filters.dateTo)" label="Al" dense outlined readonly style="width: 150px">
+          <template v-slot:append>
+            <q-icon name="event" class="cursor-pointer">
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="filters.dateTo" mask="YYYY-MM-DD" @update:model-value="refreshData">
+                  <div class="row items-center justify-end">
+                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
+                  </div>
+                </q-date>
+              </q-popup-proxy>
+            </q-icon>
+          </template>
+        </q-input>
+
         <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
         <q-btn icon="download" label="Esporta CSV" color="secondary" outline @click="exportCSV"
           :disable="metrics.total.value === 0" />
@@ -229,10 +272,21 @@ onMounted(() => {
 
     <!-- KPI Cards -->
     <div class="row q-col-gutter-md q-mb-lg">
-      <div class="col-12 col-sm-6 col-md-3">
+      <div class="col-12 col-sm-6 col-md">
         <q-card class="bg-primary text-white">
           <q-card-section>
-            <div class="text-subtitle2">Totale Richieste</div>
+            <div class="text-subtitle2">Assenze a Calendario</div>
+            <div class="text-h4">
+              <q-skeleton v-if="loading" type="text" width="60px" />
+              <template v-else>{{ metrics.totalAbsences }}</template>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+      <div class="col-12 col-sm-6 col-md">
+        <q-card class="bg-secondary text-white">
+          <q-card-section>
+            <div class="text-subtitle2">Richieste in App</div>
             <div class="text-h4">
               <q-skeleton v-if="loading" type="text" width="60px" />
               <template v-else>{{ metrics.total }}</template>
@@ -240,7 +294,7 @@ onMounted(() => {
           </q-card-section>
         </q-card>
       </div>
-      <div class="col-12 col-sm-6 col-md-3">
+      <div class="col-12 col-sm-6 col-md">
         <q-card class="bg-warning text-white">
           <q-card-section>
             <div class="text-subtitle2">In Attesa</div>
@@ -251,7 +305,7 @@ onMounted(() => {
           </q-card-section>
         </q-card>
       </div>
-      <div class="col-12 col-sm-6 col-md-3">
+      <div class="col-12 col-sm-6 col-md">
         <q-card class="bg-positive text-white">
           <q-card-section>
             <div class="text-subtitle2">Tasso Approvazione</div>
@@ -262,10 +316,10 @@ onMounted(() => {
           </q-card-section>
         </q-card>
       </div>
-      <div class="col-12 col-sm-6 col-md-3">
+      <div class="col-12 col-sm-12 col-md">
         <q-card class="bg-info text-white">
           <q-card-section>
-            <div class="text-subtitle2">Tempo Medio Risposta</div>
+            <div class="text-subtitle2">Tempo Medio</div>
             <div class="text-h4">
               <q-skeleton v-if="loading" type="text" width="80px" />
               <template v-else>{{ metrics.avgTime }}</template>

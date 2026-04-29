@@ -165,9 +165,9 @@ export class SyncService {
    * Pushes a single shift update to Google Sheets
    * Used when an offer is accepted or a request is approved.
    */
-  async syncShiftUpdate(operatorName: string, date: string, newShift: string): Promise<boolean> {
+  async syncShiftUpdate(operatorName: string, date: string, newShift: string, note?: string): Promise<boolean> {
     try {
-      return await this.sheetsService.updateShiftOnSheets(operatorName, date, newShift);
+      return await this.sheetsService.updateShiftOnSheets(operatorName, date, newShift, note);
     } catch (error) {
       logger.error('Failed to sync shift update to Sheets', error);
       return false;

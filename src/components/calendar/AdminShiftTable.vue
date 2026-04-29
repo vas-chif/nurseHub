@@ -11,7 +11,7 @@
  */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { date as qDate, type QTableColumn } from 'quasar';
+import { date as quasarDate, type QTableColumn } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 import { useConfigStore } from '../../stores/configStore';
@@ -40,7 +40,7 @@ const scheduleStore = useScheduleStore();
 const operatorOptions = ref<Operator[]>([]);
 const selectedOperators = ref<string[]>([]); // Array of IDs
 
-const startDate = ref(qDate.formatDate(new Date(), 'YYYY-MM-DD'));
+const startDate = ref(quasarDate.formatDate(new Date(), 'YYYY-MM-DD'));
 const daysToShow = ref(30);
 
 const selectedShiftCodes = ref<string[]>([]);
@@ -62,7 +62,7 @@ const itLocale = {
 
 function formatDate(dt: string) {
   if (!dt) return '';
-  return qDate.formatDate(dt, 'DD/MM/YYYY');
+  return quasarDate.formatDate(dt, 'DD/MM/YYYY');
 }
 
 // Generate Date Columns dynamically based on startDate and daysToShow
@@ -71,15 +71,15 @@ const dateColumns = computed<DateColumn[]>(() => {
   const start = new Date(startDate.value);
 
   for (let i = 0; i < daysToShow.value; i++) {
-    const d = qDate.addToDate(start, { days: i });
-    const dateKey = qDate.formatDate(d, 'YYYY-MM-DD');
-    const dayNum = qDate.formatDate(d, 'DD');
+    const d = quasarDate.addToDate(start, { days: i });
+    const dateKey = quasarDate.formatDate(d, 'YYYY-MM-DD');
+    const dayNum = quasarDate.formatDate(d, 'DD');
     const month = d.toLocaleDateString('it-IT', { month: 'short' });
     const weekday = d.toLocaleDateString('it-IT', { weekday: 'short' });
 
     // Check for holidays (Sundays + fixed dates)
     const isSunday = d.getDay() === 0;
-    const dayMonth = qDate.formatDate(d, 'DD-MM');
+    const dayMonth = quasarDate.formatDate(d, 'DD-MM');
     // Fixed Italian Holidays
     const fixedHolidays = [
       '01-01',
