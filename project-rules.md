@@ -24,6 +24,7 @@
 7. **§1.7 JSDoc File Headers**: OBBLIGATORIO per tutti i file .ts/.vue
 8. **§1.8 No `any`**: MAI usare `any` (Sostituire con interfacce o `unknown`)
 9. **§1.9 No `eslint-disable`**: MAI disabilitare le regole di linting
+10. **§1.10 Skeleton UI (UX)**: OBBLIGATORIO l'uso di `<q-skeleton>` per i caricamenti asincroni, eliminando gli schermi vuoti.
 
 ---
 
@@ -109,6 +110,34 @@ yarn build
 - [ ] Build: yarn build → SUCCESS
 - [ ] Git status: No sensitive files (*.env, keys)
 ```
+
+---
+
+## 🎨 **§1.10 Skeleton UI (UX) - OBBLIGATORIO**
+
+**REGOLA**: Durante il caricamento di liste, tabelle o dashboard (`loading = true`), è **vietato** lasciare lo schermo vuoto o usare esclusivamente spinner (`q-spinner`). È obbligatorio implementare componenti `<q-skeleton>` per mantenere la struttura visiva (Cumulative Layout Shift) e migliorare l'esperienza utente percepita.
+
+**Esempi di utilizzo corretto:**
+
+```vue
+<!-- ✅ CORRETTO: Uso di q-skeleton durante il loading -->
+<div v-if="loading && items.length === 0">
+  <q-card v-for="n in 3" :key="n" flat bordered class="q-mb-sm">
+    <q-item>
+      <q-item-section avatar><q-skeleton type="QAvatar" /></q-item-section>
+      <q-item-section>
+        <q-skeleton type="text" width="40%" />
+        <q-skeleton type="text" width="60%" />
+      </q-item-section>
+    </q-item>
+  </q-card>
+</div>
+<q-list v-else>
+  <!-- Render data -->
+</q-list>
+```
+
+**Motivo**: Il caricamento dati da Firestore o Google Sheets può richiedere tempo. Lo Skeleton fornisce un feedback visivo immediato, prevenendo la sensazione di blocco dell'app e mantenendo fissa l'architettura della pagina prima che i dati reali vengano renderizzati.
 
 ---
 

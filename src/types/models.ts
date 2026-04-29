@@ -273,3 +273,25 @@ export interface SyncStatus {
   lastSyncByName: string;    // De-normalized name for audit trail
 }
 
+// --- Phase 30: Shift Rotation Groups ---
+
+export interface RotationOperator {
+  operatorId: string;
+  operatorName: string;
+  pattern: string[]; // Array of shifts (e.g. ['A', 'B', 'A', ...])
+}
+
+export interface RotationGroup {
+  id: string;
+  configId: string;
+  name: string; // e.g. "Turno 4"
+  userIds: string[]; // Firebase UIDs for security rule access
+  operators: RotationOperator[];
+  
+  // State Machine for Timer
+  isActive: boolean; // false = Fuori Turno (Pausa estiva)
+  currentColumnIndex: number; // 0 to length-1 of pattern
+  nextChangeTimestamp: number | null; // Next execution time (ms)
+  
+  updatedAt: number;
+}

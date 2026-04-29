@@ -108,6 +108,15 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if hasConfigAuthority(configId);
       }
+
+      match /rotationGroups/{groupId} {
+        allow read: if isAuthenticated();
+        allow create, delete: if hasConfigAuthority(configId);
+        allow update: if hasConfigAuthority(configId) || (
+          isAuthenticated() && 
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive', 'currentColumnIndex', 'nextChangeTimestamp', 'updatedAt'])
+        );
+      }
     }
 
     // Other system documents: super admin only

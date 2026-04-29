@@ -68,6 +68,15 @@
 - **Effetto:** Alla conferma, pulisce la cache Pinia (`scheduleStore`) e ricarica i dati per mostrare i turni aggiornati.
 - **Validazione Admin:** Quando l'admin crea una richiesta per conto di un utente, il sistema verifica il turno reale dell'utente e blocca/avvisa in caso di discrepanza.
 
+### 6. Sistema di Rotazione Interattiva (Phase 30)
+- **Logica "State Machine":** Abbandonato il calcolo rigido basato su `startDate`. Il sistema usa una state machine basata sul `currentColumnIndex` della matrice dei turni (es. 18 step).
+- **Matrice Infinita:** Superata l'ultima colonna, il sistema riparte dalla prima applicando un ciclo Modulo matematico, garantendo una progressione senza fine.
+- **Timer Autonomo:** Ogni 5 giorni scatta il timer: il sistema avanza la colonna, notifica gli utenti e ripianifica autonomamente la "sveglia" ai prossimi 5 giorni (120 ore).
+- **Controllo Utente ("Democratizzazione"):** Qualsiasi utente che faccia parte del gruppo di rotazione può mettere in "Pausa" il timer (es. per il periodo di "Fuori Turno" estivo) e riattivarlo, impostando manualmente il giorno e l'ora esatta del prossimo scatto. Da quel momento il timer riprende a girare.
+- **Componenti:** 
+  - `RotationManager.vue` (Admin): Per definire i gruppi, aggiungere operatori e compilare la matrice di rotazione.
+  - `RotationWidget.vue` (Utenti): Espanso nella pagina Calendario, permette ai membri di vedere il Setting attuale (A/B) e gestire la pausa/ripresa del timer.
+
 ## Note Tecniche di Manutenzione
 
 ### 1. UX & Visual Feedback (Phase 25+)

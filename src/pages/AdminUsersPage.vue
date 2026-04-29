@@ -13,6 +13,7 @@ import { useConfigStore } from '../stores/configStore';
 import { operatorsService } from '../services/OperatorsService';
 import type { User, SystemConfiguration, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import RotationManager from '../components/admin/RotationManager.vue';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { useRoute } from 'vue-router';
@@ -79,7 +80,10 @@ const filterRole = ref('Tutti');
 const filterConfigId = ref('Tutti');
 
 const departmentOptions = computed(() => {
-  return [{ id: 'Tutti', name: 'Tutti i Reparti' }, ...configStore.allConfigs];
+  const allowedConfigs = authStore.isSuperAdmin
+    ? configStore.allConfigs
+    : configStore.allConfigs.filter(c => authStore.managedConfigIds.includes(c.id));
+  return [{ id: 'Tutti', name: 'Tutti i Reparti' }, ...allowedConfigs];
 });
 
 function getConfigName(id: string | undefined) {
@@ -151,8 +155,16 @@ function applyFilters(users: User[]) {
     // 3. Role
     const matchesRole = filterRole.value === 'Tutti' || u.role === filterRole.value;
 
-    // 4. Department
+    // 4. Department Filter selection
     const matchesConfig = filterConfigId.value === 'Tutti' || u.configId === filterConfigId.value;
+
+    // 5. Config Fencing Security Rule
+    // Normal admins MUST NOT see active users from configs they don't manage
+    if (!authStore.isSuperAdmin) {
+      if (u.configId !== null && !authStore.managedConfigIds.includes(u.configId)) {
+        return false;
+      }
+    }
 
     return matchesSearch && matchesProf && matchesRole && matchesConfig;
   });
@@ -303,10 +315,11 @@ onMounted(() => {
         }}</q-badge>
       </q-tab>
       <q-tab name="active" label="Utenti Attivi" icon="people" />
+      <q-tab name="rotations" label="Turnazioni (Rotazione)" icon="sync" />
     </q-tabs>
 
-    <!-- Filter Bar -->
-    <q-card flat bordered class="q-my-md bg-grey-1">
+    <!-- Filter Bar (Only show on users tabs) -->
+    <q-card flat bordered class="q-my-md bg-grey-1" v-if="activeTab !== 'rotations'">
       <q-card-section class="row q-col-gutter-sm items-center">
         <div class="col-12 col-sm-3">
           <q-input v-model="searchQuery" label="Cerca (Nome, Email, Nascita...)" outlined dense clearable
@@ -421,6 +434,10 @@ onMounted(() => {
             </q-td>
           </template>
         </q-table>
+      </q-tab-panel>
+
+      <q-tab-panel name="rotations" class="q-pa-none">
+        <RotationManager />
       </q-tab-panel>
     </q-tab-panels>
     <q-dialog v-model="approvalDialog" persistent>

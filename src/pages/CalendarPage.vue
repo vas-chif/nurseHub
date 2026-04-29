@@ -13,6 +13,7 @@
 import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
 import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
 import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
+import RotationWidget from '../components/calendar/RotationWidget.vue';
 import { useAuthStore } from '../stores/authStore';
 
 const authStore = useAuthStore();
@@ -40,5 +41,8 @@ const authStore = useAuthStore();
 
     <!-- Daily Roster (Chi c'è di turno) -->
     <DailyRosterCard class="q-mt-lg" v-if="!authStore.isAnyAdmin" />
+    
+    <!-- Shift Rotation Widget -->
+    <RotationWidget class="q-mt-md" v-if="!authStore.isAnyAdmin" />
   </q-page>
 </template>
