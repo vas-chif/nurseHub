@@ -39,8 +39,11 @@ const hasSearchModule = ref(true);
 
 // Fetch Operators
 async function loadData(force = false) {
-  // Use configStore.activeConfigId OR fallback to user's configId
-  const configId = configStore.activeConfigId || authStore.currentUser?.configId;
+  // Identity fencing: for regular users, ALWAYS use their own configId.
+  // configStore.activeConfigId is only used for Admins (Maestro Filter).
+  const configId = authStore.isAnyAdmin
+    ? (configStore.activeConfigId || authStore.currentUser?.configId)
+    : authStore.currentUser?.configId;
 
   if (!configId) {
     logger.warn('No active config or user configId - cannot load operators for calendar');
@@ -66,8 +69,11 @@ onMounted(async () => {
 // Re-load when config becomes ready
 watch(
   () => [configStore.activeConfigId, authStore.currentUser?.configId],
-  async ([newId, userConfigId]) => {
-    if (newId || userConfigId) {
+  async ([newAdminId, userConfigId]) => {
+    // For admins: react to Maestro Filter changes.
+    // For users: only react if their own configId changes.
+    const relevantId = authStore.isAnyAdmin ? newAdminId : userConfigId;
+    if (relevantId) {
       await loadData();
     }
   },

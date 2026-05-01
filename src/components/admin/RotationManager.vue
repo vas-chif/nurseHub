@@ -12,10 +12,11 @@
  * - src/stores/configStore
  */
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { rotationService } from '../../services/RotationService';
-import type { RotationGroup } from '../../types/models';
+import type { RotationGroup, Operator } from '../../types/models';
 import { useQuasar } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { doc } from 'firebase/firestore';
@@ -24,6 +25,11 @@ import { db } from '../../boot/firebase';
 const logger = useSecureLogger();
 const $q = useQuasar();
 const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
+
+// Autocomplete: list of operators for the current config
+const operatorOptions = ref<Operator[]>([]);
+const filteredOperatorOptions = ref<Operator[]>([]);
 
 const groups = ref<RotationGroup[]>([]);
 const loading = ref(true);
@@ -46,6 +52,16 @@ const formData = ref<RotationGroup>({
 // For the UI builder
 const columnsCount = ref(18);
 
+// Default patterns from Google Sheets scheme
+const DEFAULT_PATTERNS = [
+  ['A', 'B', 'B', 'A', 'A', 'B', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'B', 'A', 'B', 'A', 'A'], // Mary
+  ['A', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'B', 'A', 'B', 'B'], // Simo
+  ['A', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'A', 'B', 'B', 'A', 'B'], // Sara
+  ['B', 'A', 'A', 'B', 'B', 'B', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'B', 'A'], // Dani
+  ['B', 'B', 'A', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'A'], // Matte
+  ['B', 'B', 'A', 'A', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B']  // Vas
+];
+
 function getNewId() {
   return doc(collection(db, 'temp')).id;
 }
@@ -56,6 +72,9 @@ async function loadGroups() {
   loading.value = true;
   try {
     groups.value = await rotationService.getGroups(configId.value);
+    // Load operators for autocomplete
+    operatorOptions.value = await scheduleStore.loadOperators(configId.value);
+    filteredOperatorOptions.value = operatorOptions.value;
   } catch (error) {
     logger.error('Failed to load groups', error);
   } finally {
@@ -68,6 +87,18 @@ const configId = computed(() => configStore.activeConfigId || '');
 onMounted(() => {
   void loadGroups();
 });
+
+// Watch for config change to refresh data instantly without page reload
+watch(
+  () => configStore.activeConfigId,
+  (newId) => {
+    if (newId) {
+      void loadGroups();
+    } else {
+      groups.value = [];
+    }
+  }
+);
 
 function openCreate() {
   formData.value = {
@@ -92,11 +123,44 @@ function openEdit(g: RotationGroup) {
 }
 
 function addOperatorRow() {
+  // Cyclic default pattern assignment (1-6, then back to 1)
+  const patternIndex = formData.value.operators.length % DEFAULT_PATTERNS.length;
+  const sourcePattern = DEFAULT_PATTERNS[patternIndex] || [];
+  const defaultPattern = [...sourcePattern];
+
   formData.value.operators.push({
     operatorId: '',
-    operatorName: 'Nuovo Operatore',
-    pattern: Array(columnsCount.value).fill('A'),
+    operatorName: '',
+    pattern: defaultPattern,
   });
+}
+
+/**
+ * Filters the operator dropdown list based on the user's search query.
+ */
+function filterOperatorOptions(val: string, update: (fn: () => void) => void) {
+  update(() => {
+    if (val === '') {
+      filteredOperatorOptions.value = operatorOptions.value;
+    } else {
+      const needle = val.toLowerCase();
+      filteredOperatorOptions.value = operatorOptions.value.filter(
+        (op) => op.name.toLowerCase().includes(needle),
+      );
+    }
+  });
+}
+
+/**
+ * When an operator is selected from the dropdown, populate both
+ * operatorId and operatorName on the row to avoid manual typing errors.
+ */
+function onOperatorSelected(rowIndex: number, selected: Operator | null) {
+  if (!selected) return;
+  const row = formData.value.operators[rowIndex];
+  if (!row) return;
+  row.operatorId = selected.id;
+  row.operatorName = selected.name;
 }
 
 function removeOperatorRow(index: number) {
@@ -203,23 +267,48 @@ function deleteGroup(g: RotationGroup) {
             <q-btn size="sm" color="secondary" label="Aggiungi Operatore" icon="add" @click="addOperatorRow" />
           </div>
 
-          <q-markup-table flat bordered class="q-mt-sm">
+          <q-markup-table flat bordered class="q-mt-sm rotation-matrix-table">
             <thead>
               <tr>
-                <th class="text-left">Operatore</th>
-                <th v-for="i in columnsCount" :key="i" class="text-center">{{ i }}</th>
-                <th></th>
+                <th class="text-left" style="min-width: 160px;">Operatore</th>
+                <th v-for="i in columnsCount" :key="i" class="text-center" style="width: 44px; min-width: 44px;">{{ i }}</th>
+                <th style="width: 40px;"></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(op, rowIndex) in formData.operators" :key="rowIndex">
-                <td>
-                  <q-input v-model="op.operatorName" dense outlined placeholder="Nome Operatore" />
+                <td style="min-width: 160px;">
+                  <q-select
+                    :model-value="op.operatorName"
+                    :options="filteredOperatorOptions"
+                    option-label="name"
+                    use-input
+                    input-debounce="200"
+                    dense
+                    outlined
+                    placeholder="Cerca operatore..."
+                    style="min-width: 150px;"
+                    @filter="filterOperatorOptions"
+                    @update:model-value="(val: Operator) => onOperatorSelected(rowIndex, val)"
+                  >
+                    <template v-slot:no-option>
+                      <q-item>
+                        <q-item-section class="text-grey">Nessun operatore trovato</q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
                 </td>
-                <td v-for="i in columnsCount" :key="i" style="width: 50px">
-                  <q-input v-model="op.pattern[i-1]" dense outlined input-class="text-center text-weight-bold" />
+                <td v-for="i in columnsCount" :key="i" style="width: 44px; padding: 2px 4px;">
+                  <q-input
+                    v-model="op.pattern[i-1]"
+                    dense
+                    outlined
+                    input-class="text-center text-weight-bold"
+                    maxlength="1"
+                    style="width: 40px;"
+                  />
                 </td>
-                <td>
+                <td style="width: 40px;">
                   <q-btn flat round color="negative" icon="delete" size="sm" @click="removeOperatorRow(rowIndex)" />
                 </td>
               </tr>
@@ -231,3 +320,16 @@ function deleteGroup(g: RotationGroup) {
     </q-dialog>
   </div>
 </template>
+
+<style scoped lang="scss">
+.rotation-matrix-table {
+  overflow-x: auto;
+  display: block;
+  white-space: nowrap;
+
+  th, td {
+    padding: 4px 6px;
+    vertical-align: middle;
+  }
+}
+</style>

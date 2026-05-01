@@ -10,7 +10,7 @@
  * - Allows users to pause or resume/set the next cycle timer.
  */
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
 import { rotationService } from '../../services/RotationService';
@@ -39,11 +39,14 @@ const nextTime = ref('14:00');
 const startColumnIndex = ref(0);
 
 async function loadMyGroups() {
-  if (!configStore.activeConfigId || !authStore.currentUser) return;
+  // Identity fencing: always use the user's own configId for the rotation widget.
+  // Do NOT use configStore.activeConfigId (volatile Maestro Filter for SuperAdmin).
+  const configId = authStore.currentUser?.configId || configStore.activeConfigId;
+  if (!configId || !authStore.currentUser) return;
   
   loading.value = true;
   try {
-    const allGroups = await rotationService.getGroups(configStore.activeConfigId);
+    const allGroups = await rotationService.getGroups(configId);
     
     const opId = authStore.currentOperator?.id || authStore.currentUser.operatorId;
     const opName = authStore.currentOperator?.name;
@@ -68,6 +71,16 @@ onMounted(() => {
   }, 60000); // Update relative times every minute
 });
 
+// Re-try loading if user profile arrives late (async auth initialization)
+watch(
+  () => authStore.currentUser?.configId,
+  (newConfigId) => {
+    if (newConfigId && userGroups.value.length === 0) {
+      void loadMyGroups();
+    }
+  },
+);
+
 onUnmounted(() => {
   if (timerInterval.value) clearInterval(timerInterval.value);
 });
@@ -85,14 +98,29 @@ function formatTimeLeft(targetTs: number | null) {
   return `tra meno di un'ora`;
 }
 
-function getColumnA(group: RotationGroup) {
-  const col = group.currentColumnIndex;
-  return group.operators.filter(o => o.pattern[col] === 'A').map(o => o.operatorName).join(', ');
+function getColumnA(group: RotationGroup, isNext = false): string[] {
+  let col = group.currentColumnIndex;
+  if (isNext) {
+    const totalCols = group.operators[0]?.pattern.length || 18;
+    col = (col + 1) % totalCols;
+  }
+  return group.operators.filter(o => o.pattern[col] === 'A').map(o => o.operatorName);
 }
 
-function getColumnB(group: RotationGroup) {
-  const col = group.currentColumnIndex;
-  return group.operators.filter(o => o.pattern[col] === 'B').map(o => o.operatorName).join(', ');
+function getColumnB(group: RotationGroup, isNext = false): string[] {
+  let col = group.currentColumnIndex;
+  if (isNext) {
+    const totalCols = group.operators[0]?.pattern.length || 18;
+    col = (col + 1) % totalCols;
+  }
+  return group.operators.filter(o => o.pattern[col] === 'B').map(o => o.operatorName);
+}
+
+function getNextDateStr(group: RotationGroup) {
+  if (!group.nextChangeTimestamp) return 'TBD';
+  // Assuming rotation is every 5 days based on script logic
+  const nextChange = new Date(group.nextChangeTimestamp);
+  return nextChange.toLocaleDateString('it-IT');
 }
 
 function pauseRotation(group: RotationGroup) {
@@ -185,45 +213,94 @@ async function setNextTimer() {
       <q-card>
         <q-card-section>
           <div v-for="group in userGroups" :key="group.id" class="q-mb-md">
-            <div class="row justify-between items-center q-mb-sm">
-              <div class="text-subtitle1 text-weight-bold text-primary">{{ group.name }}</div>
-              <q-badge :color="group.isActive ? 'positive' : 'grey'">
-                {{ group.isActive ? 'Attivo' : 'Fuori Turno (Pausa)' }}
+            <div class="row justify-between items-center q-mb-md">
+              <div class="column">
+                <div class="text-h6 text-primary">{{ group.name }}</div>
+                <div class="text-caption text-grey-7">
+                  Colonna Attuale: <q-badge outline color="primary" label="Index" class="q-mr-xs" /> <strong>{{ group.currentColumnIndex + 1 }}</strong> / {{ group.operators[0]?.pattern?.length || 18 }}
+                </div>
+              </div>
+              <q-badge :color="group.isActive ? 'positive' : 'grey-7'" class="q-pa-sm text-uppercase text-weight-bold" rounded>
+                <q-icon :name="group.isActive ? 'check_circle' : 'pause_circle'" class="q-mr-xs" />
+                {{ group.isActive ? 'Attivo' : 'Sospeso' }}
               </q-badge>
             </div>
-            
-            <div class="text-caption text-grey-8 q-mb-sm">
-              Colonna Attuale: <strong>{{ group.currentColumnIndex + 1 }}</strong> / {{ group.operators[0]?.pattern?.length || 18 }}
+
+            <!-- SECTION: CURRENT ROTATION -->
+            <div class="rotation-section q-mb-lg">
+              <div class="text-overline text-grey-8 q-mb-xs">Turnazione Attuale (Oggi)</div>
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-6">
+                  <div class="setting-card setting-a q-pa-md rounded-borders shadow-1 bg-amber-1 border-amber-3">
+                    <div class="row items-center q-mb-sm">
+                      <q-avatar size="28px" font-size="16px" color="amber-8" text-white class="q-mr-sm">A</q-avatar>
+                      <div class="text-subtitle2 text-amber-10">Setting A</div>
+                    </div>
+                    <div class="row q-gutter-xs">
+                      <q-chip v-for="name in getColumnA(group)" :key="name" 
+                        dense color="amber-2" text-color="amber-10" class="text-weight-bold">
+                        {{ name }}
+                      </q-chip>
+                      <div v-if="getColumnA(group).length === 0" class="text-caption text-grey-6">Nessuno</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="setting-card setting-b q-pa-md rounded-borders shadow-1 bg-blue-1 border-blue-3">
+                    <div class="row items-center q-mb-sm">
+                      <q-avatar size="28px" font-size="16px" color="blue-8" text-white class="q-mr-sm">B</q-avatar>
+                      <div class="text-subtitle2 text-blue-10">Setting B</div>
+                    </div>
+                    <div class="row q-gutter-xs">
+                      <q-chip v-for="name in getColumnB(group)" :key="name" 
+                        dense color="blue-2" text-color="blue-10" class="text-weight-bold">
+                        {{ name }}
+                      </q-chip>
+                      <div v-if="getColumnB(group).length === 0" class="text-caption text-grey-6">Nessuno</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <!-- Current Shift Assignment -->
-            <div class="row q-col-gutter-sm q-mb-md">
-              <div class="col-12 col-md-6">
-                <q-card flat bordered class="bg-grey-1">
-                  <q-card-section class="q-pa-sm">
-                    <div class="text-weight-bold text-primary">Setting A</div>
-                    <div class="text-caption">{{ getColumnA(group) || 'Nessuno' }}</div>
-                  </q-card-section>
-                </q-card>
+            <!-- SECTION: NEXT ROTATION -->
+            <div class="rotation-section next-rotation q-mb-lg border-dashed q-pa-sm rounded-borders bg-grey-1">
+              <div class="row items-center justify-between q-mb-sm">
+                <div class="text-overline text-grey-7">🔜 Prossima Turnazione (nr {{ (group.currentColumnIndex + 1) % (group.operators[0]?.pattern.length || 18) + 1 }})</div>
+                <div class="text-caption text-weight-bold text-primary">{{ getNextDateStr(group) }}</div>
               </div>
-              <div class="col-12 col-md-6">
-                <q-card flat bordered class="bg-grey-1">
-                  <q-card-section class="q-pa-sm">
-                    <div class="text-weight-bold text-secondary">Setting B</div>
-                    <div class="text-caption">{{ getColumnB(group) || 'Nessuno' }}</div>
-                  </q-card-section>
-                </q-card>
+              <div class="row q-col-gutter-md opacity-70">
+                <div class="col-6">
+                  <div class="text-caption text-weight-bold q-mb-xs"><q-icon name="arrow_right" color="amber-8" /> Setting A</div>
+                  <div class="row q-gutter-xs">
+                    <q-badge v-for="name in getColumnA(group, true)" :key="name" 
+                      color="amber-7" label="" class="q-px-sm">
+                      {{ name }}
+                    </q-badge>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="text-caption text-weight-bold q-mb-xs"><q-icon name="arrow_right" color="blue-8" /> Setting B</div>
+                  <div class="row q-gutter-xs">
+                    <q-badge v-for="name in getColumnB(group, true)" :key="name" 
+                      color="blue-7" label="" class="q-px-sm">
+                      {{ name }}
+                    </q-badge>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Timer Info -->
-            <q-banner v-if="group.isActive" rounded class="bg-orange-1 text-orange-9 q-mb-md" dense>
+            <q-banner v-if="group.isActive" rounded class="bg-orange-1 text-orange-10 q-mb-md" dense bordered>
               <template v-slot:avatar>
-                <q-icon name="timer" color="orange-9" />
+                <q-icon name="schedule" color="orange-8" />
               </template>
-              Prossimo cambio automatico: <strong>{{ formatTimeLeft(group.nextChangeTimestamp) }}</strong>
+              <div class="text-body2">
+                Prossimo cambio automatico: <strong>{{ formatTimeLeft(group.nextChangeTimestamp) }}</strong>
+              </div>
               <div class="text-caption" v-if="group.nextChangeTimestamp">
-                ({{ new Date(group.nextChangeTimestamp).toLocaleString('it-IT') }})
+                {{ new Date(group.nextChangeTimestamp).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) }}
               </div>
             </q-banner>
 
@@ -231,17 +308,20 @@ async function setNextTimer() {
             <div class="row q-gutter-sm justify-end">
               <q-btn 
                 v-if="group.isActive"
-                flat color="negative" icon="pause" label="Sospendi" size="sm" 
+                flat color="negative" icon="pause_circle" label="Sospendi" size="sm" 
+                class="rounded-borders"
                 @click="pauseRotation(group)" 
               />
               <q-btn 
-                color="primary" icon="play_arrow" 
+                unelevated
+                color="primary" icon="update" 
                 :label="group.isActive ? 'Sposta Sveglia' : 'Riprendi Turnazione'" size="sm" 
+                class="rounded-borders text-weight-bold"
                 @click="openResumeDialog(group)" 
               />
             </div>
             
-            <q-separator class="q-mt-md" v-if="userGroups.length > 1" />
+            <q-separator class="q-mt-lg" v-if="userGroups.length > 1" />
           </div>
         </q-card-section>
       </q-card>
@@ -310,3 +390,31 @@ async function setNextTimer() {
     </div>
   </div>
 </template>
+<style scoped lang="scss">
+.setting-card {
+  height: 100%;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+  
+  &.setting-a {
+    border-color: #ffe082;
+  }
+  &.setting-b {
+    border-color: #90caf9;
+  }
+}
+
+.rotation-section {
+  &.next-rotation {
+    border: 1px dashed #e0e0e0;
+  }
+}
+
+.opacity-70 {
+  opacity: 0.7;
+}
+
+.border-dashed {
+  border-style: dashed !important;
+}
+</style>

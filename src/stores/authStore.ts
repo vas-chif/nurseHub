@@ -16,6 +16,7 @@ import { ref, computed } from 'vue';
 import type { User, Operator } from '../types/models';
 import { userService } from '../services/UserService';
 import { operatorsService } from '../services/OperatorsService';
+import { useConfigStore } from './configStore';
 import type { UserRole, IUserPermissions } from '../types/auth';
 import {
   onAuthStateChanged,
@@ -257,12 +258,21 @@ export const useAuthStore = defineStore('auth', () => {
             currentOperator.value = operator;
           }
         }
+
+        // Identity Fencing (§Maestro Filter): lock the active config for non-admin users.
+        // This prevents a previous SuperAdmin session from contaminating a regular user's view.
+        const effectiveRole = claimRole.value ?? user.role;
+        if (effectiveRole === 'user' && user.configId) {
+          const configStore = useConfigStore();
+          configStore.setActiveConfig(user.configId);
+          logger.debug('Identity fencing applied: configId locked for user');
+        }
       }
     } catch (err) {
       logger.error('Error loading user profile', err);
       error.value = (err as Error).message;
     }
-  }
+  } /*end loadUserProfile*/
 
   /**
    * Phase 25 (§1.10): Forces a JWT refresh after an admin role change.
