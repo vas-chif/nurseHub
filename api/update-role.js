@@ -54,7 +54,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { uid, role, managedConfigIds, permissions } = req.body;
+    const { uid, role, managedConfigIds, permissions, configId } = req.body;
 
     if (!uid || !role) {
       return res.status(400).json({ error: 'Missing uid or role' });
@@ -66,7 +66,8 @@ export default async function handler(req, res) {
       managedConfigIds: managedConfigIds || [],
       permissions: permissions || { manageAdmins: false, manageSystem: false, viewAuditLogs: false },
       isActive: true,
-      profileComplete: true 
+      profileComplete: true,
+      configId: configId || null
     };
     await admin.auth.setCustomUserClaims(uid, claims);
 

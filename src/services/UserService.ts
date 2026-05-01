@@ -194,6 +194,13 @@ export class UserService {
               userId: uid,
             });
 
+            // NEW: Push configId to JWT claims immediately
+            try {
+              await this.updateUserRole(uid, userDoc.role || 'user', [], { manageAdmins: false, manageSystem: false, viewAuditLogs: false });
+            } catch (err) {
+              logger.error('Failed to update JWT claims after sync', err);
+            }
+
             return {
               success: true,
               operatorId: opId,
@@ -316,6 +323,10 @@ export class UserService {
     
     // 2. Call Vercel API to set JWT Custom Claim (requires firebase-admin)
     try {
+      // Get current configId from Firestore to include in claims
+      const userDoc = await this.getUserDocument(uid);
+      const configId = userDoc?.configId || null;
+
       const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/update-role`;
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -323,7 +334,7 @@ export class UserService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
         },
-        body: JSON.stringify({ uid, role: newRole, managedConfigIds, permissions }),
+        body: JSON.stringify({ uid, role: newRole, managedConfigIds, permissions, configId }),
       });
 
       if (!response.ok) {
