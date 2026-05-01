@@ -54,11 +54,12 @@
    - **Firebase:** I turni vengono invertiti nei documenti `operators`.
    - **Google Sheets:** Se in modalità "Auto", viene aggiornato il file Master tramite `api/update-sheet-swap.js`.
 
-### 4. Sincronizzazione Isolata (Department-Based)
-- **Componente:** `GlobalSyncBtn.vue`.
-- **Azione:** Sincronizzazione Google Sheets -> Firebase **solo** per la configurazione selezionata.
+### 4. Sincronizzazione Isolata & Filtro Maestro (Phase 30.1)
+- **Filtro Maestro (SuperAdmin):** Il passaggio tra un reparto e l'altro (cambio `configId`) aggiorna unicamente la variabile in RAM (`configStore.activeConfigId`). Tutti i componenti e le computed properties (liste, utenti, richieste, notifiche in arrivo) si filtrano lato client-side a latenza zero, garantendo il 100% di isolamento visivo senza generare costi per Firebase Reads.
+- **Componente di Sync:** `GlobalSyncBtn.vue`.
+- **Regole Sicurezza Rigide:** `firestore.rules` autorizza l'aggiornamento degli operatori agli Admin o agli Utenti Base purché l'azione sia rigorosamente limitata al `configId` di loro appartenenza (Config-Fencing DB-level).
 - **Stato Isolato:** Ogni reparto ha il suo stato in `systemConfigurations/{configId}/metadata/sync`.
-- **Cooldown Indipendente:** 1 minuto per Admin, 2 ore per Utente, calcolato per singolo reparto.
+- **Cooldown Indipendente:** Il database e il client forzano un cooldown di 1 minuto per gli Admin e 2 ore per gli Utenti Base, applicato al singolo reparto.
 - **Auto-Refresh Intelligente:** Al cambio pagina o ritorno al focus, l'app verifica il timestamp specifico del reparto attivo; se c'è stata una sincronizzazione esterna per quel reparto, ricarica i dati.
 
 ### 5. Sincronizzazione Operatore (Nuovi Utenti)

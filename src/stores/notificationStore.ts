@@ -7,7 +7,7 @@
  */
 
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import {
   collection,
   query,
@@ -21,10 +21,13 @@ import {
 import { db } from '../boot/firebase';
 import type { ShiftRequest, Notification as AppNotification } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import { useConfigStore } from './configStore';
 
 export const useNotificationStore = defineStore('notification', () => {
+  const configStore = useConfigStore();
   const unreadCount = ref(0);
   const pendingRequestsCount = ref(0);
+  const rawOpenRequests = ref<ShiftRequest[]>([]);
   const notifications = ref<AppNotification[]>([]);
   let unsubscribe: Unsubscribe | null = null;
 
@@ -76,14 +79,25 @@ export const useNotificationStore = defineStore('notification', () => {
     );
 
     unsubscribe = onSnapshot(q, (snapshot) => {
-      pendingRequestsCount.value = snapshot.size;
+      // Store raw requests for reactive filtering when config changes
+      rawOpenRequests.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShiftRequest));
+      
+      let count = 0;
+      rawOpenRequests.value.forEach((data) => {
+        if (configStore.activeConfigId && data.configId !== configStore.activeConfigId) return;
+        count++;
+      });
+      pendingRequestsCount.value = count;
 
       if (!isInitial) {
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
+            const data = change.doc.data() as ShiftRequest;
+            if (configStore.activeConfigId && data.configId !== configStore.activeConfigId) return;
+            
             incrementUnread();
             if (onNewRequest)
-              onNewRequest({ id: change.doc.id, ...change.doc.data() } as ShiftRequest);
+              onNewRequest({ ...data, id: change.doc.id } as ShiftRequest);
           }
         });
       }
@@ -156,6 +170,16 @@ export const useNotificationStore = defineStore('notification', () => {
       unsubscribe = null;
     }
   }
+
+  // Reactively update count when Maestro Filter changes
+  watch(() => configStore.activeConfigId, () => {
+    let count = 0;
+    rawOpenRequests.value.forEach((data) => {
+      if (configStore.activeConfigId && data.configId !== configStore.activeConfigId) return;
+      count++;
+    });
+    pendingRequestsCount.value = count;
+  });
 
   return {
     unreadCount,

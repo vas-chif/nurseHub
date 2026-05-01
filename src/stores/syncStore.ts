@@ -132,11 +132,12 @@ export const useSyncStore = defineStore('sync', () => {
     await loadSyncStatus(configId);
 
     const lastGlobal = syncTimestamps.value[configId];
-    if (lastGlobal && scheduleStore.lastUpdated) {
-      if (lastGlobal > scheduleStore.lastUpdated) {
+    const localLastUpdated = scheduleStore.lastUpdated[configId];
+    if (lastGlobal && localLastUpdated) {
+      if (lastGlobal > localLastUpdated) {
         logger.info(`New sync detected for ${configId}, refreshing local data...`, {
           global: lastGlobal,
-          local: scheduleStore.lastUpdated,
+          local: localLastUpdated,
         });
         await scheduleStore.loadOperators(configId, true);
       }

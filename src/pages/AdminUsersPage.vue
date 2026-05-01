@@ -77,7 +77,13 @@ const roleOptions = computed(() => {
 const searchQuery = ref('');
 const filterProfession = ref('Tutti');
 const filterRole = ref('Tutti');
-const filterConfigId = ref('Tutti');
+const filterConfigId = ref(configStore.activeConfigId || 'Tutti');
+
+watch(() => configStore.activeConfigId, (newVal) => {
+  if (newVal) {
+    filterConfigId.value = newVal;
+  }
+});
 
 const departmentOptions = computed(() => {
   const allowedConfigs = authStore.isSuperAdmin

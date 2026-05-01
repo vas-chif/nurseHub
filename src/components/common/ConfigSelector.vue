@@ -18,8 +18,8 @@ const props = defineProps({
   style: { type: Object, default: () => ({ minWidth: '180px' }) }
 });
 
-async function handleConfigChange(configId: string) {
-  await configStore.setActiveConfig(configId);
+function handleConfigChange(configId: string) {
+  configStore.setActiveConfig(configId);
 }
 </script>
 
@@ -46,8 +46,8 @@ async function handleConfigChange(configId: string) {
     <template v-slot:option="scope">
       <q-item v-bind="scope.itemProps">
         <q-item-section avatar>
-          <q-icon :name="scope.opt.isActive ? 'check_circle' : 'circle'" 
-                  :color="scope.opt.isActive ? 'positive' : 'grey-4'" size="xs" />
+          <q-icon :name="scope.opt.id === configStore.activeConfigId ? 'check_circle' : 'circle'" 
+                  :color="scope.opt.id === configStore.activeConfigId ? 'positive' : 'grey-4'" size="xs" />
         </q-item-section>
         <q-item-section>
           <q-item-label>{{ scope.opt.name }}</q-item-label>

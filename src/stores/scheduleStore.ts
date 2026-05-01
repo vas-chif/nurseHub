@@ -9,6 +9,7 @@ import { ref, computed } from 'vue';
 import type { Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
 import { operatorsService } from '../services/OperatorsService';
+import { useConfigStore } from './configStore';
 
 const logger = useSecureLogger();
 const CACHE_KEY = 'nurseHub_operators';
@@ -16,13 +17,19 @@ const CACHE_TS_KEY = 'nurseHub_operators_timestamp';
 const CACHE_CONFIG_KEY = 'nurseHub_operators_config';
 
 export const useScheduleStore = defineStore('schedule', () => {
-  // State
-  const operators = ref<Operator[]>([]);
-  const lastUpdated = ref<number | null>(null);
-  const activeConfigId = ref<string | null>(null);
+  const configStore = useConfigStore();
+
+  // State: Cache by configId
+  const operatorsByConfig = ref<Record<string, Operator[]>>({});
+  const lastUpdated = ref<Record<string, number>>({});
   const loading = ref(false);
 
   // Computed
+  const operators = computed(() => {
+    if (!configStore.activeConfigId) return [];
+    return operatorsByConfig.value[configStore.activeConfigId] || [];
+  });
+
   const hasData = computed(() => operators.value.length > 0);
 
   // Actions
@@ -34,16 +41,20 @@ export const useScheduleStore = defineStore('schedule', () => {
     try {
       const savedOps = localStorage.getItem(CACHE_KEY);
       const savedTs = localStorage.getItem(CACHE_TS_KEY);
-      const savedConfig = localStorage.getItem(CACHE_CONFIG_KEY);
 
-      if (savedOps && savedTs && savedConfig) {
-        operators.value = JSON.parse(savedOps);
-        lastUpdated.value = parseInt(savedTs);
-        activeConfigId.value = savedConfig;
-        logger.info('Schedule store rehydrated from cache', {
-          count: operators.value.length,
-          configId: savedConfig,
-        });
+      if (savedOps && savedTs) {
+        // Migration check from old format to new format
+        const parsedOps = JSON.parse(savedOps);
+        if (Array.isArray(parsedOps)) {
+          // Legacy format, clear it
+          clearCache();
+        } else {
+          operatorsByConfig.value = parsedOps;
+          lastUpdated.value = JSON.parse(savedTs);
+          logger.info('Schedule store rehydrated from cache', {
+            configsCached: Object.keys(operatorsByConfig.value).length
+          });
+        }
       }
     } catch (err) {
       logger.error('Failed to rehydrate schedule store', err);
@@ -55,14 +66,12 @@ export const useScheduleStore = defineStore('schedule', () => {
    * Updates state and persists to localStorage
    */
   function setOperators(data: Operator[], configId: string) {
-    operators.value = data;
-    activeConfigId.value = configId;
-    lastUpdated.value = Date.now();
+    operatorsByConfig.value[configId] = data;
+    lastUpdated.value[configId] = Date.now();
 
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-      localStorage.setItem(CACHE_TS_KEY, lastUpdated.value.toString());
-      localStorage.setItem(CACHE_CONFIG_KEY, configId);
+      localStorage.setItem(CACHE_KEY, JSON.stringify(operatorsByConfig.value));
+      localStorage.setItem(CACHE_TS_KEY, JSON.stringify(lastUpdated.value));
     } catch (err) {
       logger.error('Failed to persist operators to localStorage', err);
     }
@@ -72,10 +81,12 @@ export const useScheduleStore = defineStore('schedule', () => {
    * Fetches operators from service, using cache if available and not forced
    */
   async function loadOperators(configId: string, forceRefresh = false): Promise<Operator[]> {
+    if (!configId) return [];
+
     // If we have data for this config and not forcing refresh, return cached
-    if (!forceRefresh && activeConfigId.value === configId && operators.value.length > 0) {
+    if (!forceRefresh && (operatorsByConfig.value[configId]?.length ?? 0) > 0) {
       logger.info('Using cached operators from store', { configId });
-      return operators.value;
+      return operatorsByConfig.value[configId] || [];
     }
 
     loading.value = true;
@@ -96,26 +107,27 @@ export const useScheduleStore = defineStore('schedule', () => {
    * Clears state and localStorage
    */
   function clearCache() {
-    operators.value = [];
-    lastUpdated.value = null;
-    activeConfigId.value = null;
+    operatorsByConfig.value = {};
+    lastUpdated.value = {};
     localStorage.removeItem(CACHE_KEY);
     localStorage.removeItem(CACHE_TS_KEY);
     localStorage.removeItem(CACHE_CONFIG_KEY);
   }
 
+  // Get operators for current view
+  function getOperatorsForConfig(configId: string): Operator[] {
+    return operatorsByConfig.value[configId] || [];
+  }
+
   return {
-    // State
+    operatorsByConfig,
     operators,
     lastUpdated,
-    activeConfigId,
     loading,
-    // Computed
     hasData,
-    // Actions
     init,
-    setOperators,
     loadOperators,
     clearCache,
+    getOperatorsForConfig,
   };
 });

@@ -15,6 +15,7 @@ import { useQuasar, date as dateUtil } from 'quasar';
 import {
   collection,
   query,
+  where,
   orderBy,
   doc,
   updateDoc,
@@ -134,6 +135,11 @@ const operatorOptions = computed(() => {
 // Filtered and sorted requests
 function applyFilters(reqs: ShiftRequest[]): ShiftRequest[] {
   let filtered = [...reqs];
+
+  // Maestro Filter: Only show requests for the active config (SuperAdmin context switch)
+  if (configStore.activeConfigId) {
+    filtered = filtered.filter((r) => r.configId === configStore.activeConfigId);
+  }
 
   // Date range filter
   if (filters.value.dateFrom) {
@@ -281,7 +287,18 @@ async function fetchUsersMap() {
 
 function initRealtimeRequests() {
   loading.value = true;
-  const q = query(collection(db, 'shiftRequests')); // Removed orderBy('createdAt', 'desc')
+  
+  let q;
+  if (authStore.isSuperAdmin) {
+    q = query(collection(db, 'shiftRequests'));
+  } else if (authStore.isAdmin && authStore.managedConfigIds.length > 0) {
+    q = query(collection(db, 'shiftRequests'), where('configId', 'in', authStore.managedConfigIds));
+  } else if (authStore.currentUser?.configId) {
+    q = query(collection(db, 'shiftRequests'), where('configId', '==', authStore.currentUser.configId));
+  } else {
+    loading.value = false;
+    return;
+  }
 
   unsubscribeRequests = onSnapshot(
     q,
@@ -1031,8 +1048,14 @@ function getResolutionDetails(req: ShiftRequest) {
 
 // ==================== PHASE 20: ADMIN SWAP MANAGEMENT ====================
 
-const pendingSwaps = ref<ShiftSwap[]>([]);
-const allSwaps = ref<ShiftSwap[]>([]);
+const rawSwaps = ref<ShiftSwap[]>([]);
+const allSwaps = computed(() => {
+  if (configStore.activeConfigId) {
+    return rawSwaps.value.filter(s => s.configId === configStore.activeConfigId);
+  }
+  return rawSwaps.value;
+});
+const pendingSwaps = computed(() => allSwaps.value.filter(s => s.status === 'PENDING_ADMIN'));
 const swapLoading = ref(false);
 
 const showSwapApprovalDialog = ref(false);
@@ -1087,7 +1110,7 @@ async function performEmptySwapArchive() {
       message: 'Archivio Cambi svuotato con successo',
       icon: 'delete_forever',
     });
-    allSwaps.value = allSwaps.value.filter(
+    rawSwaps.value = rawSwaps.value.filter(
       (s) => !archivedSwaps.value.some((as) => as.id === s.id),
     );
   } catch (e) {
@@ -1101,15 +1124,23 @@ async function performEmptySwapArchive() {
 function initRealtimeSwaps() {
   swapLoading.value = true;
   const colRef = collection(db, 'shiftSwaps');
-  // Load ALL swaps for full history (admin needs to see everything)
-  const q = query(colRef, orderBy('createdAt', 'desc'));
+  
+  let q;
+  if (authStore.isSuperAdmin) {
+    q = query(colRef, orderBy('createdAt', 'desc'));
+  } else if (authStore.isAdmin && authStore.managedConfigIds.length > 0) {
+    q = query(colRef, where('configId', 'in', authStore.managedConfigIds), orderBy('createdAt', 'desc'));
+  } else if (authStore.currentUser?.configId) {
+    q = query(colRef, where('configId', '==', authStore.currentUser.configId), orderBy('createdAt', 'desc'));
+  } else {
+    swapLoading.value = false;
+    return;
+  }
 
   unsubscribeSwaps = onSnapshot(
     q,
     (snapshot) => {
-      allSwaps.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
-      // Pending = only those needing admin decision
-      pendingSwaps.value = allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN');
+      rawSwaps.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap);
       swapLoading.value = false;
     },
     (error) => {
@@ -1186,7 +1217,10 @@ async function processSwapApproval() {
     if (configStore.activeConfigId) {
       void scheduleStore.loadOperators(configStore.activeConfigId, true);
     }
-    pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+    const targetSwap = rawSwaps.value.find((s) => s.id === swap.id);
+    if (targetSwap) {
+      targetSwap.status = 'APPROVED';
+    }
 
     // Notify users
     void notifyUser(
@@ -1253,7 +1287,10 @@ function rejectSwap(swap: ShiftSwap) {
           adminNote: adminNote || "Rifiutato dall'admin",
           resolvedAt: Date.now(),
         });
-        pendingSwaps.value = pendingSwaps.value.filter((s) => s.id !== swap.id);
+        const targetSwap = rawSwaps.value.find((s) => s.id === swap.id);
+        if (targetSwap) {
+          targetSwap.status = 'REJECTED';
+        }
 
         // Notify users
         const noteText = adminNote ? ` Motivo: ${adminNote}` : '';

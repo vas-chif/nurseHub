@@ -143,14 +143,9 @@ async function saveConfig(config: SystemConfiguration) {
   }
 }
 
-async function activateConfig(configId: string) {
-  try {
-    await configStore.setActiveConfig(configId);
-    $q.notify({ type: 'positive', message: 'Configurazione attivata!' });
-  } catch (error) {
-    logger.error('Error', error);
-    $q.notify({ type: 'negative', message: "Errore durante l'attivazione" });
-  }
+function activateConfig(configId: string) {
+  configStore.setActiveConfig(configId);
+  $q.notify({ type: 'positive', message: 'Configurazione attivata!' });
 }
 
 function deleteConfig(configId: string) {
@@ -347,7 +342,7 @@ function deleteScenario(configId: string, scenarioId: string) {
         @show="onConfigExpand(config.id)">
         <template v-slot:header>
           <q-item-section avatar>
-            <q-avatar :icon="getRoleIcon(config.profession)" :color="config.isActive ? 'primary' : 'grey-5'"
+            <q-avatar :icon="getRoleIcon(config.profession)" :color="config.id === configStore.activeConfigId ? 'primary' : 'grey-5'"
               text-color="white" />
           </q-item-section>
           <q-item-section>
@@ -356,7 +351,7 @@ function deleteScenario(configId: string, scenarioId: string) {
           </q-item-section>
           <q-item-section side>
             <div class="row q-gutter-xs">
-              <q-badge v-if="config.isActive" color="green" label="Attiva" />
+              <q-badge v-if="config.id === configStore.activeConfigId" color="green" label="Attiva" />
               <q-btn flat round dense icon="delete" color="negative" size="sm" @click.stop="deleteConfig(config.id)">
                 <q-tooltip>Elimina</q-tooltip>
               </q-btn>
@@ -394,7 +389,7 @@ function deleteScenario(configId: string, scenarioId: string) {
             <q-separator inset />
 
             <q-card-actions align="right" class="q-px-md q-pb-md">
-              <div v-if="config.isActive" class="row items-center q-mr-auto q-pl-sm">
+              <div v-if="config.id === configStore.activeConfigId" class="row items-center q-mr-auto q-pl-sm">
                 <q-icon name="check_circle" color="green" size="sm" class="q-mr-xs" />
                 <span class="text-subtitle2 text-green">Configurazione Attiva</span>
               </div>
