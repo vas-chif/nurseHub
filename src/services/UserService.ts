@@ -22,6 +22,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
+import { getAuth } from 'firebase/auth';
 import type { User } from '../types/models';
 import type { UserRole, IUserPermissions } from '../types/auth';
 import { useSecureLogger } from '../utils/secureLogger';
@@ -340,6 +341,13 @@ export class UserService {
       if (!response.ok) {
         const errBody = (await response.json()) as { error?: string };
         throw new Error(errBody.error || 'Failed to update role via API');
+      }
+      
+      // Phase 25: Force token refresh so the client picks up the new claims immediately
+      const auth = getAuth();
+      if (auth.currentUser) {
+        await auth.currentUser.getIdToken(true);
+        logger.info('Firebase ID Token refreshed with new claims');
       }
       
       logger.info('JWT Custom Claim and Firestore updated via API', { uid, newRole, managedCount: managedConfigIds.length });

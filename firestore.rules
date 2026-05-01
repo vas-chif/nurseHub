@@ -36,6 +36,11 @@ service cloud.firestore {
       );
     }
 
+    function isUserInConfig(configId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.configId == configId;
+    }
+
     // User profiles
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -90,14 +95,14 @@ service cloud.firestore {
       // Isolated Sync Metadata
       match /metadata/sync {
         allow read: if isAuthenticated();
-        allow write: if (hasConfigAuthority(configId) || (isAuthenticated() && request.auth.token.get('configId', '') == configId)) &&
+        allow write: if (hasConfigAuthority(configId) || request.auth.token.get('configId', '') == configId || isUserInConfig(configId)) &&
           (resource == null || 
            request.time.toMillis() >= resource.data.lastSyncTimestamp + (hasConfigAuthority(configId) ? 60000 : 7200000) - 10000); // 10s buffer
       }
       
       match /operators/{operatorId} {
         allow read: if true;
-        allow write: if hasConfigAuthority(configId) || (isAuthenticated() && request.auth.token.get('configId', '') == configId);
+        allow write: if hasConfigAuthority(configId) || request.auth.token.get('configId', '') == configId || isUserInConfig(configId);
         allow update: if isOperatorOwner(configId, operatorId) || (
           isAuthenticated() && 
           (!('userId' in resource.data) || resource.data.userId == null) &&
