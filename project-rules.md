@@ -25,6 +25,7 @@
 8. **§1.8 No `any`**: MAI usare `any` (Sostituire con interfacce o `unknown`)
 9. **§1.9 No `eslint-disable`**: MAI disabilitare le regole di linting
 10. **§1.10 Skeleton UI (UX)**: OBBLIGATORIO l'uso di `<q-skeleton>` per i caricamenti asincroni, eliminando gli schermi vuoti.
+11. **§1.11 Component Decomposition**: File superiori a 500 righe DEVONO essere analizzati per scomposizione in componenti riutilizzabili o composables. Logiche complesse (es. form multi-step) vanno estratte in file separati.
 
 ---
 
@@ -98,6 +99,24 @@ yarn lint
 yarn build
 
 # ❌ Se QUALSIASI step fallisce:
+# - NON fare commit
+# - NON procedere alla build
+# - FISSARE prima gli errori
+
+---
+
+## 🧩 **§1.11 Component Decomposition - MANUTENIBILITÀ**
+
+**REGOLA**: Evitare "Monolithic Components". Qualsiasi file `.vue` che superi le **500-600 righe** o che contenga logiche di business complesse (es. validazioni incrociate, calcoli di turnistica, form complessi) deve essere scomposto.
+
+**LINEE GUIDA**:
+1. **Logica di Business**: Estrarre in **Composables** (`src/composables/`).
+2. **UI Form/Dialog**: Estrarre in **Componenti Atomici** (`src/components/`).
+3. **Stato Condiviso**: Usare **Pinia Stores** invece di prop-drilling eccessivo.
+
+**Motivo**: Facilità di testing, riutilizzabilità, riduzione dei conflitti di merge e tempi di compilazione IDE più rapidi.
+
+---
 # → FIX errori PRIMA di commit/push/deploy
 # → NON fare commit con errori pendenti
 ```

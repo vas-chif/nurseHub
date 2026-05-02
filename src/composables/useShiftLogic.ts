@@ -51,7 +51,9 @@ export function useShiftLogic() {
   ): CompatibleScenario[] {
     const validScenarios: CompatibleScenario[] = [];
     const sourceScenarios = scenarios ?? useScenarioStore().scenarios;
-    const filtered = sourceScenarios.filter((s: ReplacementScenario) => s.targetShift === targetShift);
+    const filtered = sourceScenarios.filter(
+      (s: ReplacementScenario) => s.targetShift === targetShift,
+    );
 
     let nextShift: ShiftCode = 'R';
     if (reqDate && operatorSchedule) {
@@ -128,9 +130,57 @@ export function useShiftLogic() {
     return Date.now() > shiftDate.getTime();
   }
 
+  /**
+   * Returns the standard [start, end] time range for a given shift code.
+   * Format: "HH:mm"
+   */
+  function getShiftTimeRange(shiftCode: ShiftCode): [string, string] {
+    if (!shiftCode) return ['00:00', '00:00'];
+
+    const code = shiftCode.toString().toUpperCase();
+
+    if (code.startsWith('M')) return ['07:00', '14:00'];
+    if (code.startsWith('P')) return ['14:00', '21:00'];
+    if (code.startsWith('N')) return ['21:00', '07:00']; // Ends next day
+    if (code === 'MP') return ['07:00', '21:00'];
+
+    // Default fallback
+    return ['00:00', '00:00'];
+  }
+
+  /**
+   * Checks if two time intervals overlap by at least 1 hour.
+   * Times are in "HH:mm" format.
+   */
+  function hasSignificantOverlap(s1: string, e1: string, s2: string, e2: string): boolean {
+    const toMinutes = (t: string) => {
+      const parts = t.split(':');
+      const h = Number(parts[0] || 0);
+      const m = Number(parts[1] || 0);
+      return h * 60 + m;
+    };
+
+    const start1 = toMinutes(s1);
+    let end1 = toMinutes(e1);
+    const start2 = toMinutes(s2);
+    let end2 = toMinutes(e2);
+
+    // Handle night shift cross-over
+    if (end1 <= start1) end1 += 24 * 60;
+    if (end2 <= start2) end2 += 24 * 60;
+
+    const overlapStart = Math.max(start1, start2);
+    const overlapEnd = Math.min(end1, end2);
+
+    const overlapMinutes = overlapEnd - overlapStart;
+    return overlapMinutes >= 60; // At least 1 hour
+  }
+
   return {
     checkCompliance,
     getCompatibleScenarios,
     isRequestExpired,
+    getShiftTimeRange,
+    hasSignificantOverlap,
   };
 }

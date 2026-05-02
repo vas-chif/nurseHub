@@ -3,7 +3,7 @@
  * @description Page for users to submit absence and shift swap requests.
  * @author Nurse Hub Team
  * @created 2026-02-15
- * @modified 2026-04-23
+ * @modified 2026-05-02
  * @notes
  * - Handles both absence and swap logic
  * - Integrated with push notifications
@@ -13,7 +13,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, watchEffect } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
-import type { Unsubscribe } from 'firebase/firestore';
 import {
   collection,
   addDoc,
@@ -27,6 +26,7 @@ import {
   updateDoc,
   deleteDoc,
 } from 'firebase/firestore';
+import AbsenceRequestForm from '../components/requests/AbsenceRequestForm.vue';
 import { db } from '../boot/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -36,16 +36,16 @@ import { useShiftLogic } from '../composables/useShiftLogic';
 import type {
   ShiftRequest,
   ShiftCode,
-  RequestReason,
   Operator,
   ShiftSwap,
   ShiftSwapStatus,
 } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import { useUiStore } from '../stores/uiStore';
+import { useRoute } from 'vue-router';
 
 const logger = useSecureLogger();
 
-// Quasar Italian Locale for q-date
 const itLocale = {
   days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
   daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
@@ -56,9 +56,6 @@ const itLocale = {
   pluralDay: 'giorni'
 };
 
-import { useUiStore } from '../stores/uiStore';
-import { useRoute } from 'vue-router';
-
 const $q = useQuasar();
 const route = useRoute();
 const authStore = useAuthStore();
@@ -66,9 +63,8 @@ const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const uiStore = useUiStore();
 const { isRequestExpired } = useShiftLogic();
-const submitting = ref(false);
 const loading = ref(false);
-let unsubscribe: Unsubscribe | null = null;
+let unsubscribe: () => void;
 
 // Page tab: absence | swap
 const defaultTab = authStore.isAnyAdmin ? 'absence' : 'swap';
@@ -97,8 +93,6 @@ const swapShiftOptions = [
   { label: 'S - Smonto', value: 'S' },
   { label: 'R - Riposo', value: 'R' },
 ];
-
-const inputMode = ref<'SHIFT' | 'TIME'>('SHIFT');
 
 function getSwapStatusColor(status: ShiftSwapStatus): string {
   const map: Record<ShiftSwapStatus, string> = {
@@ -223,31 +217,14 @@ function cancelSwap(swap: ShiftSwap) {
   });
 }
 
-const formData = ref({
-  date: dateUtil.formatDate(new Date(), 'YYYY-MM-DD'),
-  isRecurring: false,
-  endDate: dateUtil.formatDate(new Date(), 'YYYY-MM-DD'),
-  shift: 'M' as ShiftCode,
-  startTime: '',
-  endTime: '',
-  reason: 'ABSENCE' as RequestReason,
-  note: '',
-});
-
-const absenceOptions = [
-  { label: 'Assenza Generica', value: 'ABSENCE' },
-  { label: 'Malattia', value: 'ABSENCE' },
-  { label: 'Congedo', value: 'ABSENCE' },
-  { label: 'Ferie', value: 'ABSENCE' },
-  { label: 'Altro', value: 'ABSENCE' },
-];
+// Re-using the manualRefresh to trigger list reload after success
+function onAbsenceSuccess() {
+  void manualRefresh();
+}
 
 const requests = ref<ShiftRequest[]>([]);
 
-// Admin: Operator selection
-const selectedOperatorId = ref(authStore.isAnyAdmin ? '' : authStore.currentOperator?.id || '');
 const operators = ref<Record<string, Operator>>({});
-const filterText = ref('');
 
 // Archive Logic - Phase 18
 const threeMonthsAgo = new Date();
@@ -279,24 +256,6 @@ const storageColor = computed(() => {
   if (archiveStorageLevel.value > 0.5) return 'warning';
   return 'positive';
 });
-
-const filteredOperatorOptions = computed(() => {
-  const list = Object.values(operators.value).map((op) => ({
-    id: op.id,
-    name: op.name,
-  }));
-
-  if (!filterText.value) return list;
-
-  const needle = filterText.value.toLowerCase();
-  return list.filter((v) => v.name.toLowerCase().includes(needle));
-});
-
-function filterOperators(val: string, update: (callback: () => void) => void) {
-  update(() => {
-    filterText.value = val;
-  });
-}
 
 onMounted(() => {
   // Ensure operators are loaded in the global store
@@ -377,138 +336,6 @@ async function manualRefresh() {
     icon: 'refresh',
     timeout: 1000
   });
-}
-
-async function submitRequest() {
-  if (!formData.value.date) {
-    $q.notify({ type: 'warning', message: 'Seleziona una data' });
-    return;
-  }
-
-  if (inputMode.value === 'TIME' && (!formData.value.startTime || !formData.value.endTime)) {
-    $q.notify({ type: 'warning', message: 'Specifica Orario Inizio e Fine' });
-    return;
-  }
-
-  submitting.value = true;
-  try {
-    // Use selected operator ID (for admin) or current user's operator ID
-    const targetOperatorId = authStore.isAnyAdmin
-      ? selectedOperatorId.value
-      : authStore.currentOperator?.id || '';
-
-    if (!targetOperatorId) {
-      $q.notify({ type: 'warning', message: 'Operatore non selezionato' });
-      return;
-    }
-
-    const absentOperatorName = operators.value[targetOperatorId]?.name || 'Operatore';
-    const creatorName =
-      `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
-      'Utente';
-
-    // Calculate dates to process
-    const datesToProcess: string[] = [];
-    if (formData.value.isRecurring && formData.value.endDate) {
-      let current = new Date(formData.value.date);
-      const end = new Date(formData.value.endDate);
-      while (current <= end) {
-        datesToProcess.push(dateUtil.formatDate(current, 'YYYY-MM-DD'));
-        current = dateUtil.addToDate(current, { days: 1 });
-      }
-    } else {
-      datesToProcess.push(formData.value.date);
-    }
-
-    if (datesToProcess.length > 31) {
-      $q.notify({
-        type: 'negative',
-        message: 'Massimo 31 giorni per volta per le richieste ricorrenti',
-      });
-      return;
-    }
-
-    const batch = [];
-    const batchData: Omit<ShiftRequest, 'id'>[] = [];
-
-    // VALIDAZIONE TURNO (Phase 25)
-    // Verifica che l'operatore abbia effettivamente il turno per cui si chiede l'assenza
-    for (const date of datesToProcess) {
-      const realShift = operators.value[targetOperatorId]?.schedule?.[date] || 'R';
-      if (inputMode.value === 'SHIFT' && formData.value.shift !== realShift) {
-        $q.notify({
-          color: 'warning',
-          textColor: 'dark',
-          icon: 'warning',
-          message: 'Turno non corrispondente',
-          caption: `${absentOperatorName} il ${formatDate(date)} risulta essere di "${realShift}". Non puoi creare una richiesta per il turno "${formData.value.shift}".`,
-          multiLine: true,
-          progress: true,
-          actions: [{ icon: 'close', color: 'white', round: true, dense: true }]
-        });
-        submitting.value = false;
-        return;
-      }
-    }
-
-    for (const date of datesToProcess) {
-      const newReq: Omit<ShiftRequest, 'id'> = {
-        date: date,
-        originalShift: inputMode.value === 'SHIFT' ? formData.value.shift : 'A',
-        reason: formData.value.reason,
-        status: 'OPEN',
-        creatorId: authStore.currentUser!.uid,
-        creatorName,
-        absentOperatorId: targetOperatorId,
-        absentOperatorName,
-        configId: configStore.activeConfigId || '',
-        createdAt: Date.now(),
-        requestNote: formData.value.note,
-        ...(inputMode.value === 'TIME' && formData.value.startTime
-          ? { startTime: formData.value.startTime }
-          : {}),
-        ...(inputMode.value === 'TIME' && formData.value.endTime
-          ? { endTime: formData.value.endTime }
-          : {}),
-      };
-      batchData.push(newReq);
-      batch.push(addDoc(collection(db, 'shiftRequests'), newReq));
-    }
-
-    const savedRequests = await Promise.all(batch);
-
-    // Phase 19: trigger push notifications to eligible users for each new request
-    const { notifyEligibleOperators } = await import('../services/NotificationService');
-    const activeConfigId = configStore.activeConfigId;
-    if (activeConfigId) {
-      for (let i = 0; i < savedRequests.length; i++) {
-        const docRef = savedRequests[i];
-        if (docRef?.id) {
-          const simulatedRequest = { ...batchData[i], id: docRef.id } as ShiftRequest;
-          notifyEligibleOperators(simulatedRequest, activeConfigId).catch((err) => logger.error('Error notifying operators', err));
-        }
-      }
-    }
-
-    $q.notify({
-      type: 'positive',
-      message:
-        datesToProcess.length > 1
-          ? `${datesToProcess.length} richieste inviate con successo`
-          : 'Richiesta inviata con successo',
-    });
-
-    // Reset form
-    formData.value.note = '';
-    formData.value.startTime = '';
-    formData.value.endTime = '';
-    formData.value.isRecurring = false;
-  } catch (e) {
-    logger.error('Error submitting request', e);
-    $q.notify({ type: 'negative', message: "Errore durante l'invio" });
-  } finally {
-    submitting.value = false;
-  }
 }
 
 // Phase 18/20/22: Delete Actions (Soft Delete)
@@ -659,121 +486,8 @@ function getStatusLabel(req: ShiftRequest) {
       <q-tab name="swap" label="Cambio Turno" icon="swap_horiz" />
     </q-tabs>
 
-    <!-- =========  ASSENZA TAB  ========= -->
-    <q-card flat bordered class="q-mb-md" v-if="pageTab === 'absence'">
-      <q-card-section>
-        <div class="text-subtitle1">Nuova Richiesta Assenza</div>
-      </q-card-section>
-
-      <q-card-section class="q-gutter-md">
-        <!-- Admin: Operator Selector -->
-        <div v-if="authStore.isAnyAdmin" class="q-mb-md">
-          <q-select v-model="selectedOperatorId" :options="filteredOperatorOptions" option-label="name"
-            option-value="id" label="Operatore (per conto di)" outlined dense emit-value map-options use-input clearable
-            @filter="filterOperators" :hint="'Seleziona l\'operatore per cui stai creando la richiesta'">
-            <template v-slot:no-option>
-              <q-item>
-                <q-item-section class="text-grey"> Nessun risultato </q-item-section>
-              </q-item>
-            </template>
-            <template v-slot:prepend>
-              <q-icon name="person" />
-            </template>
-          </q-select>
-        </div>
-
-        <div class="row q-col-gutter-md items-start q-ml-md">
-          <!-- Date Input -->
-          <div class="col-12 col-md-4">
-            <q-input :model-value="formatDate(formData.date)" label="Data Assenza" outlined dense readonly
-              class="cursor-pointer" :hint="formData.isRecurring ? 'Data inizio' : ''">
-              <template v-slot:append>
-                <q-icon name="event" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="formData.date" mask="YYYY-MM-DD" :locale="itLocale">
-                      <div class="row items-center justify-end">
-                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                      </div>
-                    </q-date>
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
-          </div>
-
-          <!-- Recurrence Toggle -->
-          <div class="col-12 col-md-4">
-            <q-toggle v-model="formData.isRecurring" label="Ripeti richiesta" color="secondary" dense class="q-mt-sm" />
-          </div>
-
-          <!-- End Date Input (if recurring) -->
-          <div v-if="formData.isRecurring" class="col-12 col-md-4">
-            <q-input :model-value="formatDate(formData.endDate)" label="Data Fine" outlined dense readonly
-              class="cursor-pointer" :rules="[
-                (val) => !!formData.endDate || 'Obbligatorio',
-                (val) => formData.endDate >= formData.date || 'Deve essere dopo la data inizio',
-              ]">
-              <template v-slot:append>
-                <q-icon name="event" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="formData.endDate" mask="YYYY-MM-DD" :locale="itLocale">
-                      <div class="row items-center justify-end">
-                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                      </div>
-                    </q-date>
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
-          </div>
-
-          <!-- Mode Toggle -->
-          <div class="col-12 col-md-8">
-            <div class="row items-center q-gutter-x-md q-pt-xs">
-              <span class="text-caption">Tipo Selezione:</span>
-              <q-btn-toggle v-model="inputMode" toggle-color="secondary" :options="[
-                { label: 'Turno Intero', value: 'SHIFT' },
-                { label: 'Fascia Oraria', value: 'TIME' },
-              ]" dense outlined rounded unelevated />
-            </div>
-          </div>
-
-          <!-- Shift Logic -->
-          <div class="col-12" v-if="inputMode === 'SHIFT'">
-            <q-btn-toggle v-model="formData.shift" toggle-color="primary" :options="[
-              { label: 'Mattina', value: 'M' },
-              { label: 'Pomeriggio', value: 'P' },
-              { label: 'Notte', value: 'N' },
-            ]" spread dense outlined class="full-width" />
-          </div>
-
-          <!-- Time Range Logic -->
-          <template v-else>
-            <div class="col-12 col-md-6">
-              <q-input v-model="formData.startTime" type="time" label="Dalle ore" outlined dense />
-            </div>
-            <div class="col-12 col-md-6">
-              <q-input v-model="formData.endTime" type="time" label="Alle ore" outlined dense />
-            </div>
-          </template>
-        </div>
-
-        <div class="row q-mt-md">
-          <div class="col-12 q-mb-md">
-            <q-select v-model="formData.reason" :options="absenceOptions" label="Motivo Assenza" outlined dense
-              emit-value map-options />
-          </div>
-
-          <div class="col-12">
-            <q-input v-model="formData.note" label="Note Aggiuntive" outlined dense type="textarea" rows="3" />
-          </div>
-        </div>
-      </q-card-section>
-
-      <q-card-actions align="right">
-        <q-btn label="Invia Richiesta" color="primary" @click="submitRequest" :loading="submitting" />
-      </q-card-actions>
-    </q-card>
+    <!-- =========  ASSENZA TAB (Scomposto §1.11)  ========= -->
+    <AbsenceRequestForm v-if="pageTab === 'absence'" :is-admin-mode="authStore.isAnyAdmin" @success="onAbsenceSuccess" />
 
     <!-- Archive Widget (Battery) -->
     <div v-if="pageTab === 'absence' && archivedRequests.length > 0">
