@@ -1,20 +1,17 @@
-<script setup lang="ts">
 /**
  * @file AdminAnalyticsPage.vue
  * @description Dashboard for administrative analytics and request trends.
  * @author Nurse Hub Team
  * @created 2026-03-20
- * @modified 2026-04-27
+ * @modified 2026-05-03
  * @notes
+ * - Standardized using AppDateInput and centralized dateUtils.
  * - Uses ApexCharts for data visualization.
- * - Integrated with Firestore for real-time request tracking.
- * - Systematic skeleton loading for reduced layout shift.
  */
+<script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue';
 import { useAnalytics } from 'src/composables/useAnalytics';
 import { useSecureLogger } from 'src/utils/secureLogger';
-
-const logger = useSecureLogger();
 import { getDocs, collection, query } from 'firebase/firestore';
 import { db } from 'src/boot/firebase';
 import { useConfigStore } from 'src/stores/configStore';
@@ -23,13 +20,15 @@ import type { ShiftRequest, Operator } from 'src/types/models';
 import { exportFile, useQuasar } from 'quasar';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import AppDateInput from '../components/common/AppDateInput.vue';
+import { formatToDb } from '../utils/dateUtils';
 
 const $q = useQuasar();
-
+const logger = useSecureLogger();
 const configStore = useConfigStore();
 
 const { setRequests, metrics, charts, rawRequests } = useAnalytics();
-const loading = ref(true); // Start as true to prevent premature chart mounting
+const loading = ref(true);
 
 const filters = ref({
   dateFrom: '',
@@ -37,27 +36,11 @@ const filters = ref({
 });
 
 // Setup default month filters
-function getLocalYYYYMMDD(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 const today = new Date();
 const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
 const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-filters.value.dateFrom = getLocalYYYYMMDD(firstDay);
-filters.value.dateTo = getLocalYYYYMMDD(lastDay);
-
-function formatIT(dateStr: string) {
-  if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return dateStr;
-}
+filters.value.dateFrom = formatToDb(firstDay);
+filters.value.dateTo = formatToDb(lastDay);
 
 function wrapCsvValue(val: string | number | boolean | null | undefined) {
   let formatted = val === void 0 || val === null ? '' : String(val);
@@ -183,7 +166,6 @@ async function refreshData() {
     let requests = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ShiftRequest);
 
     // Client side filtering
-    // Assicuriamo che le richieste appartengano al reparto attivo
     requests = requests.filter((r) => !r.configId || r.configId === configStore.activeConfigId);
 
     if (filters.value.dateFrom) {
@@ -201,8 +183,6 @@ async function refreshData() {
     });
 
     setRequests(requests, operators, filters.value.dateFrom, filters.value.dateTo);
-    
-    // Ensure DOM is ready before making charts visible
     await nextTick();
   } catch (e) {
     logger.error('Error fetching analytics', e);
@@ -211,61 +191,38 @@ async function refreshData() {
   }
 }
 
-// Watch for config changes (e.g. from SuperAdmin selector or initial load)
 watch(() => configStore.activeConfigId, (newId) => {
-  if (newId) {
-    void refreshData();
-  }
+  if (newId) void refreshData();
 }, { immediate: true });
 
+// Refetch on date change
+watch([() => filters.value.dateFrom, () => filters.value.dateTo], () => {
+  void refreshData();
+});
+
 onMounted(() => {
-  // If config is already there, trigger it. If not, the watcher will catch it.
-  if (configStore.activeConfigId) {
-    void refreshData();
-  }
+  if (configStore.activeConfigId) void refreshData();
 });
 </script>
-
 
 <template>
   <q-page class="q-pa-md">
     <div class="row items-center justify-between q-mb-md">
-      <h1 class="text-h5 q-my-none">Analytics Dashboard 📊</h1>
+      <h1 class="text-h5 q-my-none text-weight-bold text-primary">Analytics Dashboard 📊</h1>
 
-      <!-- Date Filter -->
-      <div class="row q-gutter-sm">
-        <q-input :model-value="formatIT(filters.dateFrom)" label="Dal" dense outlined readonly style="width: 150px">
-          <template v-slot:append>
-            <q-icon name="event" class="cursor-pointer">
-              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD" @update:model-value="refreshData">
-                  <div class="row items-center justify-end">
-                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                  </div>
-                </q-date>
-              </q-popup-proxy>
-            </q-icon>
-          </template>
-        </q-input>
-
-        <q-input :model-value="formatIT(filters.dateTo)" label="Al" dense outlined readonly style="width: 150px">
-          <template v-slot:append>
-            <q-icon name="event" class="cursor-pointer">
-              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                <q-date v-model="filters.dateTo" mask="YYYY-MM-DD" @update:model-value="refreshData">
-                  <div class="row items-center justify-end">
-                    <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                  </div>
-                </q-date>
-              </q-popup-proxy>
-            </q-icon>
-          </template>
-        </q-input>
+      <!-- Date Filters -->
+      <div class="row q-gutter-sm items-center">
+        <div style="width: 150px">
+          <AppDateInput v-model="filters.dateFrom" label="Dal" />
+        </div>
+        <div style="width: 150px">
+          <AppDateInput v-model="filters.dateTo" label="Al" />
+        </div>
 
         <q-btn icon="refresh" flat round color="primary" @click="refreshData" :loading="loading" />
-        <q-btn icon="download" label="Esporta CSV" color="secondary" outline @click="exportCSV"
+        <q-btn icon="download" label="CSV" color="secondary" outline @click="exportCSV"
           :disable="metrics.total.value === 0" />
-        <q-btn icon="picture_as_pdf" label="Esporta PDF" color="accent" outline @click="exportPDF"
+        <q-btn icon="picture_as_pdf" label="PDF" color="accent" outline @click="exportPDF"
           :disable="metrics.total.value === 0" />
       </div>
     </div>
@@ -273,10 +230,10 @@ onMounted(() => {
     <!-- KPI Cards -->
     <div class="row q-col-gutter-md q-mb-lg">
       <div class="col-12 col-sm-6 col-md">
-        <q-card class="bg-primary text-white">
+        <q-card class="bg-primary text-white rounded-borders shadow-2">
           <q-card-section>
-            <div class="text-subtitle2">Assenze a Calendario</div>
-            <div class="text-h4">
+            <div class="text-subtitle2 opacity-80">Assenze a Calendario</div>
+            <div class="text-h4 text-weight-bolder">
               <q-skeleton v-if="loading" type="text" width="60px" />
               <template v-else>{{ metrics.totalAbsences }}</template>
             </div>
@@ -284,10 +241,10 @@ onMounted(() => {
         </q-card>
       </div>
       <div class="col-12 col-sm-6 col-md">
-        <q-card class="bg-secondary text-white">
+        <q-card class="bg-secondary text-white rounded-borders shadow-2">
           <q-card-section>
-            <div class="text-subtitle2">Richieste in App</div>
-            <div class="text-h4">
+            <div class="text-subtitle2 opacity-80">Richieste in App</div>
+            <div class="text-h4 text-weight-bolder">
               <q-skeleton v-if="loading" type="text" width="60px" />
               <template v-else>{{ metrics.total }}</template>
             </div>
@@ -295,10 +252,10 @@ onMounted(() => {
         </q-card>
       </div>
       <div class="col-12 col-sm-6 col-md">
-        <q-card class="bg-warning text-white">
+        <q-card class="bg-warning text-white rounded-borders shadow-2">
           <q-card-section>
-            <div class="text-subtitle2">In Attesa</div>
-            <div class="text-h4">
+            <div class="text-subtitle2 opacity-80">In Attesa</div>
+            <div class="text-h4 text-weight-bolder">
               <q-skeleton v-if="loading" type="text" width="60px" />
               <template v-else>{{ metrics.pending }}</template>
             </div>
@@ -306,23 +263,12 @@ onMounted(() => {
         </q-card>
       </div>
       <div class="col-12 col-sm-6 col-md">
-        <q-card class="bg-positive text-white">
+        <q-card class="bg-positive text-white rounded-borders shadow-2">
           <q-card-section>
-            <div class="text-subtitle2">Tasso Approvazione</div>
-            <div class="text-h4">
+            <div class="text-subtitle2 opacity-80">Tasso Approvazione</div>
+            <div class="text-h4 text-weight-bolder">
               <q-skeleton v-if="loading" type="text" width="60px" />
               <template v-else>{{ metrics.approvalRate }}%</template>
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
-      <div class="col-12 col-sm-12 col-md">
-        <q-card class="bg-info text-white">
-          <q-card-section>
-            <div class="text-subtitle2">Tempo Medio</div>
-            <div class="text-h4">
-              <q-skeleton v-if="loading" type="text" width="80px" />
-              <template v-else>{{ metrics.avgTime }}</template>
             </div>
           </q-card-section>
         </q-card>
@@ -331,11 +277,10 @@ onMounted(() => {
 
     <!-- Charts Row 1 -->
     <div class="row q-col-gutter-md q-mb-lg">
-      <!-- Status Distribution -->
       <div class="col-12 col-md-4">
-        <q-card class="fit">
+        <q-card class="fit shadow-1 rounded-borders">
           <q-card-section>
-            <div class="text-h6">Stato Richieste</div>
+            <div class="text-h6 text-grey-8">Stato Richieste</div>
           </q-card-section>
           <q-card-section>
             <q-skeleton v-if="loading || !configStore.activeConfigId" type="circle" size="180px" class="q-mx-auto" />
@@ -344,11 +289,10 @@ onMounted(() => {
         </q-card>
       </div>
 
-      <!-- Trend -->
       <div class="col-12 col-md-8">
-        <q-card class="fit">
+        <q-card class="fit shadow-1 rounded-borders">
           <q-card-section>
-            <div class="text-h6">Andamento Giornaliero</div>
+            <div class="text-h6 text-grey-8">Andamento Giornaliero</div>
           </q-card-section>
           <q-card-section>
             <q-skeleton v-if="loading || !configStore.activeConfigId" type="rect" height="300px" />
@@ -359,13 +303,11 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Charts Row 2 -->
     <div class="row q-col-gutter-md">
-      <!-- Top Operators -->
       <div class="col-12">
-        <q-card>
+        <q-card class="shadow-1 rounded-borders">
           <q-card-section>
-            <div class="text-h6">Top 5 Operatori</div>
+            <div class="text-h6 text-grey-8">Top 5 Operatori</div>
           </q-card-section>
           <q-card-section>
             <q-skeleton v-if="loading || !configStore.activeConfigId" type="rect" height="250px" />
@@ -377,3 +319,12 @@ onMounted(() => {
     </div>
   </q-page>
 </template>
+
+<style scoped>
+.rounded-borders {
+  border-radius: 16px;
+}
+.opacity-80 {
+  opacity: 0.8;
+}
+</style>

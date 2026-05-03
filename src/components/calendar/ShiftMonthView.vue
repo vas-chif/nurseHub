@@ -1,153 +1,293 @@
 /**
-* @file ShiftMonthView.vue
-* @description Monthly calendar view for user shifts.
-* @author Nurse Hub Team
-* @created 2026-02-11
-* @modified 2026-04-20
-*/
-
-
+ * @file ShiftMonthView.vue
+ * @description Custom grid-based monthly calendar with "Elite" cell styling matching the Home Dashboard.
+ * @author Nurse Hub Team
+ * @created 2026-05-03
+ * @notes
+ * - Grid implementation for full month view.
+ * - Cell style: White card, top color bar, colored letter + icon (matches Home style).
+ */
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { date as qDate } from 'quasar';
-import type { ShiftCode } from '../../types/models';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
-import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
+import { useConfigStore } from '../../stores/configStore';
+import { useScheduleStore } from '../../stores/scheduleStore';
 import { useSecureLogger } from '../../utils/secureLogger';
-
-const logger = useSecureLogger();
+import { date as quasarDate } from 'quasar';
+import type { ShiftStyle } from '../../types/components';
 
 const authStore = useAuthStore();
+const configStore = useConfigStore();
+const scheduleStore = useScheduleStore();
+const logger = useSecureLogger();
 
-interface CalendarDay {
-  date: Date;
-  dateStr: string;
-  day: number;
-  isCurrentMonth: boolean;
-  shift?: ShiftCode | undefined;
+const currentMonthDate = ref(new Date());
+
+// Navigation
+function nextMonth() {
+  currentMonthDate.value = quasarDate.addToDate(currentMonthDate.value, { months: 1 });
+}
+function prevMonth() {
+  currentMonthDate.value = quasarDate.addToDate(currentMonthDate.value, { months: -1 });
 }
 
-const currentDate = ref(new Date());
-const weekDays = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+// Data Loading
+async function loadData(force = false) {
+  const configId = authStore.isAnyAdmin
+    ? (configStore.activeConfigId || authStore.currentUser?.configId)
+    : authStore.currentUser?.configId;
+  if (!configId) return;
+  try {
+    await scheduleStore.loadOperators(configId, force);
+  } catch (e) {
+    logger.error('Error loading operators for ShiftMonthView', e);
+  }
+}
 
-const currentMonthLabel = computed(() => {
-  return qDate.formatDate(currentDate.value, 'MMMM YYYY', {
-    months: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
-  });
+onMounted(() => { void loadData(); });
+watch(() => configStore.activeConfigId, () => { void loadData(); });
+
+// Current Operator Schedule
+const currentOperator = computed(() => {
+  const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
+  return scheduleStore.operators.find(op => op.id === targetId) || authStore.currentOperator;
 });
 
-const calendarDays = computed<CalendarDay[]>(() => {
-  const year = currentDate.value.getFullYear();
-  const month = currentDate.value.getMonth();
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
+const shiftStyles = computed(() => configStore.activeConfig?.shiftStyles || {});
 
-  let startDay = firstDayOfMonth.getDay() - 1;
-  if (startDay < 0) startDay = 6;
+// Grid Generation
+const dayNames = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
-  const days: CalendarDay[] = [];
-  const getShift = (d: Date): ShiftCode | undefined => {
-    if (!authStore.currentOperator?.schedule) return undefined;
-    return authStore.currentOperator.schedule[qDate.formatDate(d, 'YYYY-MM-DD')];
-  };
-
-  for (let i = 0; i < startDay; i++) {
-    const d = qDate.subtractFromDate(firstDayOfMonth, { days: startDay - i });
-    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: d.getDate(), isCurrentMonth: false, shift: getShift(d) });
+const calendarDays = computed(() => {
+  const year = currentMonthDate.value.getFullYear();
+  const month = currentMonthDate.value.getMonth();
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  
+  let startPadding = firstDay.getDay() - 1;
+  if (startPadding === -1) startPadding = 6;
+  
+  const days = [];
+  for (let i = 0; i < startPadding; i++) {
+    const d = quasarDate.addToDate(firstDay, { days: -(startPadding - i) });
+    days.push({ date: d, isCurrentMonth: false });
   }
-  for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
-    const d = new Date(year, month, i);
-    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: i, isCurrentMonth: true, shift: getShift(d) });
+  for (let i = 1; i <= lastDay.getDate(); i++) {
+    days.push({ date: new Date(year, month, i), isCurrentMonth: true });
   }
   const remaining = 42 - days.length;
   for (let i = 1; i <= remaining; i++) {
-    const d = qDate.addToDate(lastDayOfMonth, { days: i });
-    days.push({ date: d, dateStr: qDate.formatDate(d, 'YYYY-MM-DD'), day: d.getDate(), isCurrentMonth: false, shift: getShift(d) });
+    const d = quasarDate.addToDate(lastDay, { days: i });
+    days.push({ date: d, isCurrentMonth: false });
   }
   return days;
 });
 
-function prevMonth() { currentDate.value = qDate.subtractFromDate(currentDate.value, { month: 1 }); }
-function nextMonth() { currentDate.value = qDate.addToDate(currentDate.value, { month: 1 }); }
-function isToday(d: Date): boolean { return qDate.isSameDate(d, new Date(), 'day'); }
-
-function getCellClass(day: CalendarDay) {
-  const classes = [day.isCurrentMonth ? 'bg-white' : 'bg-grey-1 text-grey-6'];
-  if (isToday(day.date)) classes.push('today-cell');
-  return classes.join(' ');
+function getShiftForDate(d: Date) {
+  if (!currentOperator.value) return null;
+  const key = quasarDate.formatDate(d, 'YYYY-MM-DD');
+  return currentOperator.value.schedule?.[key] || null;
 }
 
-function getShiftColor(code: ShiftCode): string {
-  const map: Record<string, string> = { M: 'amber-8', P: 'orange-8', N: 'blue-10', R: 'grey-5', A: 'red-5', S: 'green-6', MP: 'purple-6' };
-  return map[code] || 'primary';
-}
+function getShiftStyles(code: string | null): ShiftStyle {
+  const map: Record<string, ShiftStyle> = {
+    'M': { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
+    'P': { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
+    'N': { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
+    'R': { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
+    'S': { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
+    'A': { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
+    '':  { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' }
+  };
 
-function onDayClick(day: CalendarDay) { logger.debug('Day clicked', { date: day.dateStr }); }
+  if (!code) return map['']!;
+  const custom = shiftStyles.value[code];
+  if (custom) return { color: custom.color, icon: custom.icon, label: code, bg: custom.bg || 'rgba(0,0,0,0.05)' };
+  
+  const char = code.charAt(0).toUpperCase();
+  return (map[char] || map[''])!;
+}
 </script>
 
 <template>
-  <div class="shift-month-view">
-    <!-- Header Controls -->
-    <div class="row justify-between items-center q-mb-lg bg-white q-pa-sm rounded-borders shadow-1">
-      <q-btn flat round dense size="sm" icon="chevron_left" color="grey-7" @click="prevMonth" />
-
-      <div class="row items-center no-wrap q-gutter-sm">
-        <div class="text-h6 text-weight-bold text-primary">
-          {{ currentMonthLabel.split(' ')[0] }}
-          <span class="text-weight-light text-grey-8">{{ currentMonthLabel.split(' ')[1] }}</span>
-        </div>
-
-        <!-- Componente Centralizzato Sincronizzazione -->
-        <GlobalSyncBtn size="sm" />
+  <div class="shift-month-grid">
+    <!-- Header -->
+    <div class="row items-center justify-between q-mb-sm header-nav shadow-1">
+      <q-btn flat round dense icon="chevron_left" @click="prevMonth" color="primary" />
+      <div class="text-subtitle1 text-weight-bolder text-grey-9 text-capitalize">
+        {{ currentMonthDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) }}
       </div>
+      <q-btn flat round dense icon="chevron_right" @click="nextMonth" color="primary" />
+    </div>
 
-      <q-btn flat round dense size="sm" icon="chevron_right" color="grey-7" @click="nextMonth" />
+    <!-- Day Names -->
+    <div class="calendar-grid-header q-mb-xs">
+      <div v-for="day in dayNames" :key="day" class="text-center text-caption text-weight-bold text-grey-6 q-py-xs">
+        {{ day }}
+      </div>
     </div>
 
     <!-- Calendar Grid -->
     <div class="calendar-grid">
-      <div v-for="day in weekDays" :key="day" class="text-center text-dark text-caption q-pb-sm text-weight-bold">
-        {{ day }}
-      </div>
-
-      <div v-for="(dateObj, index) in calendarDays" :key="index"
-        class="calendar-cell relative-position q-pa-xs cursor-pointer column justify-between"
-        :class="getCellClass(dateObj)" @click="onDayClick(dateObj)">
-        <div class="text-caption text-right" :class="{ 'text-weight-bold': isToday(dateObj.date) }">
-          {{ dateObj.day }}
+      <div 
+        v-for="(day, index) in calendarDays" 
+        :key="index" 
+        class="calendar-cell"
+        :class="{ 'not-current': !day.isCurrentMonth }"
+      >
+        <div 
+          class="elite-shift-card full-height relative-position shadow-1"
+          :style="{ 
+            '--shift-color': getShiftStyles(getShiftForDate(day.date)).color,
+            '--shift-bg': getShiftStyles(getShiftForDate(day.date)).bg
+          }"
+        >
+          <!-- Day Number -->
+          <div class="day-num text-weight-bold text-grey-8">{{ day.date.getDate() }}</div>
+          
+          <!-- Shift Display (Letter + Icon) -->
+          <div class="shift-info column items-center justify-center full-width" v-if="getShiftForDate(day.date)">
+            <div class="shift-letter text-weight-bolder" :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }">
+              {{ getShiftForDate(day.date) }}
+            </div>
+            <q-icon 
+              :name="getShiftStyles(getShiftForDate(day.date)).icon" 
+              size="12px" 
+              :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
+              class="q-mt-xs"
+            />
+          </div>
+          <div v-else class="flex-grow"></div>
         </div>
-
-        <div v-if="dateObj.shift" class="shift-indicator q-mt-xs text-center">
-          <q-badge :color="getShiftColor(dateObj.shift)" :label="dateObj.shift"
-            class="full-width shadow-2 text-center text-weight-bold text-white" style="min-height: 40px"
-            :class="{ 'dimmed-badge': !dateObj.isCurrentMonth }" />
-        </div>
       </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="row justify-center q-mt-md q-gutter-sm">
+      <q-badge rounded color="amber-8" label="M" class="q-px-sm" />
+      <q-badge rounded color="orange-8" label="P" class="q-px-sm" />
+      <q-badge rounded color="blue-10" label="N" class="q-px-sm" />
+      <q-badge rounded color="grey-5" label="R" class="q-px-sm" />
+      <q-badge rounded color="green-6" label="S" class="q-px-sm" />
+      <q-badge rounded color="red-6" label="A" class="q-px-sm" />
     </div>
   </div>
 </template>
 
 <style scoped>
+.shift-month-grid {
+  width: 100%;
+}
+
+.header-nav {
+  background: white;
+  padding: 8px 16px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+.calendar-grid-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 8px;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  background-color: #e0e0e0;
-  border: 1px solid #e0e0e0;
-  padding: 1px;
+  gap: 8px;
 }
 
 .calendar-cell {
-  min-height: 80px;
-  border-radius: 4px;
+  /* Maintaining a good aspect ratio on desktop */
+  aspect-ratio: 1 / 1;
+  min-height: 100px;
 }
 
-.today-cell {
-  border: 2px solid var(--q-primary);
-  font-weight: bold;
+.elite-shift-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
-.dimmed-badge {
-  opacity: 0.6;
+.elite-shift-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--shift-color, transparent);
+  opacity: 0.9;
+}
+
+.elite-shift-card:hover {
+  transform: translateY(-4px);
+  background: var(--shift-bg, #ffffff);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.not-current {
+  opacity: 0.25;
+}
+
+.day-num {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.shift-info {
+  flex-grow: 1;
+  padding-top: 12px;
+}
+
+.shift-letter {
+  font-size: 2.2rem;
+  line-height: 1;
+  letter-spacing: -1.5px;
+}
+
+@media (max-width: 1024px) {
+  .shift-letter {
+    font-size: 1.8rem;
+  }
+  .calendar-cell {
+    min-height: 80px;
+  }
+}
+
+@media (max-width: 600px) {
+  .calendar-grid {
+    gap: 4px;
+  }
+  .elite-shift-card {
+    border-radius: 10px;
+  }
+  .shift-letter {
+    font-size: 1.3rem;
+  }
+  .calendar-cell {
+    aspect-ratio: 1 / 1.2;
+    min-height: 60px;
+  }
+  .day-num {
+    top: 4px;
+    right: 6px;
+    font-size: 0.65rem;
+  }
+  .shift-info {
+    padding-top: 4px;
+  }
 }
 </style>

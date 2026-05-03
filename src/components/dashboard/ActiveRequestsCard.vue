@@ -43,6 +43,13 @@ const loading = ref(true);
 let opportunitiesUnsub: Unsubscribe | null = null;
 let historyUnsub: Unsubscribe | null = null;
 
+// Sorting & Filtering
+const sortBy = ref<'created' | 'date'>('created');
+const sortOptions = [
+  { label: 'Più recenti', value: 'created', icon: 'new_releases' },
+  { label: 'Data Turno', value: 'date', icon: 'calendar_today' },
+];
+
 // Dialog State
 const offerDialog = ref({
   show: false,
@@ -81,11 +88,55 @@ const urgentRequests = computed(() => {
 
 const otherRequests = computed(() => {
   const myOpId = authStore.currentOperator?.id;
-  return requests.value.filter((r) => {
+  const uid = authStore.currentUser?.uid;
+
+  const filtered = requests.value.filter((r) => {
     const isUrgent = myOpId ? r.candidateIds?.includes(myOpId) : false;
-    return !isUrgent;
+    const isHidden = uid ? r.hiddenBy?.includes(uid) : false;
+    return !isUrgent && !isHidden;
   });
+
+  // Sorting
+  if (sortBy.value === 'created') {
+    filtered.sort((a, b) => b.createdAt - a.createdAt);
+  } else {
+    filtered.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  return filtered;
 });
+
+const ignoredRequests = computed(() => {
+  const uid = authStore.currentUser?.uid;
+  if (!uid) return [];
+  return requests.value.filter((r) => r.hiddenBy?.includes(uid));
+});
+
+async function toggleInterest(reqId: string, interested: boolean) {
+  const uid = authStore.currentUser?.uid;
+  if (!uid) return;
+
+  try {
+    const reqRef = doc(db, 'shiftRequests', reqId);
+    if (!interested) {
+      // Hide
+      await updateDoc(reqRef, {
+        hiddenBy: arrayUnion(uid)
+      });
+      $q.notify({ message: 'Spostato nelle ignorate', color: 'grey-7', icon: 'visibility_off', timeout: 1000 });
+    } else {
+      // Show again (Restore)
+      // Note: In real app, we would need arrayRemove. For now, let's assume we use a specialized service or direct update
+      const { arrayRemove } = await import('firebase/firestore');
+      await updateDoc(reqRef, {
+        hiddenBy: arrayRemove(uid)
+      });
+      $q.notify({ message: 'Ripristinato', color: 'primary', icon: 'visibility', timeout: 1000 });
+    }
+  } catch (e) {
+    logger.error('Error toggling interest', e);
+  }
+}
 
 const myHistoryRequests = computed(() => historyRequests.value);
 
@@ -424,7 +475,24 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
           <!-- Other Requests Section -->
           <div class="q-pa-sm">
             <div class="row items-center justify-between q-px-sm q-py-xs">
-              <div class="text-subtitle2 text-primary">🤝 Altre Proposte</div>
+              <div class="row items-center q-gutter-x-sm">
+                <div class="text-subtitle2 text-primary">🤝 Altre Proposte</div>
+                <q-btn-dropdown flat dense size="sm" color="grey-7" :icon="sortOptions.find(o => o.value === sortBy)?.icon">
+                  <q-list dense>
+                    <q-item v-for="opt in sortOptions" :key="opt.value" clickable v-close-popup @click="sortBy = opt.value as 'created' | 'date'">
+                      <q-item-section avatar>
+                        <q-icon :name="opt.icon" size="xs" />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label>{{ opt.label }}</q-item-label>
+                      </q-item-section>
+                      <q-item-section side v-if="sortBy === opt.value">
+                        <q-icon name="check" color="primary" size="xs" />
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-btn-dropdown>
+              </div>
               <q-btn flat round dense color="primary" icon="refresh" size="sm" @click="refreshDashboard">
                 <q-tooltip>Aggiorna proposte</q-tooltip>
               </q-btn>
@@ -469,12 +537,41 @@ function getMyOfferAvatarTextColor(req: ShiftRequest) {
                     "{{ req.requestNote }}"
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side>
-                  <q-btn unelevated size="sm" color="primary" label="Offriti" icon="add_task"
-                    @click="openOfferDialog(req)" />
+                <q-item-section side class="q-gutter-x-xs">
+                  <div class="row no-wrap items-center q-gutter-x-xs">
+                    <q-btn flat round size="sm" color="grey-6" icon="visibility_off" @click.stop="toggleInterest(req.id, false)">
+                      <q-tooltip>Non mi interessa</q-tooltip>
+                    </q-btn>
+                    <q-btn unelevated size="sm" color="primary" label="Offriti" icon="add_task"
+                      @click="openOfferDialog(req)" />
+                  </div>
                 </q-item-section>
               </q-item>
             </q-list>
+
+            <!-- Ignored Section -->
+            <q-expansion-item v-if="ignoredRequests.length > 0" icon="visibility_off" label="Opportunità ignorate"
+              header-class="text-grey-7 text-caption" dense class="q-mt-md">
+              <q-list separator dense>
+                <q-item v-for="req in ignoredRequests" :key="req.id" class="q-py-xs bg-grey-1">
+                  <q-item-section>
+                    <q-item-label class="text-caption">
+                      {{ formatDate(req.date) }} - {{ req.originalShift }} ({{ req.reason === 'SHORTAGE' ? 'Carenza' : 'Assenza' }})
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <div class="row q-gutter-x-xs">
+                      <q-btn flat round size="xs" color="primary" icon="visibility" @click="toggleInterest(req.id, true)">
+                        <q-tooltip>Ripristina</q-tooltip>
+                      </q-btn>
+                      <q-btn flat round size="xs" color="secondary" icon="add_task" @click="openOfferDialog(req)">
+                        <q-tooltip>Offriti comunque</q-tooltip>
+                      </q-btn>
+                    </div>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-expansion-item>
           </div>
         </q-tab-panel>
 

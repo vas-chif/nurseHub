@@ -67,6 +67,7 @@ export interface ShiftRequest {
   creatorName?: string;
   configId?: string; // Phase 10.2: Link to department
   createdAt: number;
+  expireAt?: number; // TTL: Timestamp for automatic deletion
 
   // Optional: tracking chi manca
   absentOperatorId?: string;
@@ -217,6 +218,7 @@ export interface SystemConfiguration {
   profession: 'Infermiere' | 'Medico' | 'OSS'; // Target profession
   spreadsheetUrl: string; // Google Sheets URL for this config
   gasWebUrl?: string; // Google Apps Script URL for this config
+  shiftStyles?: Record<string, { color: string; icon: string; bg?: string }>; // Phase 31: Unified shift styling
   createdAt: number;
   createdBy: string; // Admin UID
   isActive?: boolean; // Currently selected configuration
@@ -230,6 +232,7 @@ export interface Notification {
   requestId?: string; // Link to related request
   read: boolean;
   createdAt: number;
+  expireAt?: number; // TTL: Timestamp for automatic deletion
 }
 
 // --- Phase 20: Cambio Turno (Shift Swaps) ---
@@ -249,6 +252,7 @@ export interface ShiftSwap {
 
   status: ShiftSwapStatus;
   createdAt: number;
+  expireAt?: number; // TTL: Timestamp for automatic deletion
 
   // Filled when a counterpart accepts
   counterpartId?: string; // Firebase UID of the acceptor
@@ -263,14 +267,15 @@ export interface ShiftSwap {
 
   // Phase 22: Soft Delete
   deletedByCreator?: boolean; // True if the creator deleted it from their view
+  hiddenBy?: string[]; // UIDs of users who ignored this opportunity
 }
 
 // --- Phase 25: Global Sync Cooldown ---
 
 export interface SyncStatus {
   lastSyncTimestamp: number; // Unix ms of last successful full sync
-  lastSyncByUid: string;     // UID of who triggered it
-  lastSyncByName: string;    // De-normalized name for audit trail
+  lastSyncByUid: string; // UID of who triggered it
+  lastSyncByName: string; // De-normalized name for audit trail
 }
 
 // --- Phase 30: Shift Rotation Groups ---
@@ -287,11 +292,11 @@ export interface RotationGroup {
   name: string; // e.g. "Turno 4"
   userIds: string[]; // Firebase UIDs for security rule access
   operators: RotationOperator[];
-  
+
   // State Machine for Timer
   isActive: boolean; // false = Fuori Turno (Pausa estiva)
   currentColumnIndex: number; // 0 to length-1 of pattern
   nextChangeTimestamp: number | null; // Next execution time (ms)
-  
+
   updatedAt: number;
 }

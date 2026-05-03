@@ -52,6 +52,8 @@ import { useScenarioStore } from '../stores/scenarioStore';
 import { useUiStore } from '../stores/uiStore';
 import { useRoute } from 'vue-router';
 import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
+import AppDateInput from '../components/common/AppDateInput.vue';
+import { formatToItalian } from '../utils/dateUtils';
 
 const $q = useQuasar();
 const route = useRoute();
@@ -60,7 +62,7 @@ const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const notificationStore = useNotificationStore();
 const uiStore = useUiStore();
-const { checkCompliance } = useShiftLogic();
+const { checkCompliance, isRequestExpired } = useShiftLogic();
 
 // Initialize activeTab from store
 const activeTab = ref(uiStore.getActiveTab(route.path, 'pending'));
@@ -113,16 +115,7 @@ const rejectionReason = ref('');
 const requestToReject = ref<ShiftRequest | null>(null);
 const isBulkReject = ref(false);
 
-// Quasar Italian Locale for q-date
-const itLocale = {
-  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
-  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
-  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
-  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
-  firstDayOfWeek: 1,
-  format24h: true,
-  pluralDay: 'giorni'
-};
+// Centralized itLocale is now used via imports where necessary
 
 // Operator options for filter
 const operatorOptions = computed(() => {
@@ -383,8 +376,7 @@ function getAdminName(adminId: string) {
 }
 
 function formatDate(ts: number | string | undefined) {
-  if (!ts) return '';
-  return dateUtil.formatDate(ts, 'DD/MM/YYYY');
+  return formatToItalian(ts);
 }
 
 function formatFullDate(ts: number | string | undefined) {
@@ -407,17 +399,31 @@ function getShiftColor(code: ShiftCode): string {
   }
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
+function getStatusColor(req: ShiftRequest) {
+  if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) {
+    return 'negative';
+  }
+  switch (req.status) {
     case 'CLOSED':
-      return 'positive'; // Approvata/Chiusa
+      return 'positive';
     case 'EXPIRED':
-      return 'grey'; // Rifiutata/Scaduta
+      return 'negative';
     case 'PARTIAL':
       return 'warning';
+    case 'OPEN':
+      return 'primary';
     default:
       return 'grey';
   }
+}
+
+function getStatusLabel(req: ShiftRequest) {
+  if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) {
+    return 'SCADUTA';
+  }
+  if (req.status === 'CLOSED' && req.rejectionReason) return 'RIFIUTATA';
+  if (req.status === 'EXPIRED') return 'SCADUTA';
+  return req.status; // OPEN, CLOSED, PARTIAL
 }
 
 import { useSecureLogger } from '../utils/secureLogger';
@@ -1339,36 +1345,18 @@ watch(activeTab, (val) => {
         <div class="text-subtitle2 q-mb-sm">Filtri</div>
         <div class="row q-col-gutter-md">
           <div class="col-12 col-md-3">
-            <q-input :model-value="formatDate(filters.dateFrom)" label="Da Data" outlined dense readonly
-              class="cursor-pointer" clearable @clear="filters.dateFrom = ''">
-              <template v-slot:append>
-                <q-icon name="event" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="filters.dateFrom" mask="YYYY-MM-DD" :locale="itLocale">
-                      <div class="row items-center justify-end">
-                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                      </div>
-                    </q-date>
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
+            <AppDateInput
+              v-model="filters.dateFrom"
+              label="Da Data"
+              hint="Filtra da"
+            />
           </div>
           <div class="col-12 col-md-3">
-            <q-input :model-value="formatDate(filters.dateTo)" label="A Data" outlined dense readonly
-              class="cursor-pointer" clearable @clear="filters.dateTo = ''">
-              <template v-slot:append>
-                <q-icon name="event" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="filters.dateTo" mask="YYYY-MM-DD" :locale="itLocale">
-                      <div class="row items-center justify-end">
-                        <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                      </div>
-                    </q-date>
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
+            <AppDateInput
+              v-model="filters.dateTo"
+              label="A Data"
+              hint="Filtra a"
+            />
           </div>
           <div class="col-12 col-md-3">
             <q-select v-model="filters.operators" :options="operatorOptions" label="Filtra Operatori" multiple use-chips
@@ -1464,7 +1452,7 @@ watch(activeTab, (val) => {
                       getActiveOffersCount(req) === 1 ? 'a' : 'e'
                     }}
                   </q-badge>
-                  <q-badge color="orange" label="OPEN" />
+                  <q-badge :color="getStatusColor(req)" :label="getStatusLabel(req)" />
                 </div>
               </q-item-section>
             </template>
@@ -1527,9 +1515,9 @@ watch(activeTab, (val) => {
                           </div>
                           <div v-else class="row q-gutter-xs">
                             <q-btn round flat color="negative" icon="close" size="sm"
-                              @click="rejectOffer(req.id, offer.id)" />
+                              @click="rejectOffer(req.id, offer.id)" :disable="isRequestExpired(req.date, req.originalShift)" />
                             <q-btn round flat color="positive" icon="check" size="sm"
-                              @click="acceptOffer(req.id, offer.id)" />
+                              @click="acceptOffer(req.id, offer.id)" :disable="isRequestExpired(req.date, req.originalShift)" />
                           </div>
                         </q-item-section>
                       </q-item>
@@ -1540,8 +1528,8 @@ watch(activeTab, (val) => {
                   <div class="col-12 col-md-6" style="min-width: 100%">
                     <div class="text-h6 q-mb-sm">Gestione</div>
                     <div class="row q-gutter-sm q-mb-md">
-                      <q-btn outline color="negative" label="Rifiuta (Abusiva)" @click="rejectRequest(req)" />
-                      <q-btn unelevated color="positive" label="Approva (Coperto)" @click="approveRequest(req)" />
+                      <q-btn outline color="negative" label="Rifiuta (Abusiva)" @click="rejectRequest(req)" :disable="isRequestExpired(req.date, req.originalShift)" />
+                      <q-btn unelevated color="positive" label="Approva (Coperto)" @click="approveRequest(req)" :disable="isRequestExpired(req.date, req.originalShift)" />
                     </div>
 
                     <q-separator class="q-my-md" />
@@ -1549,7 +1537,7 @@ watch(activeTab, (val) => {
                     <div class="text-subtitle2 q-mb-xs">Sostituti Suggeriti</div>
                     <div v-if="!suggestions[req.id]" class="q-mb-sm">
                       <q-btn flat color="primary" label="Trova Sostituti" icon="search" @click="findSubstitutes(req)"
-                        :loading="calculating[req.id]" />
+                        :loading="calculating[req.id]" :disable="isRequestExpired(req.date, req.originalShift)" />
                     </div>
                     <div v-else>
                       <div v-if="getSuggestions(req.id).length === 0" class="text-grey text-caption">
@@ -1679,8 +1667,8 @@ watch(activeTab, (val) => {
               </q-item-section>
               <q-item-section side>
                 <div class="row items-center">
-                  <q-chip :color="getStatusColor(req.status)" text-color="white" size="sm" class="q-mr-sm">
-                    {{ req.status }}
+                  <q-chip :color="getStatusColor(req)" text-color="white" size="sm" class="q-mr-sm">
+                    {{ getStatusLabel(req) }}
                   </q-chip>
                   <q-btn flat round dense icon="delete" color="grey-5" size="sm" @click.stop="archiveRequest(req)">
                     <q-tooltip>Sposta nel cestino</q-tooltip>
@@ -1722,8 +1710,8 @@ watch(activeTab, (val) => {
                     <div class="text-subtitle2 q-mb-xs">Stato & Chiusura</div>
                     <div class="q-mb-xs">
                       <span class="text-grey-7">Stato Attuale:</span>
-                      <q-chip :color="getStatusColor(req.status)" text-color="white" dense size="sm">
-                        {{ req.status }}
+                      <q-chip :color="getStatusColor(req)" text-color="white" dense size="sm">
+                        {{ getStatusLabel(req) }}
                       </q-chip>
                     </div>
 

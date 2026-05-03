@@ -1,24 +1,24 @@
 /**
 * @file DailyRosterCard.vue
-* @description Dashboard component displaying the list of operators scheduled for the current day.
+* @description Dashboard component displaying the list of operators scheduled for the current day with premium design.
 * @author Nurse Hub Team
 * @created 2026-03-08
-* @modified 2026-04-27
+* @modified 2026-05-03
 * @notes
-* - Provides a quick overview of who is on shift today.
-* - Systematic skeleton loading implemented for smooth initialization.
+* - Standardized using AppDateInput and centralized date utilities.
+* - Enhanced aesthetics with large shift letters and consistent premium styling.
 */
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useSecureLogger } from '../../utils/secureLogger';
+import { useScheduleStore } from '../../stores/scheduleStore';
+import { date, useQuasar } from 'quasar';
+import { formatToItalianLong, formatToDb } from '../../utils/dateUtils';
+import AppDateInput from '../common/AppDateInput.vue';
 
 const logger = useSecureLogger();
-import { useScheduleStore } from '../../stores/scheduleStore';
-import { date } from 'quasar';
-import { useQuasar } from 'quasar';
-
 const $q = useQuasar();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
@@ -29,54 +29,17 @@ const loading = ref(false);
 
 // Initialize selectedDate with today (YYYY-MM-DD format)
 const today = new Date();
-const selectedDate = ref(date.formatDate(today, 'YYYY-MM-DD'));
+const selectedDate = ref(formatToDb(today));
 
-// Formatted date for display (e.g., "15 Marzo 2024")
-const formattedSelectedDate = computed(() => {
-  if (!selectedDate.value) return '';
-  return date.formatDate(selectedDate.value, 'DD MMMM YYYY', {
-    days: ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'],
-    daysShort: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'],
-    months: [
-      'Gennaio',
-      'Febbraio',
-      'Marzo',
-      'Aprile',
-      'Maggio',
-      'Giugno',
-      'Luglio',
-      'Agosto',
-      'Settembre',
-      'Ottobre',
-      'Novembre',
-      'Dicembre',
-    ],
-    monthsShort: [
-      'Gen',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mag',
-      'Giu',
-      'Lug',
-      'Ago',
-      'Set',
-      'Ott',
-      'Nov',
-      'Dic',
-    ],
-  });
-});
+// Formatted date for display using centralized utility
+const formattedSelectedDate = computed(() => formatToItalianLong(selectedDate.value));
 
 // Calculate shifts for the selected date
 const shifts = computed(() => {
   const result = { M: [] as string[], P: [] as string[], N: [] as string[] };
-
   if (!selectedDate.value || scheduleStore.operators.length === 0) return result;
 
-  // Filter and sort operators alphabetically
   const sortedOps = [...scheduleStore.operators].sort((a, b) => a.name.localeCompare(b.name));
-
   sortedOps.forEach((op) => {
     const shiftCode = op.schedule?.[selectedDate.value];
     if (shiftCode) {
@@ -85,30 +48,18 @@ const shifts = computed(() => {
       else if (shiftCode.startsWith('N')) result.N.push(op.name);
     }
   });
-
   return result;
 });
 
 async function refreshRoster() {
   const configId = configStore.activeConfigId || authStore.currentUser?.configId;
   if (!configId) return;
-
   loading.value = true;
   try {
-    // Force refresh store from database
     await scheduleStore.loadOperators(configId, true);
-    $q.notify({
-      type: 'positive',
-      message: 'Presenze aggiornate correttamente',
-      icon: 'sync',
-    });
+    $q.notify({ type: 'positive', message: 'Presenze aggiornate', icon: 'sync' });
   } catch (error) {
     logger.error('Error refreshing roster', error);
-    $q.notify({
-      type: 'negative',
-      message: "Errore durante l'aggiornamento",
-      icon: 'error',
-    });
   } finally {
     loading.value = false;
   }
@@ -117,144 +68,123 @@ async function refreshRoster() {
 function changeDate(days: number) {
   const current = new Date(selectedDate.value);
   const newDate = date.addToDate(current, { days });
-  selectedDate.value = date.formatDate(newDate, 'YYYY-MM-DD');
+  selectedDate.value = formatToDb(newDate);
 }
 
-// Initial load if required
 onMounted(() => {
-  if (scheduleStore.operators.length === 0) {
-    void refreshRoster();
-  }
+  if (scheduleStore.operators.length === 0) void refreshRoster();
 });
+
+const shiftStyles = {
+  M: { color: '#f59e0b', icon: 'light_mode', bg: 'rgba(245, 158, 11, 0.1)' },
+  P: { color: '#ea580c', icon: 'wb_twilight', bg: 'rgba(234, 88, 12, 0.1)' },
+  N: { color: '#1e3a8a', icon: 'dark_mode', bg: 'rgba(30, 58, 138, 0.1)' }
+};
 </script>
 
-
-
 <template>
-  <q-expansion-item header-class="bg-primary text-white text-weight-bold" v-model="expanded" label="Chi c'è in turno"
-    icon="groups" expand-icon-class="text-white">
-    <q-card flat bordered class="q-mt-sm">
-      <q-card-section class="row items-center justify-between bg-primary text-white q-py-sm">
-        <div>
-          <q-btn flat dense round icon="event" class="q-mr-sm" title="Scegli data">
-            <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-              <q-date v-model="selectedDate" mask="YYYY-MM-DD">
-                <div class="row items-center justify-end">
-                  <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-btn>
-          <q-btn flat dense round icon="refresh" title="Aggiorna presenze" :loading="loading" @click="refreshRoster" />
-        </div>
-      </q-card-section>
-
-      <q-card-section
-        class="q-pa-sm bg-grey-2 text-center text-caption text-weight-bold row items-center justify-center q-gutter-x-md">
+  <q-expansion-item v-model="expanded" label="Chi c'è in turno" icon="groups"
+    header-class="bg-blue-1 text-primary text-weight-bold" class="rounded-borders overflow-hidden shadow-1">
+    <q-card flat class="q-mt-xs">
+      <!-- Date Navigation -->
+      <q-card-section class="q-pa-sm bg-grey-1 row items-center justify-between border-bottom">
         <q-btn flat dense round icon="chevron_left" color="primary" @click="changeDate(-1)" />
-        <q-space />
-        <div class="text-subtitle2">{{ formattedSelectedDate }}</div>
-        <q-space />
+
+        <div class="row items-center q-gutter-x-sm">
+          <div class="text-subtitle2 text-weight-bold">{{ formattedSelectedDate }}</div>
+          <div style="width: 40px">
+            <AppDateInput v-model="selectedDate" dense flat borderless hide-lab />
+          </div>
+        </div>
+
         <q-btn flat dense round icon="chevron_right" color="primary" @click="changeDate(1)" />
       </q-card-section>
 
       <q-card-section class="q-pa-md">
-        <div v-if="loading" class="q-gutter-y-sm q-pa-sm">
-          <q-item v-for="n in 5" :key="n" dense>
-            <q-item-section avatar>
-              <q-skeleton type="QAvatar" size="24px" />
-            </q-item-section>
-            <q-item-section>
-              <q-skeleton type="text" width="60%" />
-            </q-item-section>
-            <q-item-section side>
-              <q-skeleton type="rect" width="30px" height="20px" />
-            </q-item-section>
-          </q-item>
+        <div v-if="loading" class="q-gutter-y-sm">
+          <q-skeleton v-for="n in 3" :key="n" type="rect" height="60px" class="rounded-borders" />
         </div>
 
         <div v-else class="row q-col-gutter-md">
-          <!-- Mattina -->
-          <div class="col-12 col-md-4">
-            <q-card flat class="bg-amber-1 border-amber">
-              <q-card-section class="q-pb-xs row items-center justify-between">
-                <div class="text-subtitle2 text-black">
-                  <q-badge color="amber-8" class="q-mr-sm">M</q-badge> Mattina
+          <!-- Mattina, Pomeriggio, Notte Cards -->
+          <div v-for="(list, key) in shifts" :key="key" class="col-12 col-md-4">
+            <q-card flat bordered class="roster-shift-card" :style="{ '--accent-color': shiftStyles[key].color }">
+              <q-card-section class="q-pa-sm row no-wrap items-center bg-grey-1 border-bottom">
+                <div class="shift-display-mini column items-center q-mr-md">
+                  <div class="shift-letter-mini text-weight-bold" :style="{ color: shiftStyles[key].color }">
+                    {{ key }}
+                  </div>
+                  <q-icon :name="shiftStyles[key].icon" :style="{ color: shiftStyles[key].color }" size="10px" />
                 </div>
-                <q-badge outline color="amber-9" class="text-weight-bold">
-                  {{ shifts.M.length }}
-                </q-badge>
-              </q-card-section>
-              <q-card-section class="q-pt-none">
-                <div v-if="shifts.M.length === 0" class="text-caption text-grey text-italic">
-                  Nessun operatore
+                <div class="column">
+                  <span class="text-weight-bolder text-grey-9">{{ key === 'M' ? 'Mattina' : (key === 'P' ? 'Pomeriggio'
+                    : 'Notte') }}</span>
+                  <span class="text-caption text-grey-6">{{ list.length }} operatori</span>
                 </div>
-                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                  <li v-for="name in shifts.M" :key="name">{{ name }}</li>
-                </ul>
               </q-card-section>
-            </q-card>
-          </div>
 
-          <!-- Pomeriggio -->
-          <div class="col-12 col-md-4">
-            <q-card flat class="bg-orange-1 border-orange">
-              <q-card-section class="q-pb-xs row items-center justify-between">
-                <div class="text-subtitle2 text-black">
-                  <q-badge color="orange-8" class="q-mr-sm">P</q-badge> Pomeriggio
-                </div>
-                <q-badge outline color="orange-9" class="text-weight-bold">
-                  {{ shifts.P.length }}
-                </q-badge>
-              </q-card-section>
-              <q-card-section class="q-pt-none">
-                <div v-if="shifts.P.length === 0" class="text-caption text-grey text-italic">
+              <q-card-section class="q-pa-sm roster-list">
+                <div v-if="list.length === 0" class="text-caption text-grey-5 text-italic text-center q-py-sm">
                   Nessun operatore
                 </div>
-                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                  <li v-for="name in shifts.P" :key="name">{{ name }}</li>
-                </ul>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <!-- Notte -->
-          <div class="col-12 col-md-4">
-            <q-card flat class="bg-blue-1 border-blue">
-              <q-card-section class="q-pb-xs row items-center justify-between">
-                <div class="text-subtitle2 text-black">
-                  <q-badge color="blue-10" class="q-mr-sm">N</q-badge> Notte
+                <div v-else class="column q-gutter-y-xs">
+                  <div v-for="name in list" :key="name" class="row items-center q-gutter-x-sm">
+                    <q-icon name="person" size="10px" color="grey-4" />
+                    <span class="text-caption text-grey-9">{{ name }}</span>
+                  </div>
                 </div>
-                <q-badge outline color="blue-10" class="text-weight-bold">
-                  {{ shifts.N.length }}
-                </q-badge>
-              </q-card-section>
-              <q-card-section class="q-pt-none">
-                <div v-if="shifts.N.length === 0" class="text-caption text-grey text-italic">
-                  Nessun operatore
-                </div>
-                <ul v-else class="q-pl-md q-ma-none text-caption text-black">
-                  <li v-for="name in shifts.N" :key="name">{{ name }}</li>
-                </ul>
               </q-card-section>
             </q-card>
           </div>
         </div>
       </q-card-section>
+
+      <q-card-actions align="right" class="q-pb-md q-pr-md">
+        <q-btn flat dense color="primary" icon="refresh" label="Aggiorna" :loading="loading" @click="refreshRoster"
+          size="sm" />
+      </q-card-actions>
     </q-card>
   </q-expansion-item>
 </template>
 
 <style scoped>
-.border-amber {
-  border: 1px solid #ffca28;
+.border-bottom {
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.border-orange {
-  border: 1px solid #fb8c00;
+.roster-shift-card {
+  border-radius: 12px;
+  height: 100%;
+  border-top: 3px solid var(--accent-color);
+  transition: transform 0.2s ease;
 }
 
-.border-blue {
-  border: 1px solid #1565c0;
+.roster-shift-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+.shift-letter-mini {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.roster-list {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+/* Custom Scrollbar for list */
+.roster-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.roster-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.roster-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
 }
 </style>

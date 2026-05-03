@@ -103,6 +103,7 @@ export async function notifyUser(
     requestId,
     read: false,
     createdAt: Date.now(),
+    expireAt: Date.now() + (15 * 24 * 60 * 60 * 1000), // TTL: 15 days
   } as Notification);
 
   // 2. Invia la Notifica Push vera e propria tramite Vercel

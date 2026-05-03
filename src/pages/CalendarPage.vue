@@ -1,13 +1,9 @@
 /**
  * @file CalendarPage.vue
- * @description Main calendar page that toggles between personal month view and administrative table view.
+ * @description Main calendar page with support for Admin (Table) and User (Monthly Grid) views.
  * @author Nurse Hub Team
- * @created 2026-03-01
- * @modified 2026-04-27
- * @notes
- * - Renders ShiftMonthView for regular users.
- * - Renders AdminShiftTable for administrators (SuperAdmin/Admin).
- * - Integrates DailyRosterCard for quick status checks.
+ * @created 2026-03-10
+ * @modified 2026-05-03
  */
 <script setup lang="ts">
 import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
@@ -21,28 +17,36 @@ const authStore = useAuthStore();
 
 <template>
   <q-page class="q-pa-md bg-white column">
-    <!-- Admin View: Full Table -->
+    <!-- Admin View: Full Table (Full Width) -->
     <div v-if="authStore.isAnyAdmin" class="col column">
       <AdminShiftTable />
     </div>
 
-    <!-- User View: Month Calendar -->
-    <div v-else>
-      <ShiftMonthView />
+    <!-- User View: Centered Stack -->
+    <div v-else class="column items-center full-width">
+      <div class="user-view-container column q-gutter-y-lg">
+        <!-- Title -->
+        <div class="row items-center q-mb-xs">
+          <div class="text-h5 text-weight-bold text-primary">I Tuoi Turni</div>
+        </div>
+        
+        <!-- Monthly Grid -->
+        <ShiftMonthView />
 
-      <!-- Legend -->
-      <div class="row q-mt-md justify-center q-gutter-sm">
-        <q-badge color="amber-8" label="Mattina" />
-        <q-badge color="orange-8" label="Pomeriggio" />
-        <q-badge color="blue-10" label="Notte" />
-        <q-badge color="grey-5" label="Riposo" />
+        <!-- Daily Roster (Chi c'è di turno) -->
+        <DailyRosterCard />
+        
+        <!-- Shift Rotation Widget -->
+        <RotationWidget />
       </div>
     </div>
-
-    <!-- Daily Roster (Chi c'è di turno) -->
-    <DailyRosterCard class="q-mt-lg" v-if="!authStore.isAnyAdmin" />
-    
-    <!-- Shift Rotation Widget -->
-    <RotationWidget class="q-mt-md" v-if="!authStore.isAnyAdmin" />
   </q-page>
 </template>
+
+<style scoped>
+.user-view-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+</style>

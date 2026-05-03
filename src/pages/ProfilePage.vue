@@ -3,19 +3,19 @@
  * @description User profile management page. Allows viewing and editing personal data and avatar.
  * @author Nurse Hub Team
  * @created 2026-03-02
- * @modified 2026-04-27
+ * @modified 2026-05-03
  * @notes
+ * - Standardized using AppDateInput and centralized dateUtils.
  * - Handles image resizing (canvas) for avatar uploads to minimize Firestore storage.
- * - Enforces date formatting (DD/MM/YYYY) for display.
- * - Read-only fields for critical system data (email, role, profession).
  */
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useAuthStore } from '../stores/authStore';
 import { userService } from '../services/UserService';
-import { useQuasar, date as dateUtil } from 'quasar';
+import { useQuasar } from 'quasar';
 import { useSecureLogger } from '../utils/secureLogger';
 import { useRoute } from 'vue-router';
+import AppDateInput from '../components/common/AppDateInput.vue';
 
 const authStore = useAuthStore();
 const $q = useQuasar();
@@ -36,22 +36,6 @@ const formData = ref({
   email: '',
   dateOfBirth: '',
 });
-
-// Quasar Italian Locale for q-date
-const itLocale = {
-  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
-  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
-  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
-  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
-  firstDayOfWeek: 1,
-  format24h: true,
-  pluralDay: 'giorni'
-};
-
-function formatDate(val: string | undefined) {
-  if (!val) return '-';
-  return dateUtil.formatDate(val, 'DD/MM/YYYY');
-}
 
 // Initialize form data when user loads
 watch(
@@ -81,7 +65,7 @@ async function saveProfile() {
       dateOfBirth: formData.value.dateOfBirth,
     });
 
-    // Update local store - best effort
+    // Update local store
     if (authStore.currentUser) {
       authStore.currentUser.firstName = formData.value.firstName;
       authStore.currentUser.lastName = formData.value.lastName;
@@ -106,7 +90,6 @@ async function handleFileChange(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
 
-  // Max 2MB raw check
   if (file.size > 2 * 1024 * 1024) {
     $q.notify({ type: 'negative', message: "L'immagine è troppo grande (Max 2MB)" });
     return;
@@ -116,14 +99,8 @@ async function handleFileChange(event: Event) {
     const resizedBase64 = await resizeImage(file);
     if (!user.value) return;
 
-    // Save to DB
     await userService.updateUserProfile(user.value.uid, { avatarUrl: resizedBase64 });
 
-    // Update local store immediately (optional if store listens to DB, but good for UI)
-    // Assuming authStore listens to auth state, but maybe not deep user changes immediately if not re-fetched.
-    // Ideally we should update the store state manually or re-fetch.
-    // For now, let's assume valid re-fetch or reactivity.
-    // Force reload user profile?
     if (authStore.currentUser) {
       authStore.currentUser.avatarUrl = resizedBase64;
     }
@@ -163,7 +140,7 @@ function resizeImage(file: File): Promise<string> {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality JPEG
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
       img.onerror = reject;
       img.src = e.target?.result as string;
@@ -173,56 +150,65 @@ function resizeImage(file: File): Promise<string> {
   });
 }
 </script>
+
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-md bg-grey-1">
     <div class="row items-center q-mb-md">
-      <h1 class="text-h4 q-my-none">Profilo Utente</h1>
+      <h1 class="text-h4 q-my-none text-weight-bold text-primary">Profilo Utente</h1>
     </div>
 
     <div class="row justify-center q-mb-lg">
       <div class="column items-center">
-        <q-avatar size="120px" class="q-mb-md shadow-2">
+        <q-avatar size="120px" class="q-mb-md shadow-3 border-white">
           <q-img :src="avatarUrl || 'https://cdn.quasar.dev/img/boy-avatar.png'" />
-          <q-btn round color="primary" icon="edit" size="sm" class="absolute-bottom-right" style="bottom: 0; right: 0"
+          <q-btn round color="primary" icon="edit" size="sm" class="absolute-bottom-right" style="bottom: 4px; right: 4px"
             @click="triggerFilePicker" v-if="isEditing" />
         </q-avatar>
-        <div class="text-h6">{{ user?.firstName }} {{ user?.lastName }}</div>
-        <div class="text-caption text-grey">{{ user?.email }}</div>
+        <div class="text-h6 text-weight-bold">{{ user?.firstName }} {{ user?.lastName }}</div>
+        <div class="text-caption text-grey-7">{{ user?.email }}</div>
       </div>
       <input type="file" ref="fileInput" accept="image/*" style="display: none" @change="handleFileChange" />
     </div>
 
-    <q-card class="max-width-600 q-mx-auto">
-      <q-card-section>
-        <div class="text-h6 q-mb-md">Dati Personali</div>
-        <q-form @submit="saveProfile" class="q-gutter-md">
-          <q-input v-model="formData.firstName" label="Nome" outlined dense :readonly="!isEditing" />
-          <q-input v-model="formData.lastName" label="Cognome" outlined dense :readonly="!isEditing" />
-          <q-input v-model="formData.phoneNumber" label="Numero di Telefono" outlined dense mask="### ### ####"
+    <q-card flat bordered class="max-width-600 q-mx-auto rounded-borders shadow-1">
+      <q-card-section class="q-pa-md">
+        <div class="text-h6 q-mb-md text-primary">Dati Personali</div>
+        <q-form @submit="saveProfile" class="q-gutter-y-md">
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-sm-6">
+              <q-input v-model="formData.firstName" label="Nome" filled dense :readonly="!isEditing" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="formData.lastName" label="Cognome" filled dense :readonly="!isEditing" />
+            </div>
+          </div>
+
+          <q-input v-model="formData.phoneNumber" label="Numero di Telefono" filled dense mask="### ### ####"
             fill-mask hint="Formato: 333 123 4567" :readonly="!isEditing" />
-          <q-input v-model="formData.email" label="Email" outlined dense readonly
+          
+          <q-input v-model="formData.email" label="Email" filled dense readonly
             hint="L'email non può essere modificata" />
-          <q-input :model-value="formatDate(formData.dateOfBirth)" label="Data di Nascita" outlined dense readonly>
-            <template v-slot:append v-if="isEditing">
-              <q-icon name="event" class="cursor-pointer">
-                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                  <q-date v-model="formData.dateOfBirth" mask="YYYY-MM-DD" :locale="itLocale">
-                    <div class="row items-center justify-end">
-                      <q-btn v-close-popup label="Chiudi" color="primary" flat />
-                    </div>
-                  </q-date>
-                </q-popup-proxy>
-              </q-icon>
-            </template>
-          </q-input>
 
-          <q-input :model-value="user?.role" label="Ruolo di Sistema" outlined dense readonly class="text-uppercase" />
+          <AppDateInput 
+            v-model="formData.dateOfBirth" 
+            label="Data di Nascita" 
+            :readonly="!isEditing"
+            :disable="!isEditing"
+          />
 
-          <q-input v-if="user?.profession" :model-value="user?.profession" label="Professione" outlined dense
-            readonly />
+          <q-separator class="q-my-md" />
 
-          <div class="row justify-end q-mt-lg" v-if="isEditing">
-            <q-btn label="Salva Modifiche" type="submit" color="primary" :loading="saving" />
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-sm-6">
+              <q-input :model-value="user?.role" label="Ruolo di Sistema" filled dense readonly class="text-uppercase" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-if="user?.profession" :model-value="user?.profession" label="Professione" filled dense readonly />
+            </div>
+          </div>
+
+          <div class="row justify-end q-mt-xl" v-if="isEditing">
+            <q-btn label="Salva Modifiche" type="submit" color="primary" unelevated :loading="saving" class="rounded-borders q-px-lg" />
           </div>
         </q-form>
       </q-card-section>
@@ -233,5 +219,11 @@ function resizeImage(file: File): Promise<string> {
 <style scoped>
 .max-width-600 {
   max-width: 600px;
+}
+.rounded-borders {
+  border-radius: 16px;
+}
+.border-white {
+  border: 4px solid white;
 }
 </style>

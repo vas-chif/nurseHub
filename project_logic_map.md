@@ -5,10 +5,12 @@
 ### 1. Home / Dashboard
 - **Funzione:** Vista rapida turni e opportunità.
 - **Componenti:**
-  - `ActiveRequestsCard.vue`: Mostra i turni scoperti e permette di candidarsi.
-  - `SwapOpportunitiesCard.vue`: Mostra i cambi proposti dai colleghi.
+  - `ActiveRequestsCard.vue`: Mostra i turni scoperti.
+    - **Filtro "Non mi interessa":** Gli utenti possono nascondere opportunità irrilevanti (il loro UID viene aggiunto all'array `hiddenBy`). Le richieste nascoste finiscono in un archivio espandibile.
+    - **Ordinamento Dinamico:** Possibilità di ordinare per "Data Creazione" o "Data Turno".
+  - `SwapOpportunitiesCard.vue`: Mostra i cambi proposti dai colleghi (stessa logica di filtro `hiddenBy` e ordinamento).
 - **Logica:** Filtra i turni in base al `configId` dell'utente e alla compatibilità oraria.
-- **Novità:** Localizzazione IT forzata per date e giorni della settimana.
+- **Design:** Gerarchia visuale premium nei turni (Lettera grande per il codice turno, icona piccola sotto).
 
 ### 2. Le Mie Richieste (`UserRequestsPage.vue`)
 - **Sezioni:**
@@ -30,6 +32,7 @@
 - **Backup & Infrastructure:**
   - Il sistema di Backup (Export/Import Firestore) richiede obbligatoriamente che il progetto Firebase sia sul piano **Blaze (Pay-as-you-go)**.
   - Le API su Vercel gestiscono l'avvio e la logistica, ma l'esecuzione materiale avviene sui server Google Cloud.
+
 ### 4. Personalizzazione Navigazione e Sicurezza (Phase 28)
 - **Settings:** In `SettingsPage.vue`, Admin e SuperAdmin possono personalizzare la visibilità delle schede (tab) del footer.
 - **Persistenza:** Le preferenze di visibilità sono salvate in `uiStore` (localStorage).
@@ -40,10 +43,11 @@
 
 ## Flussi Critici
 
-### 1. Localizzazione e Standard Date
-- **Formato Unificato:** Tutte le date nel sistema utilizzano il formato italiano `DD/MM/YYYY` (gg/mm/aaaa).
-- **Calendari Localizzati:** Ogni componente `q-date` (Assenze, Scambi, Filtri Admin, Profilo) integra la locale `itLocale` per nomi mesi e giorni.
-- **Integrazione UI:** Sostituzione sistematica degli input `type="date"` con selettori Quasar localizzati per garantire uniformità tra browser e dispositivi.
+### 1. Localizzazione e Standard Date (Elite Standard)
+- **Centralizzazione**: Tutta la logica di localizzazione è gestita in `src/utils/dateUtils.ts` e `src/constants/locales.ts`.
+- **AppDateInput.vue**: È il componente master obbligatorio per ogni input di data. Gestisce automaticamente il formato `DD/MM/YYYY` per l'utente e `YYYY-MM-DD` per il database.
+- **Formato Unificato**: Visualizzazione sempre in formato italiano (`gg/mm/aaaa`).
+- **Standard Visuale Turni**: Lettera grande e centrale (M, P, N) con icona di supporto per massima leggibilità (Elite UI).
 
 ### 2. Il "Cambio Turno" (Swap)
 1. **Creazione:** L'utente sceglie data e turno da offrire. 
@@ -54,6 +58,12 @@
    - **Firebase:** I turni vengono invertiti nei documenti `operators`.
    - **Google Sheets:** Se in modalità "Auto", viene aggiornato il file Master tramite `api/update-sheet-swap.js`.
 
+### 3. Manutenzione e Pulizia Automatica (Phase 31)
+- **TTL (Time To Live) Firestore:** Implementazione del campo `expireAt` in ogni documento critico per l'eliminazione automatica dal database (Piano Blaze richiesto).
+- **Notifications:** Eliminazione automatica dopo **15 giorni**.
+- **shiftRequests & shiftSwaps:** Eliminazione automatica dopo **90 giorni** se lo stato è `CLOSED`, `REJECTED` o `EXPIRED`.
+- **Scadenza Real-time:** Le richieste non approvate entro l'orario di inizio del turno vengono marcate visivamente come `EXPIRED` e non sono più modificabili/accettabili.
+
 ### 4. Sincronizzazione Isolata & Filtro Maestro (Phase 30.1)
 - **Filtro Maestro (SuperAdmin):** Il passaggio tra un reparto e l'altro (cambio `configId`) aggiorna unicamente la variabile in RAM (`configStore.activeConfigId`). Tutti i componenti e le computed properties (liste, utenti, richieste, notifiche in arrivo) si filtrano lato client-side a latenza zero, garantendo il 100% di isolamento visivo senza generare costi per Firebase Reads.
 - **Componente di Sync:** `GlobalSyncBtn.vue`.
@@ -62,41 +72,24 @@
 - **Cooldown Indipendente:** Il database e il client forzano un cooldown di 1 minuto per gli Admin e 2 ore per gli Utenti Base, applicato al singolo reparto.
 - **Auto-Refresh Intelligente:** Al cambio pagina o ritorno al focus, l'app verifica il timestamp specifico del reparto attivo; se c'è stata una sincronizzazione esterna per quel reparto, ricarica i dati.
 
-### 5. Sincronizzazione Operatore (Nuovi Utenti)
-- **Componente:** `SyncOperatorCard.vue`.
-- **Azione:** Cerca l'associazione tra utente Firebase e riga del foglio turni (per Email o Nome/Cognome).
-- **Sicurezza:** Permette il collegamento solo se l'operatore non ha già un `userId` e l'utente non ha già un `operatorId`.
-- **Effetto:** Alla conferma, pulisce la cache Pinia (`scheduleStore`) e ricarica i dati per mostrare i turni aggiornati.
-- **Validazione Admin:** Quando l'admin crea una richiesta per conto di un utente, il sistema verifica il turno reale dell'utente e blocca/avvisa in caso di discrepanza.
-
-### 6. Sistema di Rotazione Interattiva (Phase 30)
-- **Logica "State Machine":** Abbandonato il calcolo rigido basato su `startDate`. Il sistema usa una state machine basata sul `currentColumnIndex` della matrice dei turni (es. 18 step).
-- **Matrice Infinita:** Superata l'ultima colonna, il sistema riparte dalla prima applicando un ciclo Modulo matematico, garantendo una progressione senza fine.
-- **Timer Autonomo:** Ogni 5 giorni scatta il timer: il sistema avanza la colonna, notifica gli utenti e ripianifica autonomamente la "sveglia" ai prossimi 5 giorni (120 ore).
-- **Controllo Utente ("Democratizzazione"):** Qualsiasi utente che faccia parte del gruppo di rotazione può mettere in "Pausa" il timer (es. per il periodo di "Fuori Turno" estivo) e riattivarlo, impostando manualmente il giorno e l'ora esatta del prossimo scatto. Da quel momento il timer riprende a girare.
-- **Componenti:** 
-  - `RotationManager.vue` (Admin): Per definire i gruppi, aggiungere operatori e compilare la matrice di rotazione.
-  - `RotationWidget.vue` (Utenti): Espanso nella pagina Calendario, permette ai membri di vedere il Setting attuale (A/B) e gestire la pausa/ripresa del timer.
+### 5. Sistema di Rotazione Interattiva (Phase 31)
+- **Logica "State Machine":** Basata sul `currentColumnIndex`. Il sistema gestisce una matrice infinita tramite ciclo Modulo.
+- **Elite Preview**: Il `RotationWidget` mostra la rotazione attuale con badge vibranti e la **prossima rotazione** in formato ultra-compatto (`bg-grey-3`, font 0.55rem) per una gerarchia visiva chiara.
+- **Timer Autonomo & Manuale**: Avanzamento automatico ogni 5 giorni con possibilità di pausa e ripartenza manuale (Democratizzazione del timer).
 
 ## Note Tecniche di Manutenzione
 
-### 1. UX & Visual Feedback (Phase 25+)
-- **Skeletons [COMPLETATO]**: Implementazione sistematica di `<q-skeleton>` su tutte le liste asincrone e dashboard (Turni Home, Log Backup, Lista Utenti Admin, Storico Richieste, Analytics e Tabella Turni Admin).
-- **Esportazione PDF/CSV [COMPLETATO]**: Implementazione di reportistica avanzata nella dashboard Analytics con generazione client-side di documenti professionali.
-- **Perceived Performance**: L'obiettivo è mostrare la struttura della pagina entro 100ms, caricando i dati reali in background.
-- **Transizioni**: Uso di `q-slide-transition` e Skeleton UI per eliminare lo sfarfallio del layout (Cumulative Layout Shift) durante il caricamento dei dati da Firestore/Sheets.
+### 1. UX & Visual Feedback
+- **Skeletons**: Implementazione di `<q-skeleton>` su tutte le liste asincrone.
+- **Scroll Snap**: La bacheca turni in dashboard utilizza lo scorrimento magnetico orizzontale e la barra di scorrimento stilizzata per una navigazione touch impeccabile.
+- **Swipe-Stop**: Lo scorrimento orizzontale dei turni ferma la propagazione degli eventi (`.stop`) per evitare cambi pagina accidentali.
+- **Esportazione PDF/CSV**: Generazione reportistica Analytics client-side.
 
-### 4. Manutenzione Dati e Sessioni
-- **Pulizia Notifiche**: Le notifiche hanno scopo informativo temporaneo. Cancellazione automatica ogni 30 giorni via Vercel Cron.
-- **Cache Isolation**: Durante il `logout`, è OBBLIGATORIO svuotare tutte le cache locali (specialmente `scheduleStore`) per evitare che i turni di un utente siano visibili a quello successivo sullo stesso dispositivo.
-- **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il caricamento completo del profilo Firestore prima di permettere l'accesso alle pagine protetti, evitando "buchi" di dati o race conditions.
+### 2. Sicurezza e Sessioni
+- **Cache Isolation**: Durante il `logout`, svuotamento cache `scheduleStore`.
+- **Session Hardening**: L'inizializzazione dell'app (`authStore.init`) deve attendere il profilo Firestore completo.
 
-### 5. Standard di Documentazione (Phase 29)
-- **Documentazione Sistematica [COMPLETATO]**: Audit e implementazione degli header JSDoc obbligatori per tutti i file critici (Pages, Services, Stores e Composables) secondo lo standard §1.7 di `project-rules.md`.
-- **Tracciabilità**: Ogni file include ora `@created`, `@modified` e `@notes` per tracciare l'evoluzione delle logiche di business e delle integrazioni esterne (Firebase/Google Sheets/Vercel).
-- **Manutenibilità**: I commenti JSDoc guidano i futuri sviluppatori attraverso le complessità dei flussi asincroni e delle gerarchie di permessi.
-
-## Note Tecniche di Manutenzione
-- **Swipe Sensitivity**: La sensibilità dello swipe tra i tab della Home è stata ridotta (threshold 100px) per evitare cambi pagina accidentali.
-- **Dynamic Routing**: Le rotte dello swipe vengono ricalcolate dinamicamente in base ai permessi dell'utente e alle preferenze di visibilità impostate nelle Settings.
-- **Auto-Selection Calendar**: Il calendario deve resettare la selezione se l'ID utente cambia e attendere il profilo completo prima di auto-selezionare l'operatore predefinito.
+### 3. Manutenibilità & DRY
+- **JSDoc**: Header JSDoc obbligatori per tutti i file.
+- **No Duplication**: Vietata la definizione locale di `itLocale` o array di mesi/giorni. Usare sempre `src/constants/locales.ts`.
+- **Standardizzazione UI**: Design vibrante, lettere dei turni ad alta visibilità e uso sistematico di `AppDateInput`.

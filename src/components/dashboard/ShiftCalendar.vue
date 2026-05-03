@@ -1,10 +1,12 @@
 /**
-* @file ShiftCalendar.vue
-* @description Monthly calendar view showing operator shifts and assignments.
-* @author Nurse Hub Team
-* @created 2026-03-12
-* @modified 2026-04-23
-*/
+ * @file ShiftCalendar.vue
+ * @description Monthly calendar view with premium, compact design.
+ * @author Nurse Hub Team
+ * @created 2026-03-12
+ * @modified 2026-05-03
+ * @notes
+ * - Complies with §1.4 by using centralized types.
+ */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, watchEffect } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
@@ -12,25 +14,13 @@ import { useConfigStore } from '../../stores/configStore';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { useScheduleStore } from '../../stores/scheduleStore';
 import type { Operator, ShiftCode } from '../../types/models';
+import type { DayShift, OperatorCalendar, ShiftStyle } from '../../types/components';
 
 import { date as dateUtil } from 'quasar';
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const logger = useSecureLogger();
-
-interface DayShift {
-  date: string;
-  dateFormatted: string;
-  dayName: string;
-  shift: ShiftCode;
-}
-
-interface OperatorCalendar {
-  operatorId: string;
-  operatorName: string;
-  days: DayShift[];
-}
 
 const operatorOptions = ref<Operator[]>([]);
 const filteredOptions = ref<Operator[]>([]);
@@ -39,22 +29,15 @@ const hasSearchModule = ref(true);
 
 // Fetch Operators
 async function loadData(force = false) {
-  // Identity fencing: for regular users, ALWAYS use their own configId.
-  // configStore.activeConfigId is only used for Admins (Maestro Filter).
   const configId = authStore.isAnyAdmin
     ? (configStore.activeConfigId || authStore.currentUser?.configId)
     : authStore.currentUser?.configId;
 
-  if (!configId) {
-    logger.warn('No active config or user configId - cannot load operators for calendar');
-    return;
-  }
+  if (!configId) return;
 
   try {
     const loadedOps = await scheduleStore.loadOperators(configId, force);
-    // Sort by name
     const sortedOps = [...loadedOps].sort((a, b) => a.name.localeCompare(b.name));
-
     operatorOptions.value = sortedOps;
     filteredOptions.value = sortedOps;
   } catch (e) {
@@ -62,232 +45,215 @@ async function loadData(force = false) {
   }
 }
 
-onMounted(async () => {
-  await loadData();
+onMounted(() => { void loadData(); });
+
+watch(() => [configStore.activeConfigId, authStore.currentUser?.configId], async ([newAdminId, userConfigId]) => {
+  const relevantId = authStore.isAnyAdmin ? newAdminId : userConfigId;
+  if (relevantId) await loadData();
+}, { deep: true });
+
+watch(() => scheduleStore.operators.length, (newLen) => {
+  if (newLen === 0 && (configStore.activeConfigId || authStore.currentUser?.configId)) void loadData(true);
 });
 
-// Re-load when config becomes ready
-watch(
-  () => [configStore.activeConfigId, authStore.currentUser?.configId],
-  async ([newAdminId, userConfigId]) => {
-    // For admins: react to Maestro Filter changes.
-    // For users: only react if their own configId changes.
-    const relevantId = authStore.isAnyAdmin ? newAdminId : userConfigId;
-    if (relevantId) {
-      await loadData();
-    }
-  },
-  { deep: true },
-);
-
-// If cache is cleared externally (e.g. by SyncService), re-fetch
-watch(
-  () => scheduleStore.operators.length,
-  (newLen) => {
-    if (newLen === 0 && (configStore.activeConfigId || authStore.currentUser?.configId)) {
-      logger.info('Schedule cache cleared, re-fetching data force-refresh...');
-      void loadData(true);
-    }
-  },
-);
-
-// Reset selection if user identity changes (prevent leakage between sessions)
-watch(
-  () => authStore.currentUser?.uid,
-  () => {
-    logger.info('User identity changed - resetting calendar selection');
-    selectedOperator.value = [];
-  }
-);
-
-// Unified auto-selection & data-refresh logic
 watchEffect(() => {
   const options = operatorOptions.value;
-  if (options.length === 0) return;
-
-  const currentOp = authStore.currentOperator;
-  const userOpId = authStore.currentUser?.operatorId;
-
-  // Prevent auto-selection if profile is not yet loaded for the authenticated user
-  if (authStore.isAuthenticated && !authStore.currentUser) {
-    return;
-  }
-
-  // Case 1: Initial auto-selection (Skip if admin)
-  if (selectedOperator.value.length === 0 && !authStore.isAnyAdmin) {
-    const targetId = currentOp?.id || userOpId;
-    if (targetId) {
-      const match = options.find((o) => o.id === targetId);
-      if (match) {
-        logger.info('Auto-selected operator in calendar', { name: match.name });
-        selectedOperator.value = [match];
-      }
-    }
-  } else if (selectedOperator.value.length > 0) {
-    // Case 2: Data refresh (Sync happened)
-    const freshSelection = selectedOperator.value.map((sel) => {
-      const match = options.find((o) => o.id === sel.id);
-      return match || sel;
-    });
-
-    const needsUpdate = freshSelection.some((item, idx) => item !== selectedOperator.value[idx]);
-    if (needsUpdate) {
-      logger.info('Refreshing selected operator references after data update');
-      selectedOperator.value = freshSelection;
-    }
+  if (options.length === 0 || !authStore.isAuthenticated) return;
+  const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
+  if (selectedOperator.value.length === 0 && !authStore.isAnyAdmin && targetId) {
+    const match = options.find((o) => o.id === targetId);
+    if (match) selectedOperator.value = [match];
   }
 });
 
 function filterOperators(val: string, update: (fn: () => void) => void) {
-  if (val === '') {
-    update(() => {
-      operatorOptions.value = filteredOptions.value;
-    });
-    return;
-  }
-
   update(() => {
     const needle = val.toLowerCase();
-    operatorOptions.value = filteredOptions.value.filter(
-      (v) => v.name.toLowerCase().indexOf(needle) > -1,
-    );
+    operatorOptions.value = filteredOptions.value.filter(v => v.name.toLowerCase().includes(needle));
   });
 }
 
-// Compute Calendars based on Selected Operators
 const calendars = computed<OperatorCalendar[]>(() => {
   return selectedOperator.value.map((op) => {
     const today = new Date();
     const days: DayShift[] = [];
     const schedule = op.schedule || {};
-
     for (let i = 0; i < 14; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       const dateKey = dateUtil.formatDate(d, 'YYYY-MM-DD');
-      const code = schedule[dateKey];
-      const shiftCode = (code as ShiftCode) || '';
-
-      days.push(createDayObj(d, shiftCode));
+      days.push({
+        date: dateKey,
+        dateFormatted: `${d.getDate()}/${d.getMonth() + 1}`,
+        dayName: d.toLocaleDateString('it-IT', { weekday: 'short' }),
+        shift: (schedule[dateKey] as ShiftCode) || '',
+      });
     }
-
-    return {
-      operatorId: op.id,
-      operatorName: op.name,
-      days,
-    };
+    return { operatorId: op.id, operatorName: op.name, days };
   });
 });
 
-function createDayObj(d: Date, shift: string): DayShift {
-  return {
-    date: dateUtil.formatDate(d, 'YYYY-MM-DD'),
-    dateFormatted: `${d.getDate()}/${d.getMonth() + 1}`,
-    dayName: d.toLocaleDateString('it-IT', { weekday: 'short' }),
-    shift: shift as ShiftCode,
+function getShiftStyles(code: ShiftCode): ShiftStyle {
+  const map: Record<string, ShiftStyle> = {
+    'M': { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
+    'P': { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
+    'N': { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
+    'R': { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
+    'S': { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
+    'A': { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
+    '':  { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' }
   };
+  const char = code.charAt(0);
+  return (map[char] || map['']) as ShiftStyle;
 }
 
-function getShiftColor(code: ShiftCode): string {
-  switch (code) {
-    case 'M':
-      return 'amber-8 text-black';
-    case 'P':
-      return 'orange-8 text-black';
-    case 'N':
-      return 'blue-10';
-    case 'R':
-      return 'grey-4 text-black';
-    case 'A':
-      return 'red-5';
-    case 'S':
-      return 'green-6';
-    case '':
-      return 'grey-2 text-grey-6';
-    default:
-      return 'primary';
-  }
-}
-
-function getShiftClass(code: ShiftCode): string {
-  return code === 'R' ? 'bg-grey-2' : 'bg-grey-1';
-}
+function onSwipe() {}
 </script>
 
 <template>
-  <q-card flat bordered class="shift-calendar-card">
-    <q-card-section class="row items-center justify-between">
-      <div class="text-h6">I Tuoi Turni</div>
+  <q-card flat bordered class="shift-calendar-card overflow-hidden">
+    <q-card-section class="row items-center justify-between bg-white q-py-sm">
+      <div class="row items-center q-gutter-x-sm">
+        <q-icon name="calendar_today" color="primary" size="xs" />
+        <div class="text-subtitle1 text-weight-bolder text-grey-9">I Tuoi Turni</div>
+      </div>
       <div style="min-width: 200px" v-if="authStore.isAnyAdmin && hasSearchModule">
-        <q-select v-model="selectedOperator" :options="operatorOptions" label="Seleziona Personale" dense outlined
-          options-dense bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
-          <template v-slot:option="{ itemProps, opt, selected, toggleOption }">
-            <q-item v-bind="itemProps">
-              <q-item-section>
-                <q-item-label>{{ opt.name }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-checkbox :model-value="selected" @update:model-value="toggleOption(opt)" />
-              </q-item-section>
-            </q-item>
-          </template>
+        <q-select v-model="selectedOperator" :options="operatorOptions" label="Cerca" dense outlined
+          options-dense rounded bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
+          <template v-slot:append><q-icon name="search" size="xs" /></template>
         </q-select>
       </div>
     </q-card-section>
 
-    <!-- Skeleton Loading State -->
-    <q-slide-transition>
-      <div v-if="scheduleStore.loading && calendars.length === 0">
+    <div v-if="calendars.length > 0">
+      <div v-for="calendar in calendars" :key="calendar.operatorId" class="q-pb-sm">
         <q-separator />
-        <q-card-section>
-          <q-skeleton type="text" width="150px" class="q-mb-md" />
-          <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
-            <div class="row no-wrap q-gutter-md">
-              <div v-for="n in 7" :key="n" class="shift-day-column column flex-center q-pa-sm rounded-borders bg-grey-1">
-                <q-skeleton type="text" width="30px" />
-                <q-skeleton type="text" width="40px" />
-                <q-skeleton type="rect" width="30px" height="20px" class="q-mt-xs" />
-              </div>
+        <q-card-section class="q-py-sm">
+          <div class="row items-center q-mb-sm">
+            <q-avatar size="24px" color="primary-1" text-color="primary" class="q-mr-sm shadow-1">
+              {{ calendar.operatorName.charAt(0) }}
+            </q-avatar>
+            <div class="column">
+              <span class="text-caption text-grey-6 uppercase letter-spacing-1" style="font-size: 0.6rem">Programmazione</span>
+              <span class="text-subtitle2 text-weight-bold text-grey-9" style="line-height: 1">{{ calendar.operatorName }}</span>
             </div>
-          </q-scroll-area>
+          </div>
+          
+          <div class="scroll-container q-py-xs" v-touch-swipe.horizontal.stop="onSwipe">
+            <div v-for="(day, index) in calendar.days" :key="index"
+              class="shift-card column items-center justify-between q-pa-xs"
+              :style="{ 
+                '--shift-color': getShiftStyles(day.shift as ShiftCode).color, 
+                '--shift-bg': getShiftStyles(day.shift as ShiftCode).bg 
+              }">
+              
+              <div class="column items-center">
+                <span class="day-num text-weight-bolder">{{ day.dateFormatted.split('/')[0] }}</span>
+                <span class="day-name text-caption text-uppercase" style="font-size: 0.55rem">{{ day.dayName }}</span>
+              </div>
+
+              <div class="shift-display column items-center">
+                <div class="shift-letter text-weight-bold" :class="day.shift ? 'active' : ''">
+                  {{ day.shift || '-' }}
+                </div>
+                <q-icon :name="getShiftStyles(day.shift as ShiftCode).icon" 
+                  :style="{ color: getShiftStyles(day.shift as ShiftCode).color }" size="12px" />
+              </div>
+
+              <q-tooltip anchor="bottom middle" self="top middle" :offset="[0, 8]">
+                {{ getShiftStyles(day.shift as ShiftCode).label }}
+              </q-tooltip>
+            </div>
+          </div>
         </q-card-section>
       </div>
-    </q-slide-transition>
+    </div>
 
-    <!-- Loop through selected operators -->
-    <q-slide-transition>
-      <div v-if="calendars.length > 0">
-        <div v-for="calendar in calendars" :key="calendar.operatorId">
-          <q-separator />
-          <q-card-section>
-            <div class="text-subtitle2 q-mb-xs">Turni di: {{ calendar.operatorName }}</div>
-            <q-scroll-area horizontal style="height: 110px; white-space: nowrap">
-              <div class="row no-wrap q-gutter-md">
-                <div v-for="(day, index) in calendar.days" :key="index"
-                  class="shift-day-column column flex-center q-pa-sm rounded-borders" :class="getShiftClass(day.shift)">
-                  <div class="text-caption text-weight-bold">{{ day.dateFormatted }}</div>
-                  <div class="text-caption">{{ day.dayName }}</div>
-                  <q-badge :color="getShiftColor(day.shift)" class="q-mt-xs text-uppercase shadow-1">
-                    {{ day.shift }}
-                  </q-badge>
-                </div>
-              </div>
-            </q-scroll-area>
-          </q-card-section>
-        </div>
-      </div>
-    </q-slide-transition>
-
-    <q-card-section v-if="calendars.length === 0 && !scheduleStore.loading" class="text-center text-grey q-py-lg">
-      Nessun operatore selezionato
+    <q-card-section v-else-if="!scheduleStore.loading" class="text-center text-grey-5 q-pa-lg">
+      <q-icon name="history_toggle_off" size="40px" class="q-mb-sm opacity-2" />
+      <div class="text-subtitle2 opacity-5">Nessun turno</div>
     </q-card-section>
   </q-card>
 </template>
 
-
 <style scoped>
-.shift-day-column {
-  width: 60px;
-  border: 1px solid #e0e0e0;
+.shift-calendar-card {
+  border-radius: 12px;
+  background: #ffffff;
 }
+
+.scroll-container {
+  display: flex;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 4px 2px 8px 2px;
+  scroll-snap-type: x mandatory;
+}
+
+.shift-card {
+  min-width: 64px;
+  height: 95px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
+  scroll-snap-align: start;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.shift-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--shift-color);
+  opacity: 0.8;
+}
+
+.shift-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px var(--shift-bg);
+}
+
+.day-num {
+  font-size: 0.95rem;
+  color: #1e293b;
+  margin-top: 2px;
+}
+
+.day-name {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.shift-letter {
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #94a3b8;
+}
+
+.shift-letter.active {
+  color: var(--shift-color);
+}
+
+.letter-spacing-1 {
+  letter-spacing: 1px;
+}
+
+.scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+.scroll-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.scroll-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.opacity-2 { opacity: 0.2; }
+.opacity-5 { opacity: 0.5; }
 </style>
