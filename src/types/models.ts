@@ -107,6 +107,27 @@ export interface ShiftRequest {
   deletedByCreator?: boolean; // True if the creator deleted it from their view
 }
 
+/**
+ * Represents one day entry in the absence request preview step (before submission).
+ * Allows per-day review, shift editing, reason editing, and exclusion.
+ */
+export interface AbsencePreviewRow {
+  /** Date in YYYY-MM-DD format */
+  date: string;
+  /** Shift from operator's schedule for this date; null if no schedule entry */
+  scheduledShift: ShiftCode | null;
+  /** Shift to register for the absence (defaults to scheduledShift if available) */
+  selectedShift: ShiftCode;
+  /** Human-readable absence reason label (editable per row) */
+  absenceLabel: string;
+  /** Optional note for this specific day */
+  note: string;
+  /** When true, this row is skipped during final submission */
+  excluded: boolean;
+  /** True when selectedShift does not match scheduledShift */
+  conflict: boolean;
+}
+
 export interface ShiftOffer {
   id: string;
   requestId: string;

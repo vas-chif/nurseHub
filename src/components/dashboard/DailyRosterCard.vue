@@ -92,7 +92,7 @@ const shiftStyles = {
 
         <div class="row items-center q-gutter-x-sm">
           <div class="text-subtitle2 text-weight-bold">{{ formattedSelectedDate }}</div>
-          <div style="width: 40px">
+          <div style="width: 30px">
             <AppDateInput v-model="selectedDate" dense flat borderless hide-lab />
           </div>
         </div>
