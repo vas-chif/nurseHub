@@ -11,46 +11,38 @@
  * - Always redirects to /dashboard (not /) to avoid auth guard loops.
  */
 
-import type { NavigationGuardNext, RouteLocationNormalized } from 'vue-router';
+import type { RouteLocationNormalized, RouteLocationRaw } from 'vue-router';
 import { Notify } from 'quasar';
 import { useAuthStore } from '../../stores/authStore';
 
 export function roleGuard(
   to: RouteLocationNormalized,
-  _from: RouteLocationNormalized,
-  next: NavigationGuardNext,
-): void {
+): RouteLocationRaw | true {
   const authStore = useAuthStore();
 
   // SuperAdmin-only routes (e.g. /admin — SystemConfig)
-  if (to.meta.requiresSuperAdmin) {
-    if (!authStore.isSuperAdmin) {
-      Notify.create({
-        type: 'negative',
-        icon: 'lock',
-        message: 'Accesso negato',
-        caption: 'Solo i SuperAdmin possono accedere a questa sezione.',
-        timeout: 3000,
-      });
-      next('/dashboard');
-      return;
-    }
+  if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
+    Notify.create({
+      type: 'negative',
+      icon: 'lock',
+      message: 'Accesso negato',
+      caption: 'Solo i SuperAdmin possono accedere a questa sezione.',
+      timeout: 3000,
+    });
+    return '/dashboard';
   }
 
   // Admin-or-above routes (e.g. /admin/requests, /admin/users)
-  if (to.meta.requiresAdmin) {
-    if (!authStore.isAnyAdmin) {
-      Notify.create({
-        type: 'negative',
-        icon: 'lock',
-        message: 'Accesso negato',
-        caption: 'Permessi insufficienti per questa pagina.',
-        timeout: 3000,
-      });
-      next('/dashboard');
-      return;
-    }
+  if (to.meta.requiresAdmin && !authStore.isAnyAdmin) {
+    Notify.create({
+      type: 'negative',
+      icon: 'lock',
+      message: 'Accesso negato',
+      caption: 'Permessi insufficienti per questa pagina.',
+      timeout: 3000,
+    });
+    return '/dashboard';
   }
 
-  next();
+  return true;
 } /*end roleGuard*/
