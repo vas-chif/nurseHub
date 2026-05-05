@@ -104,6 +104,17 @@ async function submitSwap(): Promise<void> {
     });
     return;
   }
+  if (isRequestExpired(swapForm.value.date, swapForm.value.offeredShift)) {
+    $q.notify({
+      color: 'warning',
+      textColor: 'dark',
+      icon: 'schedule',
+      message: 'Turno già iniziato',
+      caption: 'Non puoi proporre un cambio per un turno già iniziato o passato.',
+      multiLine: true,
+    });
+    return;
+  }
   if (swapForm.value.offeredShift === swapForm.value.desiredShift) {
     $q.notify({
       color: 'warning',
