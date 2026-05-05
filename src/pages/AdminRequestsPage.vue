@@ -31,6 +31,7 @@ import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 import AppDateInput from '../components/common/AppDateInput.vue';
 import PendingRequestsList from '../components/requests/PendingRequestsList.vue';
 import SwapRequestsList from '../components/requests/SwapRequestsList.vue';
+import HistoryRequestsList from '../components/requests/HistoryRequestsList.vue';
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 const $q = useQuasar();
@@ -274,9 +275,18 @@ onUnmounted(() => {
 
     <q-separator />
 
-    <q-tab-panels v-model="activeTab" animated>
-      <PendingRequestsList />
-      <SwapRequestsList />
+    <q-tab-panels v-model="activeTab" animated class="bg-transparent">
+      <q-tab-panel name="pending" class="q-pa-none">
+        <PendingRequestsList />
+      </q-tab-panel>
+
+      <q-tab-panel name="history" class="q-pa-none">
+        <HistoryRequestsList />
+      </q-tab-panel>
+
+      <q-tab-panel name="swaps" class="q-pa-none">
+        <SwapRequestsList />
+      </q-tab-panel>
     </q-tab-panels>
 
     <!-- Reject Dialog -->

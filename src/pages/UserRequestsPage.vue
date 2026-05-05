@@ -45,9 +45,12 @@ const loading = ref(false);
 let unsubscribe: (() => void) | undefined;
 
 // ─── Tab state ────────────────────────────────────────────────────────────────
-const defaultTab = 'absence';
+const defaultTab = authStore.isAnyAdmin ? 'absence' : 'swap';
 const savedTab = uiStore.getActiveTab(route.path, defaultTab) as 'absence' | 'swap';
-const pageTab = ref<'absence' | 'swap'>(savedTab);
+
+// Force 'swap' if 'absence' is selected but user is not admin
+const initialTab = (savedTab === 'absence' && !authStore.isAnyAdmin) ? 'swap' : savedTab;
+const pageTab = ref<'absence' | 'swap'>(initialTab);
 
 watch(pageTab, (newVal) => {
   uiStore.setActiveTab(route.path, newVal);

@@ -16,7 +16,7 @@ const ctx = inject<ReturnType<typeof useAdminSwaps>>('adminSwapsContext')!;
 </script>
 
 <template>
-  <q-tab-panel name="swaps" class="q-pa-none">
+  <div class="q-pa-none">
     <!-- Archive widget -->
     <div v-if="ctx.archivedSwaps.value.length > 0"
       class="row items-center q-mb-md q-gutter-x-md bg-white q-pa-sm rounded-borders shadow-1">
@@ -99,5 +99,5 @@ const ctx = inject<ReturnType<typeof useAdminSwaps>>('adminSwapsContext')!;
         </q-item>
       </q-list>
     </div>
-  </q-tab-panel>
+  </div>
 </template>

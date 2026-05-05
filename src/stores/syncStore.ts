@@ -15,7 +15,13 @@
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import type { DocumentSnapshot, FirestoreError } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { useAuthStore } from './authStore';
 import { useScheduleStore } from './scheduleStore';
@@ -122,6 +128,45 @@ export const useSyncStore = defineStore('sync', () => {
     }
   }
 
+  let unsubscribeSync: (() => void) | undefined;
+
+  /**
+   * Starts a real-time listener for the sync status of a specific config.
+   * This allows "pushing" updates to all users when an admin performs a sync.
+   */
+  function initSyncListener(configId: string): void {
+    if (!configId) return;
+    if (unsubscribeSync) unsubscribeSync();
+
+    unsubscribeSync = onSnapshot(
+      doc(db, getSyncDocPath(configId)),
+      (snap: DocumentSnapshot) => {
+        if (snap.exists()) {
+          const data = snap.data() as SyncStatus;
+          const oldTs = syncTimestamps.value[configId];
+          syncTimestamps.value[configId] = data.lastSyncTimestamp;
+          syncAuthors.value[configId] = data.lastSyncByName;
+
+          // If timestamp changed and we are not the ones who just synced, refresh
+          if (oldTs && data.lastSyncTimestamp > oldTs) {
+            logger.info(`Remote sync detected for ${configId} by ${data.lastSyncByName}. Refreshing...`);
+            void checkAndRefresh(configId);
+          }
+        }
+      },
+      (err: FirestoreError) => {
+        logger.error(`Sync listener error for ${configId}`, err);
+      }
+    );
+  }
+
+  function stopSyncListener(): void {
+    if (unsubscribeSync) {
+      unsubscribeSync();
+      unsubscribeSync = undefined;
+    }
+  }
+
   /**
    * Compares sync status with local store age and forces refresh if needed.
    */
@@ -129,18 +174,18 @@ export const useSyncStore = defineStore('sync', () => {
     if (!configId) return;
     const scheduleStore = useScheduleStore();
 
-    await loadSyncStatus(configId);
+    // If syncTimestamps is not yet loaded, load it
+    if (syncTimestamps.value[configId] === undefined) {
+      await loadSyncStatus(configId);
+    }
 
     const lastGlobal = syncTimestamps.value[configId];
     const localLastUpdated = scheduleStore.lastUpdated[configId];
-    if (lastGlobal && localLastUpdated) {
-      if (lastGlobal > localLastUpdated) {
-        logger.info(`New sync detected for ${configId}, refreshing local data...`, {
-          global: lastGlobal,
-          local: localLastUpdated,
-        });
-        await scheduleStore.loadOperators(configId, true);
-      }
+
+    // If global is newer than local, or if local is missing, refresh
+    if (lastGlobal && (!localLastUpdated || lastGlobal > localLastUpdated)) {
+      logger.info(`Refreshing operators for ${configId} due to sync detected...`);
+      await scheduleStore.loadOperators(configId, true);
     }
   }
 
@@ -155,5 +200,7 @@ export const useSyncStore = defineStore('sync', () => {
     loadSyncStatus,
     recordSync,
     checkAndRefresh,
+    initSyncListener,
+    stopSyncListener,
   };
 });

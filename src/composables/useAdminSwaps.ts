@@ -29,6 +29,7 @@ import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
 import { useAuthStore } from '../stores/authStore';
 import { useScheduleStore } from '../stores/scheduleStore';
+import { useSyncStore } from '../stores/syncStore';
 import { notifyUser } from '../services/NotificationService';
 import { useSecureLogger } from '../utils/secureLogger';
 import type { ShiftSwap, Operator } from '../types/models';
@@ -48,6 +49,7 @@ export function useAdminSwaps(
   const authStore = useAuthStore();
   const configStore = useConfigStore();
   const scheduleStore = useScheduleStore();
+  const syncStore = useSyncStore();
 
   // --- State ---
   const rawSwaps = ref<ShiftSwap[]>([]);
@@ -158,8 +160,9 @@ export function useAdminSwaps(
       if (swapSyncMode.value === 'auto') {
         const creatorName = swap.creatorName ?? (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '') ?? '';
         const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? '';
-        if (creatorName) void syncToSheets(creatorName, swap.date, swap.desiredShift);
-        if (counterName) void syncToSheets(counterName, swap.date, swap.offeredShift);
+        const note = swap.adminNote || 'Cambio Turno';
+        if (creatorName) void syncToSheets(creatorName, swap.date, swap.desiredShift, note);
+        if (counterName) void syncToSheets(counterName, swap.date, swap.offeredShift, note);
       }
 
       if (configStore.activeConfigId) {
@@ -185,6 +188,9 @@ export function useAdminSwaps(
       }
 
       showSwapApprovalDialog.value = false;
+      if (configStore.activeConfigId) {
+        void syncStore.recordSync(configStore.activeConfigId);
+      }
       $q.notify({
         type: 'positive',
         message: swapSyncMode.value === 'auto' ? 'Cambio approvato e sincronizzato con Excel!' : 'Cambio approvato (Sincronizzazione manuale richiesta)',

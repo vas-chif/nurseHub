@@ -34,6 +34,7 @@ import { db } from '../boot/firebase';
 import { useConfigStore } from '../stores/configStore';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useSyncStore } from '../stores/syncStore';
 import { useShiftLogic } from './useShiftLogic';
 import { notifyUser } from '../services/NotificationService';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
@@ -54,6 +55,7 @@ export function useAdminRequests() {
   const $q = useQuasar();
   const authStore = useAuthStore();
   const configStore = useConfigStore();
+  const syncStore = useSyncStore();
   const notificationStore = useNotificationStore();
   const { isRequestExpired } = useShiftLogic();
 
@@ -410,6 +412,9 @@ export function useAdminRequests() {
       }
 
       showApprovalDialog.value = false;
+      if (configStore.activeConfigId) {
+        void syncStore.recordSync(configStore.activeConfigId);
+      }
       $q.notify({ type: 'positive', message: syncMode.value === 'auto' ? 'Approvata e sincronizzata con Excel' : 'Approvata (Sincronizzazione manuale richiesta)' });
     } catch (e) {
       logger.error('Approval Error', e);

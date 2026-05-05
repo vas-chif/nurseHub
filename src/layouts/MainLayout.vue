@@ -178,6 +178,19 @@ watch(
   { immediate: true },
 );
 
+// Sync status listener (for real-time schedule updates)
+watch(
+  () => configStore.activeConfigId,
+  (newId) => {
+    if (newId) {
+      syncStore.initSyncListener(newId);
+    } else {
+      syncStore.stopSyncListener();
+    }
+  },
+  { immediate: true },
+);
+
 // Automatic refresh when navigating (checks global sync status)
 watch(
   () => router.currentRoute.value.path,
@@ -197,6 +210,7 @@ watch(
 
 onUnmounted(() => {
   notificationStore.stopListeners();
+  syncStore.stopSyncListener();
   unsubs.forEach((unsub) => unsub());
   unsubs = [];
 });
