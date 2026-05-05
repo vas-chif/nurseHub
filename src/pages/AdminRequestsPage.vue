@@ -337,6 +337,18 @@ onUnmounted(() => {
               <span v-else>Dovrai aggiornare il file Excel Master manualmente in un secondo momento.</span>
             </div>
           </div>
+
+          <!-- Admin Note Field -->
+          <div class="q-mt-md">
+            <q-input
+              v-model="reqs.adminApprovalNote"
+              filled
+              dense
+              label="Note per Excel (es. tipo timbratura)"
+              hint="Opzionale: apparirà nella cella del turno su Excel"
+              class="bg-white"
+            />
+          </div>
         </q-card-section>
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />

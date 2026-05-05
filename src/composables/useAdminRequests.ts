@@ -86,6 +86,7 @@ export function useAdminRequests() {
   // Approval dialog
   const showApprovalDialog = ref(false);
   const syncMode = ref<'auto' | 'manual'>('auto');
+  const adminApprovalNote = ref('');
   const approvalContext = ref<{
     req: ShiftRequest;
     offer?: { id: string; operatorId?: string; operatorName?: string };
@@ -359,6 +360,7 @@ export function useAdminRequests() {
   function approveRequest(req: ShiftRequest): void {
     approvalContext.value = { req };
     syncMode.value = 'auto';
+    adminApprovalNote.value = '';
     showApprovalDialog.value = true;
   }
 
@@ -369,6 +371,7 @@ export function useAdminRequests() {
     if (!offer) return;
     approvalContext.value = { req, offer };
     syncMode.value = 'auto';
+    adminApprovalNote.value = '';
     showApprovalDialog.value = true;
   }
 
@@ -406,9 +409,11 @@ export function useAdminRequests() {
       if (syncMode.value === 'auto') {
         if (req.absentOperatorId) {
           const absName = operators.value[req.absentOperatorId]?.name ?? req.absentOperatorName;
-          if (absName) void syncToSheets(absName, req.date, 'A', req.requestNote);
+          if (absName) void syncToSheets(absName, req.date, 'A', adminApprovalNote.value || req.requestNote);
         }
-        if (offer?.operatorName) void syncToSheets(offer.operatorName, req.date, req.originalShift, req.requestNote);
+        if (offer?.operatorName) {
+          void syncToSheets(offer.operatorName, req.date, req.originalShift, adminApprovalNote.value);
+        }
       }
 
       showApprovalDialog.value = false;
@@ -529,7 +534,7 @@ export function useAdminRequests() {
     loading, requests, operators, userNames, selectedRequests,
     filters, sortBy, sortOptions,
     showRejectDialog, rejectionReason, requestToReject, isBulkReject,
-    showApprovalDialog, syncMode, approvalContext,
+    showApprovalDialog, syncMode, adminApprovalNote, approvalContext,
     // Computed
     operatorOptions, filteredPendingRequests, filteredHistoryRequests,
     visibleHistoryRequests, archivedRequests, archiveStorageLevel, storageColor,

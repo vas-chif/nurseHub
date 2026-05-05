@@ -18,6 +18,7 @@ import { useSecureLogger } from '../utils/secureLogger';
 import { useAuthStore } from './authStore';
 
 const logger = useSecureLogger();
+const LAST_CONFIG_KEY = 'nursehub_active_config_id';
 
 export const useConfigStore = defineStore('config', () => {
   const authStore = useAuthStore();
@@ -55,29 +56,39 @@ export const useConfigStore = defineStore('config', () => {
         };
       }) as SystemConfiguration[];
 
-      // Set initial viewing config based on user's primary config or first available
-      let defaultViewId = authStore.currentUser?.configId;
+      // 1. Identify potential default (user's primary config)
+      let targetId = authStore.currentUser?.configId;
 
-      if (!defaultViewId && availableConfigs.value.length > 0) {
-        defaultViewId = availableConfigs.value[0]?.id;
-      } else if (!defaultViewId && allConfigs.value.length > 0) {
-        defaultViewId = allConfigs.value[0]?.id;
+      // 2. If SuperAdmin or Admin with multiple options, try to restore from localStorage
+      if (authStore.isSuperAdmin || (authStore.isAdmin && authStore.managedConfigIds.length > 1)) {
+        const savedId = localStorage.getItem(LAST_CONFIG_KEY);
+        if (savedId) {
+          // Verify if the savedId is still valid for this user
+          const isAvailable = availableConfigs.value.some(c => c.id === savedId);
+          if (isAvailable) {
+            targetId = savedId;
+            logger.info('Restored last active configuration from storage', { targetId });
+          }
+        }
       }
 
-      if (defaultViewId) {
-        setActiveConfig(defaultViewId);
+      // 3. Fallback: if no valid ID yet, use the first available config
+      if (!targetId && availableConfigs.value.length > 0) {
+        targetId = availableConfigs.value[0]?.id;
       }
-    } catch (error) {
-      logger.error('Failed to load configurations', error);
-      throw error;
+
+      if (targetId) {
+        setActiveConfig(targetId);
+      }
+    } catch (err) {
+      logger.error('Failed to load configurations', err);
     } finally {
       loading.value = false;
     }
   }
 
   /**
-   * Set a configuration as active for the local view (Maestro Filter).
-   * Does NOT write to Firestore to avoid affecting other users.
+   * Switches the active configuration context
    */
   function setActiveConfig(configId: string) {
     const configToActivate = allConfigs.value.find((c) => c.id === configId);
@@ -88,6 +99,12 @@ export const useConfigStore = defineStore('config', () => {
 
     activeConfig.value = configToActivate;
     activeConfigId.value = configId;
+
+    // Persist only if user has multiple choices (SuperAdmin or Multi-department Admin)
+    if (authStore.isSuperAdmin || (authStore.isAdmin && authStore.managedConfigIds.length > 1)) {
+      localStorage.setItem(LAST_CONFIG_KEY, configId);
+    }
+
     logger.info('Local viewing context switched', { configId, name: configToActivate.name });
   }
 

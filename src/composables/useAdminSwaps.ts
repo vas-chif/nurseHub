@@ -56,6 +56,7 @@ export function useAdminSwaps(
   const swapLoading = ref(false);
   const showSwapApprovalDialog = ref(false);
   const swapSyncMode = ref<'auto' | 'manual'>('auto');
+  const adminSwapNote = ref('');
   const approvalSwapContext = ref<ShiftSwap | null>(null);
 
   let unsubscribeSwaps: (() => void) | undefined;
@@ -129,6 +130,7 @@ export function useAdminSwaps(
   function approveSwap(swap: ShiftSwap): void {
     approvalSwapContext.value = swap;
     swapSyncMode.value = 'auto';
+    adminSwapNote.value = '';
     showSwapApprovalDialog.value = true;
   }
 
@@ -158,11 +160,16 @@ export function useAdminSwaps(
       }
 
       if (swapSyncMode.value === 'auto') {
-        const creatorName = swap.creatorName ?? (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '') ?? '';
-        const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? '';
-        const note = swap.adminNote || 'Cambio Turno';
-        if (creatorName) void syncToSheets(creatorName, swap.date, swap.desiredShift, note);
-        if (counterName) void syncToSheets(counterName, swap.date, swap.offeredShift, note);
+        const creatorName = swap.creatorName ?? (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '') ?? 'Operatore 1';
+        const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? 'Operatore 2';
+        
+        // Sync creator's new shift with admin note
+        void syncToSheets(creatorName, swap.date, swap.desiredShift, adminSwapNote.value);
+        
+        // Sync counterpart's new shift with admin note
+        if (counterName) {
+          void syncToSheets(counterName, swap.date, swap.offeredShift, adminSwapNote.value);
+        }
       }
 
       if (configStore.activeConfigId) {
@@ -267,7 +274,10 @@ export function useAdminSwaps(
   return {
     // State
     rawSwaps, swapLoading,
-    showSwapApprovalDialog, swapSyncMode, approvalSwapContext,
+    showSwapApprovalDialog,
+    swapSyncMode,
+    adminSwapNote,
+    approvalSwapContext,
     // Computed
     allSwaps, pendingSwaps, archivedSwaps, archiveSwapStorageLevel, storageSwapColor,
     // Actions

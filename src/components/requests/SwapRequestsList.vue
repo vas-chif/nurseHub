@@ -52,31 +52,40 @@ const ctx = inject<ReturnType<typeof useAdminSwaps>>('adminSwapsContext')!;
               <q-avatar color="orange-7" text-color="white" icon="swap_horiz" />
             </q-item-section>
             <q-item-section>
-              <q-item-label class="text-weight-bold">Scambio Turno</q-item-label>
-              <q-item-label caption>{{ swap.creatorName ?? swap.creatorId }} ↔ {{ swap.counterpartName ?? swap.counterpartId ?? '—' }}</q-item-label>
+              <q-item-label class="text-weight-bold">
+                {{ swap.creatorName ?? 'Utente 1' }} <q-icon name="trending_flat" color="grey-6" /> {{ swap.counterpartName ?? 'Utente 2' }}
+              </q-item-label>
+              <q-item-label caption class="text-primary text-weight-medium">
+                {{ swap.date }} — {{ swap.offeredShift }} <q-icon name="sync" size="xs" /> {{ swap.desiredShift }}
+              </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-badge color="warning" label="In Attesa" />
             </q-item-section>
           </template>
-          <q-card>
+          <q-card class="bg-grey-1">
             <q-card-section>
-              <div class="row q-col-gutter-md">
-                <div class="col-12 col-md-6">
-                  <div class="text-subtitle2 q-mb-xs">Richiedente: {{ swap.creatorName ?? swap.creatorId }}</div>
-                  <div>Data: {{ swap.date }} — Turno ceduto: {{ swap.offeredShift }}</div>
+              <div class="row q-col-gutter-md items-center">
+                <div class="col-12 col-md-5">
+                  <div class="bg-white q-pa-sm rounded-borders shadow-1 border-left-orange">
+                    <div class="text-caption text-grey-7">Cede ({{ swap.creatorName }})</div>
+                    <div class="text-subtitle1 text-weight-bold">{{ swap.date }} - <q-badge color="orange" :label="swap.offeredShift" /></div>
+                  </div>
                 </div>
-                <div class="col-12 col-md-6">
-                  <div class="text-subtitle2 q-mb-xs">Controparte: {{ swap.counterpartName ?? swap.counterpartId ?? 'In attesa' }}</div>
-                  <div>Turno richiesto: {{ swap.desiredShift }}</div>
+                <div class="col-12 col-md-2 text-center">
+                  <q-icon name="swap_horiz" size="md" color="primary" />
+                </div>
+                <div class="col-12 col-md-5">
+                  <div class="bg-white q-pa-sm rounded-borders shadow-1 border-left-green">
+                    <div class="text-caption text-grey-7">Riceve (da {{ swap.counterpartName }})</div>
+                    <div class="text-subtitle1 text-weight-bold">{{ swap.desiredDate || swap.date }} - <q-badge color="green" :label="swap.desiredShift" /></div>
+                  </div>
                 </div>
               </div>
             </q-card-section>
-            <q-card-actions class="q-pa-md">
-              <q-btn-group outline>
-                <q-btn icon="close" color="negative" label="Rifiuta" @click="ctx.rejectSwap(swap)" />
-                <q-btn icon="check" color="positive" label="Approva" @click="ctx.approveSwap(swap)" />
-              </q-btn-group>
+            <q-card-actions class="q-pa-md justify-end">
+              <q-btn flat color="negative" label="Rifiuta" icon="close" @click="ctx.rejectSwap(swap)" />
+              <q-btn unelevated color="positive" label="Approva Scambio" icon="check" @click="ctx.approveSwap(swap)" />
             </q-card-actions>
           </q-card>
         </q-expansion-item>
@@ -87,14 +96,20 @@ const ctx = inject<ReturnType<typeof useAdminSwaps>>('adminSwapsContext')!;
       <q-list separator bordered class="rounded-borders q-mx-md q-mb-lg">
         <q-item v-for="swap in ctx.allSwaps.value.filter(s => s.status !== 'PENDING_ADMIN')" :key="swap.id">
           <q-item-section avatar>
-            <q-avatar :color="swap.status === 'APPROVED' ? 'positive' : 'negative'" text-color="white" icon="swap_horiz" />
+            <q-avatar :color="swap.status === 'APPROVED' ? 'positive' : 'negative'" text-color="white" icon="history" />
           </q-item-section>
           <q-item-section>
-            <q-item-label class="text-weight-bold">{{ swap.creatorName ?? swap.creatorId }} ↔ {{ swap.counterpartName ?? swap.counterpartId ?? '—' }}</q-item-label>
-            <q-item-label caption>{{ swap.date }} {{ swap.offeredShift }} / {{ swap.desiredShift }}</q-item-label>
+            <div class="row items-center q-gutter-x-sm">
+              <span class="text-weight-bold">{{ swap.creatorName }}</span>
+              <q-badge outline color="orange" size="sm">{{ swap.offeredShift }}</q-badge>
+              <q-icon name="swap_horiz" color="grey" />
+              <span class="text-weight-bold">{{ swap.counterpartName }}</span>
+              <q-badge outline color="green" size="sm">{{ swap.desiredShift }}</q-badge>
+            </div>
+            <q-item-label caption>{{ swap.date }}</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-badge :color="swap.status === 'APPROVED' ? 'positive' : 'negative'">{{ swap.status }}</q-badge>
+            <q-badge :color="swap.status === 'APPROVED' ? 'positive' : 'negative'" :label="swap.status" />
           </q-item-section>
         </q-item>
       </q-list>
