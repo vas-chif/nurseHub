@@ -98,6 +98,8 @@ export function useAdminSwaps(
       q = query(colRef, where('configId', 'in', authStore.managedConfigIds), orderBy('createdAt', 'desc'));
     } else if (authStore.currentUser?.configId) {
       q = query(colRef, where('configId', '==', authStore.currentUser.configId), orderBy('createdAt', 'desc'));
+    } else if (configStore.activeConfigId) {
+      q = query(colRef, where('configId', '==', configStore.activeConfigId), orderBy('createdAt', 'desc'));
     } else {
       swapLoading.value = false;
       return;

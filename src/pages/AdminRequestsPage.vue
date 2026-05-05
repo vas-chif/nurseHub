@@ -189,6 +189,9 @@ watch(() => configStore.activeConfigId, async (v) => {
   if (v) {
     await reqs.fetchOperators();
     void scenarioStore.loadScenarios(v);
+    // Re-subscribe swaps with the now-available configId
+    swaps.stopRealtimeSwaps();
+    swaps.initRealtimeSwaps();
   }
 });
 
@@ -251,15 +254,23 @@ onUnmounted(() => {
     </q-banner>
 
     <!-- Tabs -->
-    <q-tabs v-model="activeTab" dense class="text-grey" active-color="primary" indicator-color="primary" align="justify" narrow-indicator>
-      <q-tab name="pending" label="In Attesa" />
-      <q-tab name="history" label="Storico" />
-      <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
-        <q-badge v-if="swaps.pendingSwaps.value.length > 0" color="red" floating>
-          {{ swaps.pendingSwaps.value.length }}
-        </q-badge>
-      </q-tab>
-    </q-tabs>
+    <div class="row items-center justify-between q-mb-xs">
+      <q-tabs v-model="activeTab" dense class="text-grey col" active-color="primary" indicator-color="primary" align="justify" narrow-indicator>
+        <q-tab name="pending" label="In Attesa" />
+        <q-tab name="history" label="Storico" />
+        <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
+          <q-badge v-if="swaps.pendingSwaps.value.length > 0" color="red" floating>
+            {{ swaps.pendingSwaps.value.length }}
+          </q-badge>
+        </q-tab>
+      </q-tabs>
+      <q-btn flat round dense icon="refresh" color="primary" class="q-ml-xs"
+        :loading="reqs.loading.value || swaps.swapLoading.value"
+        @click="() => { reqs.initRealtimeRequests(); swaps.stopRealtimeSwaps(); swaps.initRealtimeSwaps(); }"
+      >
+        <q-tooltip>Aggiorna</q-tooltip>
+      </q-btn>
+    </div>
 
     <q-separator />
 
