@@ -19,6 +19,7 @@ import { useQuasar } from 'quasar';
 import {
   collection,
   addDoc,
+  updateDoc,
   query,
   where,
   onSnapshot,
@@ -103,6 +104,17 @@ async function submitSwap(): Promise<void> {
     });
     return;
   }
+  if (swapForm.value.offeredShift === swapForm.value.desiredShift) {
+    $q.notify({
+      color: 'warning',
+      textColor: 'dark',
+      icon: 'warning',
+      message: 'Turni identici',
+      caption: 'Il turno da cedere e quello desiderato non possono essere uguali.',
+      multiLine: true,
+    });
+    return;
+  }
   const realShift = authStore.currentOperator?.schedule?.[swapForm.value.date] || 'R';
   if (realShift !== swapForm.value.offeredShift) {
     $q.notify({
@@ -158,6 +170,26 @@ async function loadMySwaps(): Promise<void> {
     .map((d) => ({ id: d.id, ...d.data() }) as ShiftSwap)
     .filter((s) => s.deletedByCreator !== true);
 } /*end loadMySwaps*/
+
+async function deleteSwap(swap: ShiftSwap): Promise<void> {
+  $q.dialog({
+    title: 'Elimina proposta',
+    message: `Vuoi eliminare la proposta di cambio del ${formatToItalian(swap.date)}?`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void (async () => {
+      try {
+        await updateDoc(doc(db, 'shiftSwaps', swap.id), { deletedByCreator: true });
+        mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
+        $q.notify({ type: 'positive', message: 'Proposta eliminata.' });
+      } catch (e) {
+        logger.error('Error deleting swap', e);
+        $q.notify({ type: 'negative', message: "Errore durante l'eliminazione" });
+      }
+    })();
+  });
+} /*end deleteSwap*/
 
 // ─── Requests history ─────────────────────────────────────────────────────────
 const requests = ref<ShiftRequest[]>([]);
@@ -451,9 +483,23 @@ function getStatusColor(req: ShiftRequest): string {
               <q-icon name="hourglass_empty" size="xs" /> In attesa di controparte
             </div>
           </div>
-          <q-badge :color="getSwapStatusColor(swap)" class="q-pa-xs">
-            {{ swap.status }}
-          </q-badge>
+          <div class="column items-end q-gutter-y-xs">
+            <q-badge :color="getSwapStatusColor(swap)" class="q-pa-xs">
+              {{ swap.status }}
+            </q-badge>
+            <q-btn
+              v-if="swap.status === 'OPEN'"
+              flat
+              round
+              dense
+              size="sm"
+              icon="delete"
+              color="negative"
+              @click="deleteSwap(swap)"
+            >
+              <q-tooltip>Elimina proposta</q-tooltip>
+            </q-btn>
+          </div>
         </q-card-section>
       </q-card>
     </div>
