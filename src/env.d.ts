@@ -1,8 +1,14 @@
-declare namespace NodeJS {
-  interface ProcessEnv {
-    NODE_ENV: string;
-    VUE_ROUTER_MODE: 'hash' | 'history' | 'abstract' | undefined;
-    VUE_ROUTER_BASE: string | undefined;
+// Make this file a module so that `declare module` blocks are augmentations,
+// not ambient module declarations that would shadow the real vue-router exports.
+export {};
+
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      NODE_ENV: string;
+      VUE_ROUTER_MODE: 'hash' | 'history' | 'abstract' | undefined;
+      VUE_ROUTER_BASE: string | undefined;
+    }
   }
 }
 
