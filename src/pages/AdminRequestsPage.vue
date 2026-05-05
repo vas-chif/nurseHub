@@ -249,40 +249,19 @@ onUnmounted(() => {
             <AppDateInput v-model="reqs.filters.value.dateTo" label="A Data" hint="Filtra a" />
           </div>
           <div class="col-12 col-md-3">
-            <q-select
-              v-model="reqs.filters.value.operators"
-              :options="reqs.operatorOptions.value"
-              label="Filtra Operatori"
-              multiple
-              use-chips
-              dense
-              outlined
-              emit-value
-              map-options
-              clearable
-            />
+            <q-select v-model="reqs.filters.value.operators" :options="reqs.operatorOptions.value"
+              label="Filtra Operatori" multiple use-chips dense outlined emit-value map-options clearable />
           </div>
           <div class="col-12 col-md-3">
-            <q-select
-              v-model="reqs.sortBy.value"
-              :options="reqs.sortOptions"
-              label="Ordina per"
-              dense
-              outlined
-              emit-value
-              map-options
-            />
+            <q-select v-model="reqs.sortBy.value" :options="reqs.sortOptions" label="Ordina per" dense outlined
+              emit-value map-options />
           </div>
         </div>
       </q-card-section>
     </q-card>
 
     <!-- Bulk Actions -->
-    <q-banner
-      v-if="reqs.selectedRequests.value.length > 0"
-      class="bg-primary text-white q-mb-md"
-      dense
-    >
+    <q-banner v-if="reqs.selectedRequests.value.length > 0" class="bg-primary text-white q-mb-md" dense>
       <template v-slot:avatar><q-icon name="check_circle" /></template>
       <div class="row items-center">
         <span class="col">{{ reqs.selectedRequests.value.length }} richieste selezionate</span>
@@ -294,15 +273,8 @@ onUnmounted(() => {
 
     <!-- Tabs -->
     <div class="row items-center justify-between q-mb-xs">
-      <q-tabs
-        v-model="activeTab"
-        dense
-        class="text-grey col"
-        active-color="primary"
-        indicator-color="primary"
-        align="justify"
-        narrow-indicator
-      >
+      <q-tabs v-model="activeTab" dense class="text-grey col" active-color="primary" indicator-color="primary"
+        align="justify" narrow-indicator>
         <q-tab name="pending" label="In Attesa" />
         <q-tab name="history" label="Storico" />
         <q-tab name="swaps" label="Cambi Turno" icon="swap_horiz">
@@ -311,22 +283,14 @@ onUnmounted(() => {
           </q-badge>
         </q-tab>
       </q-tabs>
-      <q-btn
-        flat
-        round
-        dense
-        icon="refresh"
-        color="primary"
-        class="q-ml-xs"
-        :loading="reqs.loading.value || swaps.swapLoading.value"
-        @click="
+      <q-btn flat round dense icon="refresh" color="primary" class="q-ml-xs"
+        :loading="reqs.loading.value || swaps.swapLoading.value" @click="
           () => {
             reqs.initRealtimeRequests();
             swaps.stopRealtimeSwaps();
             swaps.initRealtimeSwaps();
           }
-        "
-      >
+        ">
         <q-tooltip>Aggiorna</q-tooltip>
       </q-btn>
     </div>
@@ -355,25 +319,13 @@ onUnmounted(() => {
           <div class="text-caption text-grey">Campo obbligatorio</div>
         </q-card-section>
         <q-card-section>
-          <q-input
-            v-model="reqs.rejectionReason.value"
-            type="textarea"
-            label="Inserisci il motivo"
-            rows="4"
-            outlined
-            autofocus
-            :rules="[(val) => !!val || 'Motivo obbligatorio']"
-          />
+          <q-input v-model="reqs.rejectionReason.value" type="textarea" label="Inserisci il motivo" rows="4" outlined
+            autofocus :rules="[(val) => !!val || 'Motivo obbligatorio']" />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            flat
-            label="Conferma Rifiuto"
-            color="negative"
-            @click="reqs.confirmReject()"
-            :disable="!reqs.rejectionReason.value"
-          />
+          <q-btn flat label="Conferma Rifiuto" color="negative" @click="reqs.confirmReject()"
+            :disable="!reqs.rejectionReason.value" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -387,63 +339,37 @@ onUnmounted(() => {
         </q-card-section>
         <q-card-section class="q-pt-none">
           <div v-if="approvalContext?.offer" class="q-mb-md">
-            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong
-            >.
+            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong>.
           </div>
           <div v-else-if="approvalContext?.req" class="q-mb-md">
             Stai confermando la copertura per
             <strong>{{
               reqs.getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req)
-            }}</strong
-            >.
+              }}</strong>.
           </div>
           <div class="bg-grey-2 q-pa-md rounded-borders">
             <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
-            <q-btn-toggle
-              v-model="syncMode"
-              spread
-              no-caps
-              rounded
-              unelevated
-              toggle-color="primary"
-              color="white"
-              text-color="primary"
-              :options="[
+            <q-btn-toggle v-model="syncMode" spread no-caps rounded unelevated toggle-color="primary" color="white"
+              text-color="primary" :options="[
                 { label: 'Automatica', value: 'auto' },
                 { label: 'Manuale', value: 'manual' },
-              ]"
-            />
+              ]" />
             <div class="text-caption text-grey-7 q-mt-sm">
-              <span v-if="syncMode === 'auto'"
-                >Il turno verrà aggiornato automaticamente sul file Excel Master.</span
-              >
-              <span v-else
-                >Dovrai aggiornare il file Excel Master manualmente in un secondo momento.</span
-              >
+              <span v-if="syncMode === 'auto'">Il turno verrà aggiornato automaticamente sul file Excel Master.</span>
+              <span v-else>Dovrai aggiornare il file Excel Master manualmente in un secondo momento.</span>
             </div>
           </div>
 
           <!-- Admin Note Field -->
           <div class="q-mt-md">
-            <q-input
-              v-model="adminApprovalNote"
-              filled
-              dense
-              label="Note per Excel (es. tipo timbratura)"
-              hint="Opzionale: apparirà nella cella del turno su Excel"
-              class="bg-white"
-            />
+            <q-input v-model="adminApprovalNote" filled dense label="Note per Excel (es. tipo timbratura)"
+              hint="Opzionale: apparirà nella cella del turno su Excel" class="bg-white" />
           </div>
         </q-card-section>
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            unelevated
-            color="positive"
-            label="Conferma & Chiudi"
-            @click="processApproval()"
-            :loading="reqs.loading.value"
-          />
+          <q-btn unelevated color="positive" label="Conferma & Chiudi" @click="processApproval()"
+            :loading="reqs.loading.value" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -458,8 +384,7 @@ onUnmounted(() => {
         <q-card-section class="q-pt-none">
           <div v-if="approvalSwapContext" class="q-mb-md">
             Stai confermando il cambio turno del
-            <strong>{{ reqs.formatDate(approvalSwapContext.date) }}</strong
-            ><br />
+            <strong>{{ reqs.formatDate(approvalSwapContext.date) }}</strong><br />
             tra
             <strong>{{ approvalSwapContext.creatorName || approvalSwapContext.creatorId }}</strong>
             e
@@ -467,58 +392,34 @@ onUnmounted(() => {
               approvalSwapContext.counterpartName ||
               approvalSwapContext.counterpartId ||
               'Assegnazione'
-            }}</strong
-            >.
+              }}</strong>.
           </div>
           <div class="bg-grey-2 q-pa-md rounded-borders">
             <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
-            <q-btn-toggle
-              v-model="swapSyncMode"
-              spread
-              no-caps
-              rounded
-              unelevated
-              toggle-color="primary"
-              color="white"
-              text-color="primary"
-              :options="[
+            <q-btn-toggle v-model="swapSyncMode" spread no-caps rounded unelevated toggle-color="primary" color="white"
+              text-color="primary" :options="[
                 { label: 'Automatica', value: 'auto' },
                 { label: 'Manuale', value: 'manual' },
-              ]"
-            />
+              ]" />
             <div class="text-caption text-grey-7 q-mt-sm">
-              <span v-if="swapSyncMode === 'auto'"
-                >I turni invertiti verranno aggiornati automaticamente sul file Excel Master per
-                entrambi gli operatori.</span
-              >
-              <span v-else
-                >Dovrai aggiornare i turni degli operatori sul file Excel Master manualmente in un
-                secondo momento.</span
-              >
+              <span v-if="swapSyncMode === 'auto'">I turni invertiti verranno aggiornati automaticamente sul file Excel
+                Master per
+                entrambi gli operatori.</span>
+              <span v-else> Dovrai aggiornare i turni degli operatori sul file Excel Master manualmente in un
+                secondo momento. </span>
             </div>
           </div>
 
           <!-- Admin Note Field -->
           <div class="q-mt-md">
-            <q-input
-              v-model="adminSwapNote"
-              filled
-              dense
-              label="Note per Excel (es. accordo verbale)"
-              hint="Opzionale: apparirà nella cella del turno su Excel"
-              class="bg-white"
-            />
+            <q-input v-model="adminSwapNote" filled dense label="Note per Excel (es. accordo verbale)"
+              hint="Opzionale: apparirà nella cella del turno su Excel" class="bg-white" />
           </div>
         </q-card-section>
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn
-            unelevated
-            color="positive"
-            label="Approva & Applica"
-            @click="processSwapApproval()"
-            :loading="swaps.swapLoading.value"
-          />
+          <q-btn unelevated color="positive" label="Approva & Applica" @click="processSwapApproval()"
+            :loading="swaps.swapLoading.value" />
         </q-card-actions>
       </q-card>
     </q-dialog>
