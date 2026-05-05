@@ -1,3 +1,4 @@
+<script setup lang="ts">
 /**
  * @file AdminBackupRestore.vue
  * @description Admin panel section for triggering manual backups and restoring
@@ -5,7 +6,6 @@
  * @author Nurse Hub Team
  * @created 2026-03-05
  */
-<script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
 import { backupService } from '../../services/BackupService';

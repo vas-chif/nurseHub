@@ -1,6 +1,10 @@
-/** * @file ErrorNotFound.vue * @description Generic 404 / not-found page shown by the router
-catch-all route. * @author Nurse Hub Team * @created 2026-01-15 */
 <script setup lang="ts">
+/**
+ * @file ErrorNotFound.vue
+ * @description Generic 404 / not-found page shown by the router catch-all route.
+ * @author Nurse Hub Team
+ * @created 2026-01-15
+ */
 //
 </script>
 <template>

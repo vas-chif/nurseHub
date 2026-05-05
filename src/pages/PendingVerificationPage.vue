@@ -1,7 +1,11 @@
-/** * @file PendingVerificationPage.vue * @description Shown after registration while the user
-awaits admin approval. * Displays status info and lets the user sign out or resend the verification
-e-mail. * @author Nurse Hub Team * @created 2026-02-01 */
 <script setup lang="ts">
+/**
+ * @file PendingVerificationPage.vue
+ * @description Shown after registration while the user awaits admin approval.
+ *   Displays status info and lets the user sign out or resend the verification e-mail.
+ * @author Nurse Hub Team
+ * @created 2026-02-01
+ */
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';

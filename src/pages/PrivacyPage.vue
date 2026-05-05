@@ -1,3 +1,4 @@
+<script setup lang="ts">
 /**
  * @file PrivacyPage.vue
  * @description Static page displaying the app's privacy policy (GDPR-compliant).
@@ -5,7 +6,6 @@
  * @author Nurse Hub Team
  * @created 2026-02-15
  */
-<script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {

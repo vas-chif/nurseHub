@@ -1,6 +1,11 @@
-/** * @file LicensePage.vue * @description Static page that displays third-party open-source licence
-notices * bundled with the application. * @author Nurse Hub Team * @created 2026-02-15 */
 <script setup lang="ts">
+/**
+ * @file LicensePage.vue
+ * @description Static page that displays third-party open-source licence notices
+ *   bundled with the application.
+ * @author Nurse Hub Team
+ * @created 2026-02-15
+ */
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { ITabSelezionati, IDettaglio } from '../types/legal';
