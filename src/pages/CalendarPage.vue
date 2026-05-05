@@ -10,6 +10,7 @@ import ShiftMonthView from '../components/calendar/ShiftMonthView.vue';
 import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
 import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
 import RotationWidget from '../components/calendar/RotationWidget.vue';
+import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 import { useAuthStore } from '../stores/authStore';
 import { computed } from 'vue';
 
@@ -42,8 +43,9 @@ const isPageLoading = computed(() => !authStore.isInitialized);
     <div v-else class="column items-center full-width">
       <div class="user-view-container column q-gutter-y-lg">
         <!-- Title -->
-        <div class="row items-center q-mb-xs">
+        <div class="row items-center justify-between q-mb-xs">
           <div class="text-h5 text-weight-bold text-primary">I Tuoi Turni</div>
+          <GlobalSyncBtn />
         </div>
         
         <!-- Monthly Grid -->

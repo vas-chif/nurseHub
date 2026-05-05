@@ -296,12 +296,12 @@ function getStatusColor(req: ShiftRequest): string {
       indicator-color="primary"
       align="justify"
     >
-      <q-tab name="absence" label="Assenza" icon="event_busy" />
+      <q-tab v-if="authStore.isAnyAdmin" name="absence" label="Assenza" icon="event_busy" />
       <q-tab name="swap" label="Cambio Turno" icon="swap_horiz" />
     </q-tabs>
 
-    <!-- =========  ASSENZA TAB  ========= -->
-    <template v-if="pageTab === 'absence'">
+    <!-- =========  ASSENZA TAB (admin only) ========= -->
+    <template v-if="pageTab === 'absence' && authStore.isAnyAdmin">
       <AbsenceRequestForm @success="manualRefresh" />
 
       <!-- Archive widget -->
