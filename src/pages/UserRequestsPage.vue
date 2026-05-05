@@ -1,18 +1,11 @@
-/**
- * @file UserRequestsPage.vue
- * @description Page for users to submit absence and shift swap requests.
- * Displays two tabs: Assenza (delegates to AbsenceRequestForm component) and
- * Cambio Turno (inline swap form). All Firestore queries are scoped by configId
- * and automatically reload when activeConfigId changes (§Punto 1).
- * @author Nurse Hub Team
- * @created 2026-02-15
- * @modified 2026-05-04
- * @notes
- * - Absence form logic lives entirely in AbsenceRequestForm + useAbsenceForm (§1.11).
- * - initRealtimeRequests and loadMySwaps filter by configId.
- * - watch(configStore.activeConfigId) triggers query reload on config switch.
- * - q-skeleton shown while requests load (§1.10).
- */
+/** * @file UserRequestsPage.vue * @description Page for users to submit absence and shift swap
+requests. * Displays two tabs: Assenza (delegates to AbsenceRequestForm component) and * Cambio
+Turno (inline swap form). All Firestore queries are scoped by configId * and automatically reload
+when activeConfigId changes (§Punto 1). * @author Nurse Hub Team * @created 2026-02-15 * @modified
+2026-05-04 * @notes * - Absence form logic lives entirely in AbsenceRequestForm + useAbsenceForm
+(§1.11). * - initRealtimeRequests and loadMySwaps filter by configId. * -
+watch(configStore.activeConfigId) triggers query reload on config switch. * - q-skeleton shown while
+requests load (§1.10). */
 <script setup lang="ts">
 import { ref, onUnmounted, computed, watch, watchEffect } from 'vue';
 import { useQuasar } from 'quasar';
@@ -153,7 +146,8 @@ async function submitSwap(): Promise<void> {
   swapSubmitting.value = true;
   try {
     const creatorName =
-      `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() || 'Utente';
+      `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() ||
+      'Utente';
     const newSwap: Omit<ShiftSwap, 'id'> = {
       creatorId: uid,
       creatorOperatorId: operatorId,
@@ -231,12 +225,8 @@ const visibleRequests = computed(() => {
   });
 });
 
-const archivedRequests = computed(() =>
-  requests.value.filter((req) => req.date < cutoffDate),
-);
-const archiveStorageLevel = computed(() =>
-  Math.min(archivedRequests.value.length / 100, 1),
-);
+const archivedRequests = computed(() => requests.value.filter((req) => req.date < cutoffDate));
+const archiveStorageLevel = computed(() => Math.min(archivedRequests.value.length / 100, 1));
 const storageColor = computed(() =>
   archiveStorageLevel.value > 0.8
     ? 'negative'
@@ -333,9 +323,12 @@ function getStatusColor(req: ShiftRequest): string {
   if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) return 'negative';
   if (req.status === 'CLOSED' && req.rejectionReason) return 'negative';
   switch (req.status) {
-    case 'OPEN': return 'primary';
-    case 'CLOSED': return 'positive';
-    default: return 'grey';
+    case 'OPEN':
+      return 'primary';
+    case 'CLOSED':
+      return 'positive';
+    default:
+      return 'grey';
   }
 } /*end getStatusColor*/
 </script>
@@ -369,7 +362,12 @@ function getStatusColor(req: ShiftRequest): string {
           <div class="text-caption text-grey-8 text-weight-bold">
             <q-icon name="inventory_2" /> Archivio ({{ archivedRequests.length }})
           </div>
-          <q-linear-progress :value="archiveStorageLevel" :color="storageColor" size="8px" rounded />
+          <q-linear-progress
+            :value="archiveStorageLevel"
+            :color="storageColor"
+            size="8px"
+            rounded
+          />
         </div>
         <q-btn flat dense color="negative" icon="delete_forever" @click="emptyArchive" size="sm" />
       </div>
@@ -421,7 +419,8 @@ function getStatusColor(req: ShiftRequest): string {
                 <q-icon name="info" /> {{ req.rejectionReason }}
               </div>
               <div class="text-grey-7">
-                Creata il {{ formatToItalian(new Date(req.createdAt).toISOString().substring(0, 10)) }}
+                Creata il
+                {{ formatToItalian(new Date(req.createdAt).toISOString().substring(0, 10)) }}
               </div>
             </q-card-section>
           </q-card>
@@ -436,48 +435,94 @@ function getStatusColor(req: ShiftRequest): string {
 
     <!-- =========  CAMBIO TURNO TAB  ========= -->
     <div v-if="pageTab === 'swap'">
-      <q-card flat bordered class="q-mb-md shadow-1 rounded-borders">
-        <q-card-section>
-          <div class="text-subtitle1 text-weight-bold text-primary">Proponi Cambio Turno</div>
-          <div class="text-caption text-grey-7">Seleziona la data e i turni che desideri scambiare.</div>
-        </q-card-section>
-
-        <q-card-section class="row q-col-gutter-md">
-          <div class="col-12 col-md-6">
-            <AppDateInput v-model="swapForm.date" label="Data turno da cedere" required />
-          </div>
-          <div class="col-6 col-md-6">
-            <q-select
-              v-model="swapForm.offeredShift"
-              :options="swapShiftOptions"
-              emit-value
-              map-options
-              label="Turno da cedere"
-              filled
-              dense
-            />
-          </div>
-          <div class="col-12 col-md-6">
-            <AppDateInput v-model="swapForm.desiredDate" label="Data turno desiderato" required />
-          </div>
-          <div class="col-6 col-md-6">
-            <q-select
-              v-model="swapForm.desiredShift"
-              :options="swapShiftOptions"
-              emit-value
-              map-options
-              label="Turno desiderato"
-              filled
-              dense
-            />
+      <q-card flat bordered class="q-mb-lg shadow-2 rounded-borders overflow-hidden">
+        <q-card-section class="bg-primary text-white q-py-sm">
+          <div class="row items-center q-gutter-x-sm">
+            <q-icon name="swap_horizontal_circle" size="sm" />
+            <div class="text-subtitle1 text-weight-bold">Proponi un nuovo Cambio Turno</div>
           </div>
         </q-card-section>
 
-        <q-card-actions align="right" class="q-pb-md q-pr-md">
+        <q-card-section class="q-pa-md">
+          <div class="row q-col-gutter-lg items-center">
+            <!-- LEFT SIDE: WHAT I GIVE -->
+            <div class="col-12 col-md-5">
+              <div class="q-pa-md bg-orange-1 rounded-borders border-orange">
+                <div class="text-overline text-orange-9 q-mb-sm">IL TUO TURNO (DA CEDERE)</div>
+                <div class="column q-gutter-y-md">
+                  <AppDateInput
+                    v-model="swapForm.date"
+                    label="Data turno da cedere"
+                    required
+                    dense
+                    bg-color="white"
+                  />
+                  <q-select
+                    v-model="swapForm.offeredShift"
+                    :options="swapShiftOptions"
+                    emit-value
+                    map-options
+                    label="Turno da cedere"
+                    filled
+                    dense
+                    bg-color="white"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="outbound" color="orange" />
+                    </template>
+                  </q-select>
+                </div>
+              </div>
+            </div>
+
+            <!-- CENTER ICON -->
+            <div class="col-12 col-md-2 text-center">
+              <q-icon name="swap_horiz" size="xl" color="grey-4" class="gt-sm" />
+              <q-icon name="south" size="md" color="grey-4" class="lt-md q-my-none" />
+            </div>
+
+            <!-- RIGHT SIDE: WHAT I WANT -->
+            <div class="col-12 col-md-5">
+              <div class="q-pa-md bg-green-1 rounded-borders border-green">
+                <div class="text-overline text-green-9 q-mb-sm">TURNO DESIDERATO (IN CAMBIO)</div>
+                <div class="column q-gutter-y-md">
+                  <AppDateInput
+                    v-model="swapForm.desiredDate"
+                    label="Data turno desiderato"
+                    required
+                    dense
+                    bg-color="white"
+                  />
+                  <q-select
+                    v-model="swapForm.desiredShift"
+                    :options="swapShiftOptions"
+                    emit-value
+                    map-options
+                    label="Turno desiderato"
+                    filled
+                    dense
+                    bg-color="white"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="login" color="green" />
+                    </template>
+                  </q-select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-actions align="center" class="q-pa-md bg-grey-1">
           <q-btn
-            label="Invia Proposta"
+            label="Invia Proposta di Scambio"
             color="primary"
+            icon="send"
             unelevated
+            class="q-px-xl q-py-sm text-weight-bold"
+            rounded
             @click="submitSwap"
             :loading="swapSubmitting"
           />
@@ -486,24 +531,45 @@ function getStatusColor(req: ShiftRequest): string {
 
       <div class="row items-center justify-between q-mb-sm">
         <div class="text-subtitle2 text-grey-8">Le tue proposte attive</div>
-        <q-btn flat round icon="refresh" size="sm" color="primary" @click="manualRefresh" :loading="loading" />
+        <q-btn
+          flat
+          round
+          icon="refresh"
+          size="sm"
+          color="primary"
+          @click="manualRefresh"
+          :loading="loading"
+        />
       </div>
 
-      <div v-if="mySwaps.length === 0" class="text-center q-pa-xl text-grey-5 border-dashed rounded-borders">
+      <div
+        v-if="mySwaps.length === 0"
+        class="text-center q-pa-xl text-grey-5 border-dashed rounded-borders"
+      >
         Non hai ancora inviato proposte di scambio.
       </div>
 
-      <q-card v-for="swap in mySwaps" :key="swap.id" flat bordered class="q-mb-sm shadow-sm rounded-borders">
+      <q-card
+        v-for="swap in mySwaps"
+        :key="swap.id"
+        flat
+        bordered
+        class="q-mb-sm shadow-sm rounded-borders"
+      >
         <q-card-section class="row items-center justify-between">
           <div class="column">
             <div class="text-weight-bold">{{ formatToItalian(swap.date) }}</div>
             <div class="text-caption q-mt-xs">
               <span class="text-grey-7">Cedo: </span>
-              <q-badge color="orange-2" text-color="orange-10" class="q-mr-xs">{{ swap.offeredShift }}</q-badge>
+              <q-badge color="orange-2" text-color="orange-10" class="q-mr-xs">{{
+                swap.offeredShift
+              }}</q-badge>
               <span class="text-caption text-grey-6">({{ formatToItalian(swap.date) }})</span>
               <span class="text-grey-7 q-mx-xs">→ ricevo: </span>
               <q-badge color="green-2" text-color="green-10">{{ swap.desiredShift }}</q-badge>
-              <span class="text-caption text-grey-6 q-ml-xs">({{ formatToItalian(swap.desiredDate) }})</span>
+              <span class="text-caption text-grey-6 q-ml-xs"
+                >({{ formatToItalian(swap.desiredDate) }})</span
+              >
             </div>
             <div v-if="swap.counterpartName" class="text-caption text-grey-8 q-mt-xs">
               <q-icon name="person" size="xs" /> Con: <strong>{{ swap.counterpartName }}</strong>
@@ -541,5 +607,11 @@ function getStatusColor(req: ShiftRequest): string {
 }
 .border-dashed {
   border: 1px dashed #cbd5e1;
+}
+.border-orange {
+  border: 1px solid #ffb74d;
+}
+.border-green {
+  border: 1px solid #81c784;
 }
 </style>
