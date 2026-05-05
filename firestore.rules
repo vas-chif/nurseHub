@@ -142,7 +142,8 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && (
         (resource.data.status == 'OPEN' && request.resource.data.status == 'PENDING_ADMIN' && request.resource.data.counterpartId == request.auth.uid) ||
-        (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED')
+        (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED') ||
+        (resource.data.creatorId == request.auth.uid && resource.data.status == 'OPEN' && request.resource.data.get('deletedByCreator', false) == true)
       ));
       allow delete: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }
