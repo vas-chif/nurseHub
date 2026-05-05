@@ -1,3 +1,15 @@
+/**
+ * @file routes.ts
+ * @description Vue Router route definitions for Nurse Hub.
+ * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-05-05
+ * @notes
+ * - requiresAuth: route needs a logged-in user (enforced by authGuard).
+ * - requiresVerified: route needs the user to be linked to an operator.
+ * - requiresAdmin: route needs isAnyAdmin (admin or superAdmin).
+ * - requiresSuperAdmin: route needs isSuperAdmin only (enforced by roleGuard).
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
@@ -48,7 +60,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'admin',
         component: () => import('pages/AdminPage.vue'),
-        meta: { requiresAdmin: true },
+        meta: { requiresAdmin: true, requiresSuperAdmin: true },
       },
       {
         path: 'admin/users',

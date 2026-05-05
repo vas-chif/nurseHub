@@ -9,6 +9,7 @@ import { ref, reactive } from 'vue';
 import { useQuasar } from 'quasar';
 import type { ShiftCode, RequestReason } from '../../types/models';
 import { useSecureLogger } from '../../utils/secureLogger';
+import AppDateInput from '../common/AppDateInput.vue';
 
 const logger = useSecureLogger();
 
@@ -54,8 +55,7 @@ function onSubmit() {
 
     <q-card-section>
       <q-form @submit="onSubmit" class="q-gutter-md">
-        <q-input v-model="form.date" type="date" label="Data Turno" stack-label outlined
-          :rules="[(val) => !!val || 'Data obbligatoria']" />
+        <AppDateInput v-model="form.date" label="Data Turno" :required="true" />
 
         <q-select v-model="form.shift" :options="shiftOptions" label="Turno Mancante" outlined
           :rules="[(val) => !!val || 'Seleziona un turno']" />

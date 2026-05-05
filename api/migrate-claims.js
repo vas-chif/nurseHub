@@ -29,21 +29,22 @@ async function migrateAllUsers() {
   for (const userDoc of usersSnapshot.docs) {
     const uid = userDoc.id;
     const data = userDoc.data();
-    const role = data.role === 'admin' ? 'admin' : 'user';
+    const role = data.role === 'superAdmin' ? 'superAdmin' : data.role === 'admin' ? 'admin' : 'user';
+    const configId = data.configId || null;
 
     try {
       // Check current claims to avoid unnecessary writes
       const authUser = await admin.auth().getUser(uid);
-      const existingClaim = authUser.customClaims?.role;
+      const existingClaims = authUser.customClaims || {};
 
-      if (existingClaim === role) {
-        console.log(`[migrate-claims] SKIP uid=${uid} (claim already correct: ${role})`);
+      if (existingClaims.role === role && existingClaims.configId === configId) {
+        console.log(`[migrate-claims] SKIP uid=${uid} (claims already correct: role=${role}, configId=${configId ?? 'none'})`);
         skipped++;
         continue;
       }
 
-      await setUserClaim(uid, role);
-      console.log(`[migrate-claims] ✅ uid=${uid} → role=${role}`);
+      await setUserClaim(uid, role, configId);
+      console.log(`[migrate-claims] ✅ uid=${uid} → role=${role}, configId=${configId ?? 'none'}`);
       success++;
     } catch (err) {
       // User might exist in Firestore but not in Auth (edge case)

@@ -13,6 +13,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { date as quasarDate, type QTableColumn } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
+import { itLocale } from '../../constants/locales';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 import { useConfigStore } from '../../stores/configStore';
 import { useScheduleStore } from '../../stores/scheduleStore';
@@ -49,16 +50,6 @@ const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
 const pagination = ref({ rowsPerPage: 0 }); // Show all rows for virtual scroll
 const showLegend = ref(false);
 
-// Quasar Italian Locale for q-date
-const itLocale = {
-  days: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
-  daysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
-  months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
-  monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
-  firstDayOfWeek: 1,
-  format24h: true,
-  pluralDay: 'giorni'
-};
 
 function formatDate(dt: string) {
   if (!dt) return '';

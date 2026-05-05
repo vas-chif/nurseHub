@@ -23,13 +23,19 @@ if (!admin.apps.length) {
 }
 
 /**
- * Sets the `role` Custom Claim on a Firebase Auth user.
+ * Sets Custom Claims on a Firebase Auth user.
+ * Writes role + optional configId to the JWT so rules can verify without a Firestore read.
  * @param {string} uid
- * @param {'admin'|'user'} role
+ * @param {'superAdmin'|'admin'|'user'} role
+ * @param {string|null} [configId] - The Firestore systemConfiguration ID this user belongs to
  */
-async function setUserClaim(uid, role) {
-  await admin.auth().setCustomUserClaims(uid, { role });
-  console.log(`[set-claims] Custom claim set: uid=${uid}, role=${role}`);
+async function setUserClaim(uid, role, configId = null) {
+  const claims = {
+    role,
+    ...(configId ? { configId } : {}),
+  };
+  await admin.auth().setCustomUserClaims(uid, claims);
+  console.log(`[set-claims] Custom claim set: uid=${uid}, role=${role}, configId=${configId ?? '(none)'}`);
 }
 
 module.exports = { setUserClaim, admin };

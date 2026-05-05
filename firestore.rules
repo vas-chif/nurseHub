@@ -36,9 +36,16 @@ service cloud.firestore {
       );
     }
 
+    /**
+     * Config-Fencing (JWT-First): checks if the authenticated user belongs to a config.
+     * Uses JWT claim 'configId' to avoid a Firestore read (zero cost).
+     * Fallback: Firestore read only when claim is absent (legacy users pre-migration).
+     */
     function isUserInConfig(configId) {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.configId == configId;
+      return isAuthenticated() && (
+        request.auth.token.get('configId', '') == configId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.configId == configId
+      );
     }
 
     // User profiles

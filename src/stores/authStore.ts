@@ -49,6 +49,8 @@ export const useAuthStore = defineStore('auth', () => {
    * Primary source for isAdmin computed.
    */
   const claimRole = ref<UserRole | null>(null);
+  /** JWT configId claim — primary source for config-fencing checks (zero Firestore reads). */
+  const claimConfigId = ref<string | null>(null);
   const managedConfigIds = ref<string[]>([]);
   const permissions = ref<IUserPermissions>({
     manageAdmins: false,
@@ -107,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       managedConfigIds.value = (claims['managedConfigIds'] as string[]) || [];
+      claimConfigId.value = (claims['configId'] as string | undefined) ?? null;
       
       const permsClaim = claims['permissions'] as IUserPermissions | undefined;
       if (permsClaim) {
@@ -330,6 +333,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     isInitialized,
     claimRole,
+    claimConfigId,
     managedConfigIds,
     permissions,
     // Computed

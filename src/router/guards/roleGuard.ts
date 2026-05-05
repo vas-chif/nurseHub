@@ -1,27 +1,56 @@
 /**
  * @file roleGuard.ts
- * @description Route guard for role-based access control
+ * @description Route guard for role-based access control. Runs after authGuard,
+ *   so auth is guaranteed to be initialized when this guard executes.
  * @author Nurse Hub Team
+ * @created 2026-02-11
+ * @modified 2026-05-05
+ * @notes
+ * - Handles two meta flags: requiresAdmin (any admin) and requiresSuperAdmin (superAdmin only).
+ * - Shows a $q.notify-equivalent banner via Notify.create before redirect.
+ * - Always redirects to /dashboard (not /) to avoid auth guard loops.
  */
 
 import type { NavigationGuardNext, RouteLocationNormalized } from 'vue-router';
+import { Notify } from 'quasar';
 import { useAuthStore } from '../../stores/authStore';
 
 export function roleGuard(
   to: RouteLocationNormalized,
-  from: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
   next: NavigationGuardNext,
 ): void {
   const authStore = useAuthStore();
 
-  // Check if route requires admin role
+  // SuperAdmin-only routes (e.g. /admin — SystemConfig)
+  if (to.meta.requiresSuperAdmin) {
+    if (!authStore.isSuperAdmin) {
+      Notify.create({
+        type: 'negative',
+        icon: 'lock',
+        message: 'Accesso negato',
+        caption: 'Solo i SuperAdmin possono accedere a questa sezione.',
+        timeout: 3000,
+      });
+      next('/dashboard');
+      return;
+    }
+  }
+
+  // Admin-or-above routes (e.g. /admin/requests, /admin/users)
   if (to.meta.requiresAdmin) {
     if (!authStore.isAnyAdmin) {
-      // Non-admin users are redirected to home
-      next('/');
+      Notify.create({
+        type: 'negative',
+        icon: 'lock',
+        message: 'Accesso negato',
+        caption: 'Permessi insufficienti per questa pagina.',
+        timeout: 3000,
+      });
+      next('/dashboard');
       return;
     }
   }
 
   next();
-}
+} /*end roleGuard*/

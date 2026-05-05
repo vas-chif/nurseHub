@@ -11,14 +11,30 @@ import AdminShiftTable from '../components/calendar/AdminShiftTable.vue';
 import DailyRosterCard from '../components/dashboard/DailyRosterCard.vue';
 import RotationWidget from '../components/calendar/RotationWidget.vue';
 import { useAuthStore } from '../stores/authStore';
+import { computed } from 'vue';
 
 const authStore = useAuthStore();
+
+/** True while auth initialization is pending — prevents rendering tabelle before user role is known. */
+const isPageLoading = computed(() => !authStore.isInitialized);
 </script>
 
 <template>
   <q-page class="q-pa-md bg-white column">
+    <!-- §1.10 Skeleton: shown while auth role is resolving -->
+    <div v-if="isPageLoading" class="col column">
+      <q-card flat bordered class="q-mb-sm">
+        <q-card-section>
+          <q-skeleton type="text" width="30%" class="q-mb-md" />
+          <q-skeleton type="rect" height="40px" class="q-mb-sm" />
+          <q-skeleton type="rect" height="40px" class="q-mb-sm" />
+          <q-skeleton type="rect" height="40px" />
+        </q-card-section>
+      </q-card>
+    </div>
+
     <!-- Admin View: Full Table (Full Width) -->
-    <div v-if="authStore.isAnyAdmin" class="col column">
+    <div v-else-if="authStore.isAnyAdmin" class="col column">
       <AdminShiftTable />
     </div>
 

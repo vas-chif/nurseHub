@@ -39,6 +39,9 @@ export default defineConfigWithVueTs(
     files: ['**/*.ts', '**/*.vue'],
     rules: {
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      // Allow `interface A extends B {}` for declaration merging (e.g. vue-i18n, pinia module augmentation).
+      // This does NOT disable the rule — empty interfaces without extends are still flagged.
+      '@typescript-eslint/no-empty-object-type': ['error', { allowInterfaces: 'with-single-extends' }],
     },
   },
   // https://github.com/vuejs/eslint-config-typescript

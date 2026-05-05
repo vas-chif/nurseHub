@@ -5,3 +5,14 @@ declare namespace NodeJS {
     VUE_ROUTER_BASE: string | undefined;
   }
 }
+
+// Augment vue-router meta types for type-safe guard checks
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean;
+    requiresVerified?: boolean;
+    requiresAdmin?: boolean;
+    /** SuperAdmin-only routes — enforced by roleGuard before component load */
+    requiresSuperAdmin?: boolean;
+  }
+}
