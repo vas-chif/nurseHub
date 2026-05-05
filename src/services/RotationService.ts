@@ -97,3 +97,16 @@ export class RotationService {
 }
 
 export const rotationService = new RotationService();
+
+/**
+ * Pure helper: returns the next column index for a rotation group.
+ * Wraps around when the end of the pattern is reached.
+ *
+ * @param currentIndex - The current 0-based column index
+ * @param totalCols - Total number of columns in the rotation pattern
+ * @returns The next 0-based column index
+ */
+export function advance(currentIndex: number, totalCols: number): number {
+  if (totalCols <= 0) return 0;
+  return (currentIndex + 1) % totalCols;
+} /*end advance*/

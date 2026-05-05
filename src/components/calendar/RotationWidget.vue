@@ -139,7 +139,8 @@ async function setNextTimer() {
                     Step: <strong>{{ group.currentColumnIndex + 1 }}</strong> / {{ group.operators[0]?.pattern?.length || 18 }}
                   </div>
                 </div>
-                <q-badge :color="group.isActive ? 'positive' : 'grey-7'" size="sm">
+                <q-badge :color="group.isActive ? 'positive' : 'grey-7'" size="sm"
+                  :class="group.isActive ? 'badge-pulse' : ''">
                   {{ group.isActive ? 'Attivo' : 'Pausa' }}
                 </q-badge>
               </div>
@@ -279,6 +280,16 @@ async function setNextTimer() {
 
 .next-rotation-container {
   border: 1px solid #e2e8f0;
+}
+
+/* Pulse animation for the active-rotation badge */
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+}
+.badge-pulse {
+  animation: badge-pulse 1.8s ease-in-out infinite;
+  display: inline-flex;
 }
 
 /* Custom Scrollbar */
