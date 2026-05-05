@@ -108,14 +108,17 @@ async function loadOpportunities() {
 
   compatibleSwaps.value = allOpen.filter((swap) => {
     if (!operatorSchedule) return false;
-    // Basic compatibility
-    const isCompatible = operatorSchedule[swap.date] === swap.desiredShift;
+    // B must have desiredShift on desiredDate (the date A wants)
+    const isCompatible = operatorSchedule[swap.desiredDate] === swap.desiredShift;
+    // B must be free (R/A) on swap.date so they can take A's offered shift
+    const offeredDateShift = operatorSchedule[swap.date] ?? 'R';
+    const isFreeOnOfferedDate = !['M', 'P', 'N', 'S', 'MP', 'N11', 'N12'].includes(offeredDateShift);
     // Interest check
     const isHidden = swap.hiddenBy?.includes(uid) || false;
     // Expiration check
     const isExpired = isRequestExpired(swap.date, swap.offeredShift);
     
-    return isCompatible && !isHidden && !isExpired;
+    return isCompatible && isFreeOnOfferedDate && !isHidden && !isExpired;
   });
 
   // Sorting
@@ -331,7 +334,7 @@ function acceptSwap(swap: ShiftSwap) {
               <div class="col">
                 <div class="text-caption text-grey-7 q-mb-xs">
                   <q-icon name="event" size="xs" class="q-mr-xs" />
-                  {{ formatDate(swap.date) }}
+                  Cede il {{ formatDate(swap.date) }}
                 </div>
                 <div class="row items-center q-gutter-xs">
                   <span class="text-caption">Cede</span>
@@ -342,6 +345,7 @@ function acceptSwap(swap: ShiftSwap) {
                   <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense>
                     {{ swap.desiredShift }}
                   </q-chip>
+                  <span class="text-caption text-grey-6">({{ formatDate(swap.desiredDate) }})</span>
                 </div>
               </div>
               <div class="row items-center q-gutter-x-xs no-wrap">

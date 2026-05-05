@@ -267,8 +267,9 @@ export interface ShiftSwap {
   creatorName?: string; // De-normalized for display
   configId: string;
 
-  date: string; // YYYY-MM-DD — date of the shift being swapped
+  date: string; // YYYY-MM-DD — date of the offered shift (creator gives up)
   offeredShift: ShiftCode; // What the creator gives up (e.g. 'M')
+  desiredDate: string; // YYYY-MM-DD — date of the desired shift (may differ for night shifts)
   desiredShift: ShiftCode; // What the creator wants in return (e.g. 'P')
 
   status: ShiftSwapStatus;

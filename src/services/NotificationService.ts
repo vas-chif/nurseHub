@@ -422,15 +422,15 @@ export async function notifySwapProposed(
 
       if (!uid || uid === swapObj.creatorId) continue;
 
-      // Check shift compatibility
-      const opShift = opData.schedule?.[swapObj.date];
+      // Check shift compatibility: B must have desiredShift on desiredDate
+      const opShift = opData.schedule?.[swapObj.desiredDate];
       if (opShift === swapObj.desiredShift) {
         recipients.add(uid);
       }
     }
 
     // 3. Send single notification to each unique recipient
-    const message = `Nuova proposta di cambio: Un collega offre ${swapObj.offeredShift} per un ${swapObj.desiredShift} del ${swapObj.date}.`;
+    const message = `Nuova proposta di cambio: Un collega offre ${swapObj.offeredShift} del ${swapObj.date} per un ${swapObj.desiredShift} del ${swapObj.desiredDate}.`;
 
     const promises = Array.from(recipients).map((uid) =>
       notifyUser(uid, 'NEW_OPPORTUNITY', message, swapId).catch((e) =>

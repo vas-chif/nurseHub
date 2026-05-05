@@ -64,6 +64,7 @@ watch(pageTab, (newVal) => {
 const swapForm = ref({
   date: formatToDb(new Date()),
   offeredShift: 'M' as ShiftCode,
+  desiredDate: formatToDb(new Date()),
   desiredShift: 'P' as ShiftCode,
 });
 const swapSubmitting = ref(false);
@@ -115,6 +116,17 @@ async function submitSwap(): Promise<void> {
     });
     return;
   }
+  if (isRequestExpired(swapForm.value.desiredDate, swapForm.value.desiredShift)) {
+    $q.notify({
+      color: 'warning',
+      textColor: 'dark',
+      icon: 'schedule',
+      message: 'Turno desiderato già passato',
+      caption: 'Non puoi richiedere un turno già iniziato o passato.',
+      multiLine: true,
+    });
+    return;
+  }
   if (swapForm.value.offeredShift === swapForm.value.desiredShift) {
     $q.notify({
       color: 'warning',
@@ -149,6 +161,7 @@ async function submitSwap(): Promise<void> {
       configId,
       date: swapForm.value.date,
       offeredShift: swapForm.value.offeredShift,
+      desiredDate: swapForm.value.desiredDate,
       desiredShift: swapForm.value.desiredShift,
       status: 'OPEN',
       createdAt: Date.now(),
@@ -430,10 +443,10 @@ function getStatusColor(req: ShiftRequest): string {
         </q-card-section>
 
         <q-card-section class="row q-col-gutter-md">
-          <div class="col-12 col-md-4">
-            <AppDateInput v-model="swapForm.date" label="Data del cambio" required />
+          <div class="col-12 col-md-6">
+            <AppDateInput v-model="swapForm.date" label="Data turno da cedere" required />
           </div>
-          <div class="col-6 col-md-4">
+          <div class="col-6 col-md-6">
             <q-select
               v-model="swapForm.offeredShift"
               :options="swapShiftOptions"
@@ -444,7 +457,10 @@ function getStatusColor(req: ShiftRequest): string {
               dense
             />
           </div>
-          <div class="col-6 col-md-4">
+          <div class="col-12 col-md-6">
+            <AppDateInput v-model="swapForm.desiredDate" label="Data turno desiderato" required />
+          </div>
+          <div class="col-6 col-md-6">
             <q-select
               v-model="swapForm.desiredShift"
               :options="swapShiftOptions"
@@ -484,8 +500,10 @@ function getStatusColor(req: ShiftRequest): string {
             <div class="text-caption q-mt-xs">
               <span class="text-grey-7">Cedo: </span>
               <q-badge color="orange-2" text-color="orange-10" class="q-mr-xs">{{ swap.offeredShift }}</q-badge>
-              <span class="text-grey-7">→ ricevo: </span>
+              <span class="text-caption text-grey-6">({{ formatToItalian(swap.date) }})</span>
+              <span class="text-grey-7 q-mx-xs">→ ricevo: </span>
               <q-badge color="green-2" text-color="green-10">{{ swap.desiredShift }}</q-badge>
+              <span class="text-caption text-grey-6 q-ml-xs">({{ formatToItalian(swap.desiredDate) }})</span>
             </div>
             <div v-if="swap.counterpartName" class="text-caption text-grey-8 q-mt-xs">
               <q-icon name="person" size="xs" /> Con: <strong>{{ swap.counterpartName }}</strong>
