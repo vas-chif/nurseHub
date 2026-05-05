@@ -171,7 +171,7 @@ async function loadMySwaps(): Promise<void> {
     .filter((s) => s.deletedByCreator !== true);
 } /*end loadMySwaps*/
 
-async function deleteSwap(swap: ShiftSwap): Promise<void> {
+function deleteSwap(swap: ShiftSwap): void {
   $q.dialog({
     title: 'Elimina proposta',
     message: `Vuoi eliminare la proposta di cambio del ${formatToItalian(swap.date)}?`,
