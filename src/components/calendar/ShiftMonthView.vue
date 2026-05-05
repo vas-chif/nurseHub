@@ -1,12 +1,7 @@
-/**
- * @file ShiftMonthView.vue
- * @description Custom grid-based monthly calendar with "Elite" cell styling matching the Home Dashboard.
- * @author Nurse Hub Team
- * @created 2026-05-03
- * @notes
- * - Grid implementation for full month view.
- * - Cell style: White card, top color bar, colored letter + icon (matches Home style).
- */
+/** * @file ShiftMonthView.vue * @description Custom grid-based monthly calendar with "Elite" cell
+styling matching the Home Dashboard. * @author Nurse Hub Team * @created 2026-05-03 * @notes * -
+Grid implementation for full month view. * - Cell style: White card, top color bar, colored letter +
+icon (matches Home style). */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
@@ -34,7 +29,7 @@ function prevMonth() {
 // Data Loading
 async function loadData(force = false) {
   const configId = authStore.isAnyAdmin
-    ? (configStore.activeConfigId || authStore.currentUser?.configId)
+    ? configStore.activeConfigId || authStore.currentUser?.configId
     : authStore.currentUser?.configId;
   if (!configId) return;
   try {
@@ -44,13 +39,20 @@ async function loadData(force = false) {
   }
 }
 
-onMounted(() => { void loadData(); });
-watch(() => configStore.activeConfigId, () => { void loadData(); });
+onMounted(() => {
+  void loadData();
+});
+watch(
+  () => configStore.activeConfigId,
+  () => {
+    void loadData();
+  },
+);
 
 // Current Operator Schedule
 const currentOperator = computed(() => {
   const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
-  return scheduleStore.operators.find(op => op.id === targetId) || authStore.currentOperator;
+  return scheduleStore.operators.find((op) => op.id === targetId) || authStore.currentOperator;
 });
 
 const shiftStyles = computed(() => configStore.activeConfig?.shiftStyles || {});
@@ -58,16 +60,28 @@ const shiftStyles = computed(() => configStore.activeConfig?.shiftStyles || {});
 // Grid Generation
 const dayNames = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
+/** Normalised today date (time stripped) for stable daily comparison. */
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+function isToday(d: Date): boolean {
+  return (
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  );
+} /*end isToday*/
+
 const calendarDays = computed(() => {
   const year = currentMonthDate.value.getFullYear();
   const month = currentMonthDate.value.getMonth();
-  
+
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  
+
   let startPadding = firstDay.getDay() - 1;
   if (startPadding === -1) startPadding = 6;
-  
+
   const days = [];
   for (let i = 0; i < startPadding; i++) {
     const d = quasarDate.addToDate(firstDay, { days: -(startPadding - i) });
@@ -92,19 +106,25 @@ function getShiftForDate(d: Date) {
 
 function getShiftStyles(code: string | null): ShiftStyle {
   const map: Record<string, ShiftStyle> = {
-    'M': { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
-    'P': { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
-    'N': { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
-    'R': { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
-    'S': { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
-    'A': { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
-    '':  { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' }
+    M: { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
+    P: { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
+    N: { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
+    R: { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
+    S: { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
+    A: { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
+    '': { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' },
   };
 
   if (!code) return map['']!;
   const custom = shiftStyles.value[code];
-  if (custom) return { color: custom.color, icon: custom.icon, label: code, bg: custom.bg || 'rgba(0,0,0,0.05)' };
-  
+  if (custom)
+    return {
+      color: custom.color,
+      icon: custom.icon,
+      label: code,
+      bg: custom.bg || 'rgba(0,0,0,0.05)',
+    };
+
   const char = code.charAt(0).toUpperCase();
   return (map[char] || map[''])!;
 }
@@ -123,37 +143,47 @@ function getShiftStyles(code: string | null): ShiftStyle {
 
     <!-- Day Names -->
     <div class="calendar-grid-header q-mb-xs">
-      <div v-for="day in dayNames" :key="day" class="text-center text-caption text-weight-bold text-grey-6 q-py-xs">
+      <div
+        v-for="day in dayNames"
+        :key="day"
+        class="text-center text-caption text-weight-bold text-grey-6 q-py-xs"
+      >
         {{ day }}
       </div>
     </div>
 
     <!-- Calendar Grid -->
     <div class="calendar-grid">
-      <div 
-        v-for="(day, index) in calendarDays" 
-        :key="index" 
+      <div
+        v-for="(day, index) in calendarDays"
+        :key="index"
         class="calendar-cell"
-        :class="{ 'not-current': !day.isCurrentMonth }"
+        :class="{ 'not-current': !day.isCurrentMonth, 'is-today': isToday(day.date) }"
       >
-        <div 
+        <div
           class="elite-shift-card full-height relative-position shadow-1"
-          :style="{ 
+          :style="{
             '--shift-color': getShiftStyles(getShiftForDate(day.date)).color,
-            '--shift-bg': getShiftStyles(getShiftForDate(day.date)).bg
+            '--shift-bg': getShiftStyles(getShiftForDate(day.date)).bg,
           }"
         >
           <!-- Day Number -->
           <div class="day-num text-weight-bold text-grey-8">{{ day.date.getDate() }}</div>
-          
+
           <!-- Shift Display (Letter + Icon) -->
-          <div class="shift-info column items-center justify-center full-width" v-if="getShiftForDate(day.date)">
-            <div class="shift-letter text-weight-bolder" :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }">
+          <div
+            class="shift-info column items-center justify-center full-width"
+            v-if="getShiftForDate(day.date)"
+          >
+            <div
+              class="shift-letter text-weight-bolder"
+              :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
+            >
               {{ getShiftForDate(day.date) }}
             </div>
-            <q-icon 
-              :name="getShiftStyles(getShiftForDate(day.date)).icon" 
-              size="12px" 
+            <q-icon
+              :name="getShiftStyles(getShiftForDate(day.date)).icon"
+              size="12px"
               :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
               class="q-mt-xs"
             />
@@ -215,7 +245,9 @@ function getShiftStyles(code: string | null): ShiftStyle {
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
 .elite-shift-card::before {
@@ -232,12 +264,48 @@ function getShiftStyles(code: string | null): ShiftStyle {
 .elite-shift-card:hover {
   transform: translateY(-4px);
   background: var(--shift-bg, #ffffff);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .not-current {
   opacity: 0.25;
 }
+
+/* ── Today highlight (Google/Apple Calendar style) ─────────────────────── */
+.is-today > .elite-shift-card {
+  border: 2px solid #186497;
+  box-shadow:
+    0 0 0 3px rgba(24, 100, 151, 0.15),
+    0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.is-today .day-num {
+  background: #186497;
+  color: #ffffff;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: 6px;
+  right: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .is-today .day-num {
+    width: 18px;
+    height: 18px;
+    font-size: 0.6rem;
+    top: 3px;
+    right: 4px;
+  }
+}
+/* ── end today highlight ────────────────────────────────────────────────── */
 
 .day-num {
   position: absolute;
