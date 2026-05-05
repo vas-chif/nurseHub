@@ -1,3 +1,12 @@
+/**
+ * @file stores/index.ts
+ * @description Pinia store bootstrap for Quasar.
+ *   Creates the Pinia instance and optionally registers plugins.
+ *   To add typed Pinia plugin properties, extend the PiniaCustomProperties
+ *   interface inside the plugin definition (not here) to avoid empty-interface lint errors.
+ * @author Nurse Hub Team
+ * @created 2026-01-15
+ */
 import { defineStore } from '#q-app/wrappers';
 import { createPinia } from 'pinia';
 

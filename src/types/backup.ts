@@ -1,3 +1,10 @@
+/**
+ * @file backup.ts
+ * @description TypeScript types and enums for the backup/restore subsystem.
+ *   Used by AdminBackupRestore.vue, api/backup-manager.js and api/backup-restore.js.
+ * @author Nurse Hub Team
+ * @created 2026-03-01
+ */
 import { type Timestamp } from 'firebase/firestore';
 
 export enum BackupType { SCHEDULED = 'SCHEDULED', MANUAL = 'MANUAL', EMERGENCY = 'EMERGENCY' }

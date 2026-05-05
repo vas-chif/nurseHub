@@ -1,3 +1,10 @@
+<!--
+  @file SyncOperatorCard.vue
+  @description User-profile card that allows an operator to manually trigger
+    a sync of their personal schedule from the Google Sheets source-of-truth.
+  @author Nurse Hub Team
+  @created 2026-02-20
+-->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { userService } from '../../services/UserService';

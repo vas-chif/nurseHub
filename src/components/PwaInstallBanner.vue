@@ -1,3 +1,10 @@
+<!--
+  @file PwaInstallBanner.vue
+  @description Floating banner that prompts eligible users to install the PWA.
+    Listens to the beforeinstallprompt event via pwaStore.
+  @author Nurse Hub Team
+  @created 2026-02-10
+-->
 <script setup lang="ts">
 import { usePwaStore } from '../stores/pwaStore';
 import { useQuasar } from 'quasar';

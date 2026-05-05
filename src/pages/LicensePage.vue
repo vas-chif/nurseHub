@@ -1,3 +1,10 @@
+<!--
+  @file LicensePage.vue
+  @description Static page that displays third-party open-source licence notices
+    bundled with the application.
+  @author Nurse Hub Team
+  @created 2026-02-15
+-->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';

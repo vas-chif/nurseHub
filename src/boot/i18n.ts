@@ -1,3 +1,10 @@
+/**
+ * @file i18n.ts
+ * @description Quasar boot file — creates and mounts the vue-i18n instance.
+ *   Merges locale messages from src/i18n and sets the default locale to it-IT.
+ * @author Nurse Hub Team
+ * @created 2026-01-15
+ */
 import { defineBoot } from '#q-app/wrappers';
 import { createI18n } from 'vue-i18n';
 
