@@ -394,6 +394,8 @@ function getStatusColor(req: ShiftRequest): string {
             <q-select
               v-model="swapForm.offeredShift"
               :options="swapShiftOptions"
+              emit-value
+              map-options
               label="Turno da cedere"
               filled
               dense
@@ -403,6 +405,8 @@ function getStatusColor(req: ShiftRequest): string {
             <q-select
               v-model="swapForm.desiredShift"
               :options="swapShiftOptions"
+              emit-value
+              map-options
               label="Turno desiderato"
               filled
               dense

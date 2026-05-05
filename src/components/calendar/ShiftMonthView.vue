@@ -50,9 +50,15 @@ watch(
 );
 
 // Current Operator Schedule
+// Use the user's own configId (not activeConfigId) so admins who switched config
+// still see the logged-in user's schedule, not the active-admin-config operators.
 const currentOperator = computed(() => {
   const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
-  return scheduleStore.operators.find((op) => op.id === targetId) || authStore.currentOperator;
+  const userConfigId = authStore.currentUser?.configId;
+  const ops = userConfigId
+    ? scheduleStore.getOperatorsForConfig(userConfigId)
+    : scheduleStore.operators;
+  return ops.find((op) => op.id === targetId) || authStore.currentOperator;
 });
 
 const shiftStyles = computed(() => configStore.activeConfig?.shiftStyles || {});
@@ -283,7 +289,7 @@ function getShiftStyles(code: string | null): ShiftStyle {
 
 .is-today .day-num {
   background: #186497;
-  color: #ffffff;
+  color: #ffffff !important;
   border-radius: 50%;
   width: 22px;
   height: 22px;
