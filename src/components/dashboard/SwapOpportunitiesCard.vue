@@ -101,7 +101,13 @@ async function loadOpportunities() {
   const operatorSchedule = authStore.currentOperator?.schedule;
   if (!uid) return;
 
-  const snap = await getDocs(query(collection(db, 'shiftSwaps'), where('status', '==', 'OPEN')));
+  const snap = await getDocs(
+    query(
+      collection(db, 'shiftSwaps'),
+      where('status', '==', 'OPEN'),
+      where('configId', '==', configStore.activeConfigId),
+    ),
+  );
   const allOpen = snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ShiftSwap))
     .filter((s) => s.creatorId !== uid);
@@ -110,9 +116,12 @@ async function loadOpportunities() {
     if (!operatorSchedule) return false;
     // B must have desiredShift on desiredDate (the date A wants)
     const isCompatible = operatorSchedule[swap.desiredDate] === swap.desiredShift;
-    // B must be free (R/A) on swap.date so they can take A's offered shift
+    // B must be free (R/A) on swap.date ONLY when it differs from desiredDate.
+    // On same-day swaps B already has desiredShift that day — no free-day check needed.
     const offeredDateShift = operatorSchedule[swap.date] ?? 'R';
-    const isFreeOnOfferedDate = !['M', 'P', 'N', 'S', 'MP', 'N11', 'N12'].includes(offeredDateShift);
+    const isFreeOnOfferedDate =
+      swap.date === swap.desiredDate ||
+      !['M', 'P', 'N', 'S', 'MP', 'N11', 'N12'].includes(offeredDateShift);
     // Interest check
     const isHidden = swap.hiddenBy?.includes(uid) || false;
     // Expiration check

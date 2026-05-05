@@ -400,7 +400,7 @@ export async function notifySwapProposed(
     adminsSnap.docs.forEach((doc) => {
       const d = doc.data();
       const uid = d.uid || doc.id;
-      if (uid) recipients.add(uid);
+      if (uid && uid !== swapObj.creatorId) recipients.add(uid);
     });
 
     // 2. Fetch all Eligible Peers (Operators with the desired shift)

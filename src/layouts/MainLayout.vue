@@ -250,7 +250,7 @@ function goBack() {
             {{ notificationStore.unreadCount }}
           </q-badge>
           <q-menu anchor="bottom right" self="top right" :offset="[0, 10]">
-            <q-list style="min-width: 320px; max-width: 95vw">
+            <q-list style="min-width: 380px; max-width: 95vw">
               <div class="row items-center justify-between q-pa-sm">
                 <div class="text-subtitle2">Notifiche</div>
                 <q-btn v-if="notificationStore.unreadCount > 0" flat dense color="primary"
@@ -265,7 +265,7 @@ function goBack() {
                       :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'" />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label lines="2">{{ n.message }}</q-item-label>
+                    <q-item-label lines="3">{{ n.message }}</q-item-label>
                     <q-item-label caption>{{ new Date(n.createdAt).toLocaleTimeString() }}</q-item-label>
                   </q-item-section>
                 </q-item>
