@@ -1,10 +1,5 @@
-<!--
-  @file LicensePage.vue
-  @description Static page that displays third-party open-source licence notices
-    bundled with the application.
-  @author Nurse Hub Team
-  @created 2026-02-15
--->
+/** * @file LicensePage.vue * @description Static page that displays third-party open-source licence
+notices * bundled with the application. * @author Nurse Hub Team * @created 2026-02-15 */
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -148,7 +143,10 @@ if (initialSection) {
           <div v-if="selectedDettaglio && selectedDettaglio.length > 0" class="q-py-sm">
             <q-list v-for="(detail, index) in selectedDettaglio" :key="index" class="q-mb-md">
               <q-card flat bordered class="bg-white">
-                <q-card-section v-if="detail.titolo" class="bg-grey-1 text-primary text-weight-bold">
+                <q-card-section
+                  v-if="detail.titolo"
+                  class="bg-grey-1 text-primary text-weight-bold"
+                >
                   <q-icon :name="detail.icon || 'info'" class="q-mr-sm" />
                   {{ detail.titolo }}
                 </q-card-section>
@@ -167,8 +165,16 @@ if (initialSection) {
       </q-page-container>
 
       <!-- Drawer Navigation -->
-      <q-drawer v-model="leftDrawerOpen" show-if-above :mini="miniState" @click.capture="drawerClick" :width="280"
-        :breakpoint="500" bordered class="bg-grey-1">
+      <q-drawer
+        v-model="leftDrawerOpen"
+        show-if-above
+        :mini="miniState"
+        @click.capture="drawerClick"
+        :width="280"
+        :breakpoint="500"
+        bordered
+        class="bg-grey-1"
+      >
         <q-scroll-area class="fit">
           <q-list padding>
             <!-- Back button -->
@@ -186,13 +192,23 @@ if (initialSection) {
             <!-- Sections -->
             <div v-for="(item, index) in tabsMenuThirdParty" :key="index">
               <!-- Section Header -->
-              <q-item-label header v-if="!item.clickable" class="text-uppercase text-weight-bold q-mt-sm">
+              <q-item-label
+                header
+                v-if="!item.clickable"
+                class="text-uppercase text-weight-bold q-mt-sm"
+              >
                 {{ item.label }}
               </q-item-label>
 
               <!-- Clickable Item -->
-              <q-item v-else clickable v-ripple :active="isSectionActive(item)" active-class="bg-primary text-white"
-                @click="goTo(item)">
+              <q-item
+                v-else
+                clickable
+                v-ripple
+                :active="isSectionActive(item)"
+                active-class="bg-primary text-white"
+                @click="goTo(item)"
+              >
                 <q-item-section avatar v-if="item.icon">
                   <q-icon :name="item.icon" />
                 </q-item-section>
@@ -206,10 +222,26 @@ if (initialSection) {
 
         <!-- Mini Toggle -->
         <div class="absolute" style="top: 15px; right: -17px" v-if="!miniState">
-          <q-btn dense round unelevated color="secondary" icon="chevron_left" @click="miniState = true" size="sm" />
+          <q-btn
+            dense
+            round
+            unelevated
+            color="secondary"
+            icon="chevron_left"
+            @click="miniState = true"
+            size="sm"
+          />
         </div>
         <div class="absolute" style="top: 15px; right: -17px" v-if="miniState">
-          <q-btn dense round unelevated color="secondary" icon="chevron_right" @click="miniState = false" size="sm" />
+          <q-btn
+            dense
+            round
+            unelevated
+            color="secondary"
+            icon="chevron_right"
+            @click="miniState = false"
+            size="sm"
+          />
         </div>
       </q-drawer>
     </q-layout>

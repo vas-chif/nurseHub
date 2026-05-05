@@ -1,10 +1,6 @@
-<!--
-  @file PendingVerificationPage.vue
-  @description Shown after registration while the user awaits admin approval.
-    Displays status info and lets the user sign out or resend the verification e-mail.
-  @author Nurse Hub Team
-  @created 2026-02-01
--->
+/** * @file PendingVerificationPage.vue * @description Shown after registration while the user
+awaits admin approval. * Displays status info and lets the user sign out or resend the verification
+e-mail. * @author Nurse Hub Team * @created 2026-02-01 */
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -111,8 +107,14 @@ function formatDate(timestamp: number): string {
       <q-separator />
 
       <q-card-actions align="center">
-        <q-btn label="Aggiorna" icon="refresh" color="primary" outline @click="checkVerificationStatus"
-          :loading="checking" />
+        <q-btn
+          label="Aggiorna"
+          icon="refresh"
+          color="primary"
+          outline
+          @click="checkVerificationStatus"
+          :loading="checking"
+        />
         <q-btn label="Esci" icon="logout" color="negative" outline @click="handleLogout" />
       </q-card-actions>
     </q-card>

@@ -1,9 +1,5 @@
-<!--
-  @file ErrorNotFound.vue
-  @description Generic 404 / not-found page shown by the router catch-all route.
-  @author Nurse Hub Team
-  @created 2026-01-15
--->
+/** * @file ErrorNotFound.vue * @description Generic 404 / not-found page shown by the router
+catch-all route. * @author Nurse Hub Team * @created 2026-01-15 */
 <script setup lang="ts">
 //
 </script>
@@ -14,7 +10,15 @@
 
       <div class="text-h2" style="opacity: 0.4">Oops. Nothing here...</div>
 
-      <q-btn class="q-mt-xl" color="white" text-color="blue" unelevated to="/" label="Go Home" no-caps />
+      <q-btn
+        class="q-mt-xl"
+        color="white"
+        text-color="blue"
+        unelevated
+        to="/"
+        label="Go Home"
+        no-caps
+      />
     </div>
   </div>
 </template>

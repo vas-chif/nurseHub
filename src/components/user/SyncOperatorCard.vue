@@ -1,10 +1,6 @@
-<!--
-  @file SyncOperatorCard.vue
-  @description User-profile card that allows an operator to manually trigger
-    a sync of their personal schedule from the Google Sheets source-of-truth.
-  @author Nurse Hub Team
-  @created 2026-02-20
--->
+/** * @file SyncOperatorCard.vue * @description User-profile card that allows an operator to
+manually trigger * a sync of their personal schedule from the Google Sheets source-of-truth. *
+@author Nurse Hub Team * @created 2026-02-20 */
 <script setup lang="ts">
 import { ref } from 'vue';
 import { userService } from '../../services/UserService';
@@ -30,7 +26,7 @@ async function handleSync() {
       color: 'negative',
       icon: 'lock',
       message: 'Accesso Negato',
-      caption: 'Devi aver effettuato l\'accesso per poter sincronizzare il profilo.',
+      caption: "Devi aver effettuato l'accesso per poter sincronizzare il profilo.",
       multiLine: true,
       progress: true,
     });
@@ -85,8 +81,10 @@ async function handleSync() {
     <q-card-section v-if="syncResult">
       <q-banner :class="syncResult.success ? 'bg-positive' : 'bg-warning'" rounded>
         <template v-slot:avatar>
-          <q-icon :name="syncResult.success ? 'check_circle' : 'info'"
-            :color="syncResult.success ? 'white' : 'orange-9'" />
+          <q-icon
+            :name="syncResult.success ? 'check_circle' : 'info'"
+            :color="syncResult.success ? 'white' : 'orange-9'"
+          />
         </template>
         <div :class="syncResult.success ? 'text-white' : 'text-orange-9'">
           {{ syncResult.message }}
@@ -95,8 +93,15 @@ async function handleSync() {
     </q-card-section>
 
     <q-card-actions align="center">
-      <q-btn unelevated color="primary" label="Trova associazione operatore" icon="search" :loading="loading"
-        :disable="loading || (syncResult?.success ?? false)" @click="handleSync" />
+      <q-btn
+        unelevated
+        color="primary"
+        label="Trova associazione operatore"
+        icon="search"
+        :loading="loading"
+        :disable="loading || (syncResult?.success ?? false)"
+        @click="handleSync"
+      />
     </q-card-actions>
 
     <q-card-section v-if="!syncResult && !loading" class="text-caption text-grey-6 text-center">

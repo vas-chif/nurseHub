@@ -1,10 +1,6 @@
-<!--
-  @file PwaInstallBanner.vue
-  @description Floating banner that prompts eligible users to install the PWA.
-    Listens to the beforeinstallprompt event via pwaStore.
-  @author Nurse Hub Team
-  @created 2026-02-10
--->
+/** * @file PwaInstallBanner.vue * @description Floating banner that prompts eligible users to
+install the PWA. * Listens to the beforeinstallprompt event via pwaStore. * @author Nurse Hub Team *
+@created 2026-02-10 */
 <script setup lang="ts">
 import { usePwaStore } from '../stores/pwaStore';
 import { useQuasar } from 'quasar';
@@ -19,13 +15,13 @@ const installApp = async () => {
     showHelp.value = true;
     return;
   }
-  
+
   const result = await pwaStore.install();
   if (result) {
     $q.notify({
       type: 'positive',
       message: '🎉 Installazione completata! Grazie per aver scelto NurseHub.',
-      position: 'top'
+      position: 'top',
     });
   }
 };
@@ -45,68 +41,109 @@ const dismiss = () => {
       </template>
 
       <div class="column">
-        <span class="text-weight-bold text-subtitle1">Installa l'app per un'esperienza migliore!</span>
+        <span class="text-weight-bold text-subtitle1"
+          >Installa l'app per un'esperienza migliore!</span
+        >
         <span class="text-caption opacity-80">
           Più veloce, sicura e sempre pronta sul tuo desktop.
         </span>
       </div>
 
       <template v-slot:action>
-        <q-btn flat dense icon="help_outline" class="q-mr-md" @click="showHelp = true"
-          v-if="pwaStore.isSafari && !pwaStore.deferredPrompt">
+        <q-btn
+          flat
+          dense
+          icon="help_outline"
+          class="q-mr-md"
+          @click="showHelp = true"
+          v-if="pwaStore.isSafari && !pwaStore.deferredPrompt"
+        >
           <q-tooltip>Come installare su Safari?</q-tooltip>
         </q-btn>
 
-        <q-btn flat label="Più tardi" color="white" class="q-mr-sm text-capitalize" @click="dismiss" />
-        <q-btn unelevated :label="pwaStore.isIOS ? 'Come installare' : 'Installa Ora'" color="white" text-color="primary" :icon="pwaStore.isIOS ? 'help_outline' : 'downloading'"
-          class="install-btn text-weight-bold q-px-md" @click="installApp" />
+        <q-btn
+          flat
+          label="Più tardi"
+          color="white"
+          class="q-mr-sm text-capitalize"
+          @click="dismiss"
+        />
+        <q-btn
+          unelevated
+          :label="pwaStore.isIOS ? 'Come installare' : 'Installa Ora'"
+          color="white"
+          text-color="primary"
+          :icon="pwaStore.isIOS ? 'help_outline' : 'downloading'"
+          class="install-btn text-weight-bold q-px-md"
+          @click="installApp"
+        />
       </template>
     </q-banner>
 
     <q-dialog v-model="showHelp">
       <q-card style="min-width: 350px" class="q-pa-md">
         <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">{{ pwaStore.isIOS ? 'Installazione su iPhone/iPad' : "Guida all'installazione Desktop" }}</div>
+          <div class="text-h6">
+            {{
+              pwaStore.isIOS ? 'Installazione su iPhone/iPad' : "Guida all'installazione Desktop"
+            }}
+          </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-    
+
         <q-card-section>
           <div v-if="pwaStore.isIOS" class="column q-gutter-md">
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">1</q-avatar>
-              <div class="text-body2">Tocca l'icona <strong>Condividi</strong> <q-icon name="ios_share" size="xs" /> nella barra in basso di Safari.</div>
+              <div class="text-body2">
+                Tocca l'icona <strong>Condividi</strong> <q-icon name="ios_share" size="xs" /> nella
+                barra in basso di Safari.
+              </div>
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">2</q-avatar>
-              <div class="text-body2">Scorri verso l'alto e seleziona <strong>"Aggiungi alla schermata Home"</strong> <q-icon name="add_box" size="xs" />.</div>
+              <div class="text-body2">
+                Scorri verso l'alto e seleziona <strong>"Aggiungi alla schermata Home"</strong>
+                <q-icon name="add_box" size="xs" />.
+              </div>
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">3</q-avatar>
-              <div class="text-body2">Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare.</div>
+              <div class="text-body2">
+                Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare.
+              </div>
             </div>
             <q-separator class="q-my-sm" />
             <div class="text-caption text-grey-7 italic">
-              L'app apparirà tra le tue icone e potrai usarla a schermo intero senza la barra di Safari.
+              L'app apparirà tra le tue icone e potrai usarla a schermo intero senza la barra di
+              Safari.
             </div>
           </div>
-          
+
           <div v-else class="column q-gutter-md">
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">1</q-avatar>
-              <div class="text-body2">Clicca sul pulsante <strong>"Installa Ora"</strong> nel banner blu.</div>
+              <div class="text-body2">
+                Clicca sul pulsante <strong>"Installa Ora"</strong> nel banner blu.
+              </div>
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">2</q-avatar>
-              <div class="text-body2">Conferma l'installazione nel popup del browser (solitamente in alto a destra).</div>
+              <div class="text-body2">
+                Conferma l'installazione nel popup del browser (solitamente in alto a destra).
+              </div>
             </div>
             <div class="row no-wrap items-center q-gutter-sm">
               <q-avatar color="primary" text-color="white" size="sm">3</q-avatar>
-              <div class="text-body2">L'app verrà aggiunta al tuo desktop e potrai avviarla come un programma vero e proprio.</div>
+              <div class="text-body2">
+                L'app verrà aggiunta al tuo desktop e potrai avviarla come un programma vero e
+                proprio.
+              </div>
             </div>
           </div>
         </q-card-section>
-    
+
         <q-card-actions align="right">
           <q-btn flat label="Ho capito" color="primary" v-close-popup />
         </q-card-actions>
