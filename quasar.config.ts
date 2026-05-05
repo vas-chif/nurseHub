@@ -122,7 +122,7 @@ export default defineConfig((ctx) => {
       directives: ['TouchSwipe'],
 
       // Quasar plugins
-      plugins: ['Notify', 'Dialog', 'Loading', 'LocalStorage'],
+      plugins: ['Notify', 'Dialog', 'Loading', 'LocalStorage', 'BottomSheet'],
     },
 
     // animations: 'all', // --- includes all animations
