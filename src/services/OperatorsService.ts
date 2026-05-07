@@ -3,11 +3,12 @@
  * @description Service for managing operator profiles within specific system configurations.
  * @author Nurse Hub Team
  * @created 2026-03-10
- * @modified 2026-04-27
+ * @modified 2026-05-07
  * @notes
  * - Accesses operators stored in sub-collections of the systemConfigurations collection.
  * - Supports retrieval of all operators for a config or specific operator by ID.
  * - Essential for mapping users to their professional shift schedules.
+ * - findOperatorByName() provides fallback lookup for self-healing login flows.
  */
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../boot/firebase';
@@ -71,6 +72,20 @@ export class OperatorsService {
   async getAllOperators(configId: string): Promise<Operator[]> {
     return this.getOperatorsByConfig(configId);
   }
+
+  /**
+   * Finds an operator by their full name (case-insensitive) within a configuration.
+   * Used as fallback when a user's operatorId is stale or points to a non-existent document.
+   * This supports the self-healing login flow in authStore.loadUserProfile().
+   * @param configId - The system configuration ID to search in
+   * @param fullName - The operator's full name in any case (e.g. "Vasile Chifeac" or "VASILE CHIFEAC")
+   * @returns The matching Operator or null if not found
+   */
+  async findOperatorByName(configId: string, fullName: string): Promise<Operator | null> {
+    const allOps = await this.getOperatorsByConfig(configId);
+    const normalized = fullName.toUpperCase().trim();
+    return allOps.find((op) => op.name.toUpperCase().trim() === normalized) ?? null;
+  } /*end findOperatorByName*/
 }
 
 export const operatorsService = new OperatorsService();

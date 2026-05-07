@@ -3,12 +3,13 @@
  * @description Service for managing user identities, profile data, and administrative role hierarchies.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-04-27
+ * @modified 2026-05-07
  * @notes
  * - Handles complex operator matching during user synchronization.
  * - Manages administrative promotions and JWT Custom Claims via Vercel integration.
  * - Implements profile updates (avatar, DOB, phone) with Firestore persistence.
  * - Provides audit-friendly user blocking and unlinking capabilities.
+ * - repairOperatorLink() supports the self-healing login flow in authStore.
  */
 
 import {
@@ -18,6 +19,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  writeBatch,
   query,
   where,
 } from 'firebase/firestore';
@@ -407,6 +409,27 @@ export class UserService {
       updatedAt: Date.now(),
     });
   }
+
+  /**
+   * Repairs a stale user-to-operator link detected during self-healing login.
+   * Atomically updates the user's operatorId and claims the operator document with the user's UID.
+   * Called automatically by authStore.loadUserProfile() when a stale ID is detected.
+   * @param uid - Firebase Auth UID of the user being repaired
+   * @param configId - The system configuration ID the operator belongs to
+   * @param operatorId - The correct (slug-based) operator ID to link to
+   */
+  async repairOperatorLink(uid: string, configId: string, operatorId: string): Promise<void> {
+    const batch = writeBatch(db);
+    batch.update(doc(this.usersCollection, uid), {
+      operatorId,
+      updatedAt: Date.now(),
+    });
+    batch.update(doc(db, 'systemConfigurations', configId, 'operators', operatorId), {
+      userId: uid,
+    });
+    await batch.commit();
+    logger.info('Repaired operator link via self-healing', { operatorId });
+  } /*end repairOperatorLink*/
 }
 
 // Export singleton instance

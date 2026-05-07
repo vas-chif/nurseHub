@@ -3,11 +3,14 @@
  * @description Core service for bidirectional synchronization with Google Sheets.
  * @author Nurse Hub Team
  * @created 2026-02-15
- * @modified 2026-04-27
+ * @modified 2026-05-07
  * @notes
  * - Uses Gviz API for read-only parsing of public/private spreadsheets.
  * - Integrates with Google Apps Script (GAS) Web Apps for secure write operations.
  * - Handles complex date parsing from varied sheet formats (Excel serials, Gviz strings).
+ * - Operator IDs are now stable slugs derived from operator names (e.g. "vasile-chifeac"),
+ *   replacing the previous row-index-based approach ("op-N") that caused identity corruption
+ *   whenever rows were reordered in the source spreadsheet.
  */
 
 import type { AppConfig, Operator } from '../types/models';
@@ -42,6 +45,23 @@ export class GoogleSheetsService {
   constructor(config: AppConfig) {
     this.config = config;
   }
+
+  /**
+   * Generates a stable, URL-safe slug from an operator's full name.
+   * Handles Italian accented characters (à, è, ì, ò, ù) via NFD normalization.
+   * The same name always produces the same slug regardless of sheet row position.
+   * @param name - The operator's full name as it appears in the sheet (e.g. "FORTUNA DANIELE")
+   * @returns Deterministic slug (e.g. "fortuna-daniele")
+   */
+  private slugifyName(name: string): string {
+    return name
+      .toLowerCase()
+      .normalize('NFD')                 // decompose accents: à → a + combining mark
+      .replace(/[\u0300-\u036f]/g, '')  // remove combining diacritical marks
+      .trim()
+      .replace(/\s+/g, '-')             // whitespace → hyphen
+      .replace(/[^a-z0-9-]/g, '');      // remove apostrophes, dots, etc.
+  } /*end slugifyName*/
 
   /**
    * Generates the Gviz API URL for fetching data as JSON
@@ -220,7 +240,7 @@ export class GoogleSheetsService {
             });
 
             parsedOps.push({
-              id: `op-${i}`, 
+              id: this.slugifyName(name),
               name,
               schedule,
               email: cMap[name.toUpperCase()]?.email || '',
@@ -278,7 +298,7 @@ export class GoogleSheetsService {
           });
 
           parsedOps.push({
-            id: `op-${i}`,
+            id: this.slugifyName(name),
             name,
             schedule,
             email: '', // Contacts handled separately if needed, or we could add them to GAS

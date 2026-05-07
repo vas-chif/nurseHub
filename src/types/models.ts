@@ -48,8 +48,10 @@ export interface User {
 }
 
 export interface Operator {
-  id: string; // generated or row-index based
+  id: string; // deterministic slug based on name (e.g. "vasile-chifeac")
   name: string;
+  userId?: string; // Firebase Auth UID of the user who owns this operator record.
+                   // Protected: never overwritten by sync — preserved across all sheet changes.
   email?: string;
   dateOfBirth?: string; // YYYY-MM-DD format for user matching
   phone?: string;
