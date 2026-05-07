@@ -54,8 +54,13 @@ service cloud.firestore {
         isSuperAdmin() || 
         (isAdmin() && request.auth.token.get('permissions', {}).get('manageAdmins', false) == true) ||
         (request.auth.uid == userId && (
+          // Allow normal updates (excluding sensitive fields)
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId', 'managerialInfo']) ||
-          (resource.data.get('operatorId', null) == null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt']))
+          // Allow self-healing/migration: if the current operatorId is null OR is a legacy ID (starts with 'op-')
+          (
+            (resource.data.get('operatorId', null) == null || resource.data.get('operatorId', '').matches('^op-.*')) && 
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt'])
+          )
         ))
       );
     }

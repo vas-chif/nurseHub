@@ -65,9 +65,13 @@ onMounted(async () => {
     unsubs.push(unsubInApp);
   }
 
+  // Load configurations for all authenticated users to support self-healing
+  if (authStore.currentUser?.uid) {
+    await configStore.loadConfigurations();
+  }
+
   // Admin notification listener
   if (authStore.isAnyAdmin) {
-    await configStore.loadConfigurations();
     notificationStore.initAdminListener(() => {
       if (router.currentRoute.value.path !== '/admin/requests') {
         $q.notify({

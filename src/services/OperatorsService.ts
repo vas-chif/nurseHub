@@ -88,10 +88,23 @@ export class OperatorsService {
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '') // strip accents
-        .replace(/\s+/g, ' ')            // collapse multiple spaces
+        .replace(/[^a-z0-9]/g, '') // strip non-alphanumeric
         .trim();
-    const needle = normalize(fullName);
-    return allOps.find((op) => normalize(op.name) === needle) ?? null;
+
+    const target = normalize(fullName);
+    
+    // 1. Direct match
+    let match = allOps.find((op) => normalize(op.name) === target);
+    if (match) return match;
+
+    // 2. Reversed name order match (e.g. "Chifeac Vasile" vs "Vasile Chifeac")
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const reversed = normalize(parts.reverse().join(' '));
+      match = allOps.find((op) => normalize(op.name) === reversed);
+    }
+
+    return match ?? null;
   } /*end findOperatorByName*/
 }
 

@@ -420,15 +420,21 @@ export class UserService {
    */
   async repairOperatorLink(uid: string, configId: string, operatorId: string): Promise<void> {
     const batch = writeBatch(db);
-    // Use set+merge so this never throws if the user doc is missing
-    // (e.g. SuperAdmin accounts created outside the normal registration flow).
-    batch.set(doc(this.usersCollection, uid), {
-      operatorId,
-      updatedAt: Date.now(),
-    }, { merge: true });
-    batch.set(doc(db, 'systemConfigurations', configId, 'operators', operatorId), {
-      userId: uid,
-    }, { merge: true });
+    batch.set(
+      doc(this.usersCollection, uid),
+      {
+        operatorId,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+    batch.set(
+      doc(db, 'systemConfigurations', configId, 'operators', operatorId),
+      {
+        userId: uid,
+      },
+      { merge: true }
+    );
     await batch.commit();
     logger.info('Repaired operator link via self-healing', { operatorId });
   } /*end repairOperatorLink*/

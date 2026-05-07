@@ -116,10 +116,14 @@ export class SyncService {
             // Use set+merge so it never throws even if the user doc is missing (e.g. SuperAdmin
             // accounts created outside the normal registration flow).
             if (preservedUserId) {
-              usersBatch.set(doc(usersRef, preservedUserId), {
-                operatorId: slug,
-                updatedAt: Date.now(),
-              }, { merge: true });
+              usersBatch.set(
+                doc(usersRef, preservedUserId),
+                {
+                  operatorId: slug,
+                  updatedAt: Date.now(),
+                },
+                { merge: true }
+              );
               userMigrationsCount++;
               logger.info('Migrating legacy operator ID → slug', {
                 legacyId: legacyDocId,
