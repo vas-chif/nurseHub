@@ -273,8 +273,11 @@ export const useAuthStore = defineStore('auth', () => {
           }
           // operator is null (stale ID) or identity guard fired — attempt self-healing
           if (!currentOperator.value) {
-            const fullName = `${user.firstName} ${user.lastName}`;
-            const recovered = await operatorsService.findOperatorByName(user.configId, fullName);
+            // Guard: only attempt self-healing when we have a non-empty name to search with
+            const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+            const recovered = fullName
+              ? await operatorsService.findOperatorByName(user.configId, fullName)
+              : null;
 
             if (recovered) {
               if (recovered.userId && recovered.userId !== uid) {

@@ -112,12 +112,14 @@ export class SyncService {
             // 2. Delete the old legacy document
             opsBatch.delete(doc(operatorsRef, legacyDocId));
 
-            // 3. Repair all users that pointed to the old legacy ID
+            // 3. Repair all users that pointed to the old legacy ID.
+            // Use set+merge so it never throws even if the user doc is missing (e.g. SuperAdmin
+            // accounts created outside the normal registration flow).
             if (preservedUserId) {
-              usersBatch.update(doc(usersRef, preservedUserId), {
+              usersBatch.set(doc(usersRef, preservedUserId), {
                 operatorId: slug,
                 updatedAt: Date.now(),
-              });
+              }, { merge: true });
               userMigrationsCount++;
               logger.info('Migrating legacy operator ID → slug', {
                 legacyId: legacyDocId,

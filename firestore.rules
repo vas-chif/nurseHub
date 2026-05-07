@@ -67,10 +67,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (
         request.resource.data.reason != 'ABSENCE' || isAnyAdmin()
       );
-      // Config-Fencing for updates (approvals, rejections)
+      // Config-Fencing for updates (approvals, rejections, or toggling interest)
       allow update: if hasConfigAuthority(resource.data.configId) || (
         isAuthenticated() && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'offeringOperatorIds'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offers', 'offeringOperatorIds', 'hiddenBy'])
       );
       allow delete: if hasConfigAuthority(resource.data.configId) || 
                    (isAuthenticated() && resource != null && (resource.data.creatorId == request.auth.uid || resource.data.userId == request.auth.uid));
@@ -143,7 +143,8 @@ service cloud.firestore {
       allow update: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && (
         (resource.data.status == 'OPEN' && request.resource.data.status == 'PENDING_ADMIN' && request.resource.data.counterpartId == request.auth.uid) ||
         (resource.data.creatorId == request.auth.uid && request.resource.data.status == 'CANCELLED') ||
-        (resource.data.creatorId == request.auth.uid && resource.data.status == 'OPEN' && request.resource.data.get('deletedByCreator', false) == true)
+        (resource.data.creatorId == request.auth.uid && resource.data.status == 'OPEN' && request.resource.data.get('deletedByCreator', false) == true) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hiddenBy']))
       ));
       allow delete: if hasConfigAuthority(resource.data.configId) || (isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid);
     }

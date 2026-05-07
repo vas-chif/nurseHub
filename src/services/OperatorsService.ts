@@ -83,8 +83,15 @@ export class OperatorsService {
    */
   async findOperatorByName(configId: string, fullName: string): Promise<Operator | null> {
     const allOps = await this.getOperatorsByConfig(configId);
-    const normalized = fullName.toUpperCase().trim();
-    return allOps.find((op) => op.name.toUpperCase().trim() === normalized) ?? null;
+    const normalize = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // strip accents
+        .replace(/\s+/g, ' ')            // collapse multiple spaces
+        .trim();
+    const needle = normalize(fullName);
+    return allOps.find((op) => normalize(op.name) === needle) ?? null;
   } /*end findOperatorByName*/
 }
 
