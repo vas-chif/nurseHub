@@ -42,7 +42,7 @@ const activeTab = ref('pending');
 
 // ─── Composables ─────────────────────────────────────────────────────────────
 const reqs = useAdminRequests();
-const swaps = useAdminSwaps(reqs.syncToSheets, reqs.operators);
+const swaps = useAdminSwaps(reqs.syncToSheets, reqs.operators, reqs.filters);
 
 // Destructure for easier template usage and to fix v-model Ref types
 const { 
@@ -262,6 +262,29 @@ watch(() => reqs.operatorOptions.value, (newVal) => {
   filteredOperatorOptions.value = newVal;
 });
 
+function setPeriod(type: 'week' | 'month' | 'today' | 'next7') {
+  const now = new Date();
+  let from = new Date();
+  let to = new Date();
+
+  if (type === 'today') {
+    from = now;
+    to = now;
+  } else if (type === 'week') {
+    from = now;
+    to = new Date(now.getTime() + 7 * 86400000);
+  } else if (type === 'next7') {
+    from = now;
+    to = new Date(now.getTime() + 7 * 86400000);
+  } else if (type === 'month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  }
+
+  reqs.filters.value.dateFrom = from.toISOString().split('T')[0]!;
+  reqs.filters.value.dateTo = to.toISOString().split('T')[0]!;
+}
+
 function filterOperators(val: string, update: (fn: () => void) => void) {
   if (val === '') {
     update(() => {
@@ -304,6 +327,15 @@ function filterOperators(val: string, update: (fn: () => void) => void) {
           </div>
           <div class="col-12 col-sm-6 col-md-2">
             <AppDateInput v-model="reqs.filters.value.dateTo" label="Al giorno" />
+          </div>
+
+          <!-- Quick Periods -->
+          <div class="col-12 col-md-3">
+            <div class="flex q-gutter-xs no-wrap items-center" style="height: 40px">
+              <q-btn flat dense color="primary" label="Oggi" @click="setPeriod('today')" class="q-px-sm" size="sm" border />
+              <q-btn flat dense color="primary" label="+7gg" @click="setPeriod('next7')" class="q-px-sm" size="sm" />
+              <q-btn flat dense color="primary" label="Mese" @click="setPeriod('month')" class="q-px-sm" size="sm" />
+            </div>
           </div>
           
           <!-- Operator Multi-Select -->

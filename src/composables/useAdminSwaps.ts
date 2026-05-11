@@ -43,7 +43,8 @@ const logger = useSecureLogger();
  */
 export function useAdminSwaps(
   syncToSheets: (operatorName: string, date: string, newShift: string, note?: string) => Promise<void>,
-  operators: { value: Record<string, Operator> }
+  operators: { value: Record<string, Operator> },
+  filters: { value: { dateFrom: string; dateTo: string } }
 ) {
   const $q = useQuasar();
   const authStore = useAuthStore();
@@ -70,7 +71,19 @@ export function useAdminSwaps(
     return rawSwaps.value;
   });
 
-  const pendingSwaps = computed(() => allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN'));
+  const pendingSwaps = computed(() => {
+    let filtered = allSwaps.value.filter((s) => s.status === 'PENDING_ADMIN');
+    
+    // Apply Date Filters
+    if (filters.value.dateFrom) {
+      filtered = filtered.filter(s => s.date >= filters.value.dateFrom);
+    }
+    if (filters.value.dateTo) {
+      filtered = filtered.filter(s => s.date <= filters.value.dateTo);
+    }
+    
+    return filtered;
+  });
 
   const archivedSwaps = computed(() => {
     const cutoffDate = dateUtil.formatDate(
