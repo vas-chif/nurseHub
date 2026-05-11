@@ -20,7 +20,7 @@ export type ShiftCode =
 
 export type RequestReason = 'SHORTAGE' | 'ABSENCE';
 
-export type RequestStatus = 'OPEN' | 'PARTIAL' | 'CLOSED' | 'EXPIRED';
+export type RequestStatus = 'OPEN' | 'PARTIAL' | 'CLOSED' | 'EXPIRED' | 'APPROVED' | 'REJECTED';
 
 // --- Entities ---
 
@@ -49,14 +49,18 @@ export interface User {
 
 export interface Operator {
   id: string; // deterministic slug based on name (e.g. "vasile-chifeac")
-  name: string;
+  name: string; // Full name or display name
+  firstName?: string; // Optional: for alignment with User (§1.12)
+  lastName?: string;  // Optional: for alignment with User (§1.12)
   userId?: string; // Firebase Auth UID of the user who owns this operator record.
                    // Protected: never overwritten by sync — preserved across all sheet changes.
   email?: string;
   dateOfBirth?: string; // YYYY-MM-DD format for user matching
   phone?: string;
   schedule: Record<string, ShiftCode>; // YYYY-MM-DD -> Code
+  notes?: Record<string, string>; // YYYY-MM-DD -> Note text (§1.12)
   lastSync?: number | object; // Timestamp ultima sincronizzazione (number or FieldValue)
+  sheetOrder?: number; // Sorting order from Google Sheets (§1.12)
 }
 
 export interface ShiftRequest {
@@ -95,6 +99,8 @@ export interface ShiftRequest {
     operatorId: string;
     operatorName?: string;
     scenarioLabel?: string;
+    roleLabel?: string;
+    newShift?: ShiftCode;
     timestamp?: number;
     isRejected?: boolean;
   }>; // Offerte ricevute dagli operatori
@@ -104,6 +110,15 @@ export interface ShiftRequest {
   acceptedOfferId?: string; // ID of the accepted offer
   hiddenBy?: string[]; // UIDs of users who deleted this from their view
   isArchived?: boolean; // True if auto-archived (> 3 months)
+
+  // Expert System Step 1.3: Permanent closure metadata
+  resolutionMetadata?: {
+    substituteId: string | null;
+    substituteName: string;
+    scenarioLabel: string;
+    closedBy?: string;
+    closedAt: number;
+  };
 
   // Phase 22: Soft Delete
   deletedByCreator?: boolean; // True if the creator deleted it from their view
@@ -245,6 +260,17 @@ export interface SystemConfiguration {
   createdAt: number;
   createdBy: string; // Admin UID
   isActive?: boolean; // Currently selected configuration
+
+  // Spreadsheet Mapping (§1.12)
+  dateRowIndex: number;
+  nameColumnIndex: number;
+  dataStartRowIndex: number;
+  dataStartColIndex: number;
+  contactsUrl: string;
+  contactsStartRow: number;
+  contactNameCol: number;
+  contactEmailCol: number;
+  contactPhoneCol: number;
 }
 
 export interface Notification {

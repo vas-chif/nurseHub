@@ -58,13 +58,31 @@
    - **Firebase:** I turni vengono invertiti nei documenti `operators`.
    - **Google Sheets:** Se in modalità "Auto", viene aggiornato il file Master tramite `api/update-sheet-swap.js`.
 
-### 3. Manutenzione e Pulizia Automatica (Phase 31)
-- **TTL (Time To Live) Firestore:** Implementazione del campo `expireAt` in ogni documento critico per l'eliminazione automatica dal database (Piano Blaze richiesto).
-- **Notifications:** Eliminazione automatica dopo **15 giorni**.
-- **shiftRequests & shiftSwaps:** Eliminazione automatica dopo **90 giorni** se lo stato è `CLOSED`, `REJECTED` o `EXPIRED`.
-- **Scadenza Real-time:** Le richieste non approvate entro l'orario di inizio del turno vengono marcate visivamente come `EXPIRED` e non sono più modificabili/accettabili.
+### 3. Il Sistema Esperto Admin (Expert System - Maggio 2026)
+L'app funge da "Vigile Intelligente" tra Database e Google Sheets per garantire coerenza assoluta.
+- **Pre-flight Sync Check**: Prima di ogni approvazione, il sistema interroga Google Sheets (via GAS) per verificare che il turno dell'operatore non sia cambiato manualmente su Excel.
+- **Dialogo di Risoluzione Conflitti**: In caso di mismatch (es. Excel dice 'S' ma App si aspetta 'R'), l'Admin deve scegliere esplicitamente tra:
+  - **Forza Sovrascrittura**: L'app vince e riscrive il dato su Excel.
+  - **Gestione Manuale**: L'app aggiorna solo Firestore e lascia l'Admin libero di agire su Excel.
+  - **Annulla**: Per investigare la causa dell'errore.
+  - **Motore di Matching Centralizzato (Expert System Core)**: 
+    - Tutta la logica di abbinamento tra operatori e scenari risiede in `useShiftLogic.ts` (`isOperatorEligibleForRole`).
+    - **Single Source of Truth**: Questo motore è l'unico responsabile per popolare la Dashboard Utente, i Suggerimenti Admin e per filtrare l'invio delle Notifiche.
+    - **Temporal Guard Onnipresente**: 
+      - **In-Shift Guard**: Impedisce "Spostamenti" se il turno è iniziato da >30 min.
+      - **End-Time Guard**: Rimuove l'operatore se il suo turno è finito da >30 min (considerato "Smontato").
+    - **Anti-Noise Notification Guard**: Prima di inviare notifiche, il sistema ricontrolla l'idoneità temporale. Se un operatore è diventato inidoneo tra la ricerca e l'invio (es. è passato il tempo limite), non riceve la notifica.
+- **Organizzazione Offerte (Multi-Scenario Mapping)**: 
+  - **Lato Utente**: Le opzioni di copertura sono de-duplicate per "Ruolo" (es. se N12 è presente in 3 scenari, l'utente vede una sola riga). L'utente si candida per un'azione di copertura specifica.
+  - **Lato Admin**: Il sistema mappa automaticamente ogni candidatura su **tutti** gli scenari compatibili. Se un operatore offre "N12", il suo nome apparirà in ogni raggruppamento (Scenario 3, 4, 5...) che prevede quel ruolo, permettendo all'Admin di valutare l'offerta in contesti di gruppo differenti.
+- **Snapshot Indelebile**: Al momento della chiusura, l'app salva un oggetto `resolutionMetadata` (ID, Nome, Scenario) nel documento Firestore. Questo garantisce che lo storico mostri sempre chi ha coperto il turno, anche se i dati degli operatori cambiano in futuro.
 
-### 4. Sincronizzazione Isolata & Filtro Maestro (Phase 30.1)
+### 4. Manutenzione e Pulizia Automatica (Phase 31)
+- **TTL (Time To Live) Firestore:** Implementazione del campo `expireAt` in ogni documento critico per l'eliminazione automatica dal database (Piano Blaze richiesto).
+- **Notifiche Intelligenti**: L'invio delle notifiche è subordinato al Motore di Matching. Se un operatore non vede più l'opportunità in dashboard (perché scaduta o incompatibile), il sistema non gli invia il ping, riducendo il rumore di fondo.
+- **Scadenza Real-time Unificata**: Le richieste (Assenze e Cambi) e le relative offerte non approvate entro l'orario di inizio del turno vengono marcate visivamente come `SCADUTO` (Admin) o `Scaduta` (Utente) in tempo reale.
+
+### 5. Sincronizzazione Isolata & Filtro Maestro (Phase 30.1)
 - **Filtro Maestro (SuperAdmin):** Il passaggio tra un reparto e l'altro (cambio `configId`) aggiorna unicamente la variabile in RAM (`configStore.activeConfigId`). Tutti i componenti e le computed properties (liste, utenti, richieste, notifiche in arrivo) si filtrano lato client-side a latenza zero, garantendo il 100% di isolamento visivo senza generare costi per Firebase Reads.
 - **Componente di Sync:** `GlobalSyncBtn.vue`.
 - **Regole Sicurezza Rigide:** `firestore.rules` autorizza l'aggiornamento degli operatori agli Admin o agli Utenti Base purché l'azione sia rigorosamente limitata al `configId` di loro appartenenza (Config-Fencing DB-level).
@@ -72,7 +90,7 @@
 - **Cooldown Indipendente:** Il database e il client forzano un cooldown di 1 minuto per gli Admin e 2 ore per gli Utenti Base, applicato al singolo reparto.
 - **Auto-Refresh Intelligente:** Al cambio pagina o ritorno al focus, l'app verifica il timestamp specifico del reparto attivo; se c'è stata una sincronizzazione esterna per quel reparto, ricarica i dati.
 
-### 5. Sistema di Rotazione Interattiva (Phase 31)
+### 6. Sistema di Rotazione Interattiva (Phase 31)
 - **Logica "State Machine":** Basata sul `currentColumnIndex`. Il sistema gestisce una matrice infinita tramite ciclo Modulo.
 - **Elite Preview**: Il `RotationWidget` mostra la rotazione attuale con badge vibranti e la **prossima rotazione** in formato ultra-compatto (`bg-grey-3`, font 0.55rem) per una gerarchia visiva chiara.
 - **Timer Autonomo & Manuale**: Avanzamento automatico ogni 5 giorni con possibilità di pausa e ripartenza manuale (Democratizzazione del timer).
@@ -93,3 +111,20 @@
 - **JSDoc**: Header JSDoc obbligatori per tutti i file.
 - **No Duplication**: Vietata la definizione locale di `itLocale` o array di mesi/giorni. Usare sempre `src/constants/locales.ts`.
 - **Standardizzazione UI**: Design vibrante, lettere dei turni ad alta visibilità e uso sistematico di `AppDateInput`.
+- **Elite Formatting**: Le note inviate a Google Sheets utilizzano emoji e formattazione multiriga (👤 Operatore, 📝 Nota, 🤝 Sostituto, 📋 Scenario, ✅ Approvazione) per massima chiarezza visiva sul file Excel.
+
+### 7. Gestione Avanzata Turni & Audit Log (Phase 32)
+Il sistema è stato potenziato per permettere agli Admin una gestione chirurgica e immediata dei turni, garantendo al contempo un audit log chiaro su Excel.
+- **Logica di Sovrascrittura Multi-giorno**:
+  - Nelle richieste di assenza multi-giorno, i turni **S** (Smonto) e **R** (Riposo) vengono sovrascritti automaticamente per evitare dati sporchi in calendario.
+  - I turni **A** (Assenza) vengono invece preservati, evitando sovrapposizioni di giustificativi.
+- **Toggle "Sovrascrittura Diretta" (Admin Fast-Track)**: Permette agli Admin di inviare la richiesta e aggiornare Google Sheets istantaneamente, saltando lo stato `OPEN`.
+- **Modifica Diretta in Tabella Admin (Batch Edit)**:
+  - Le celle di `AdminShiftTable.vue` sono interattive (cliccabili).
+  - **Stato Pendente**: Le modifiche locali vengono evidenziate con un bordo tratteggiato e salvate in una "coda di sincronizzazione".
+  - **Batch Sync**: Un unico pulsante flottante permette di inviare tutte le modifiche accumulate a Google Sheets in un'unica operazione, ottimizzando le performance e riducendo gli errori.
+- **Audit Log Cromatico (Excel Audit)**:
+  - **Rosso**: Identifica modifiche derivanti da **Richieste** (Assenze/Cambi).
+  - **Blu**: Identifica modifiche effettuate **Manualmente** dall'Admin tramite la tabella.
+  - **Firma Admin**: Ogni nota di modifica manuale include automaticamente il nome dell'Admin che ha effettuato l'operazione.
+- **Readability Emojis**: Tutte le note di sincronizzazione ora includono emoji standardizzate (🔄 Scambio, 🛠️ Modifica Manuale, 📝 Nota, 👤 Operatore) per una consultazione rapida del foglio Excel.

@@ -35,6 +35,7 @@ import type {
   RequestReason,
   Operator,
   AbsencePreviewRow,
+  AppConfig,
 } from '../types/models';
 
 /**
@@ -99,6 +100,7 @@ export function useAbsenceForm(onSuccess: () => void) {
     endTime: '',
     absenceLabel: 'Assenza Generica',
     note: '',
+    directSync: false, // Admin-only: sync to Sheets immediately (§1.12)
   });
 
   const absenceOptions = [
@@ -227,9 +229,7 @@ export function useAbsenceForm(onSuccess: () => void) {
           scheduledShift !== null &&
           scheduledShift !== formData.value.shift;
         const excluded =
-          scheduledShift === 'R' ||
-          scheduledShift === 'S' ||
-          scheduledShift === 'A';
+          scheduledShift === 'A'; // Only 'A' remains 'A' (§Punto 1)
         return {
           date,
           scheduledShift,
@@ -281,7 +281,7 @@ export function useAbsenceForm(onSuccess: () => void) {
         date: row.date,
         originalShift: row.selectedShift,
         reason: 'ABSENCE' as RequestReason,
-        status: 'OPEN',
+        status: formData.value.directSync ? 'APPROVED' : 'OPEN',
         configId,
         creatorId: authStore.currentUser!.uid,
         creatorName,
@@ -310,6 +310,18 @@ export function useAbsenceForm(onSuccess: () => void) {
           notifyEligibleOperators(fullReq, configId).catch((e: unknown) =>
             logger.error('Errore notifica operatori eleggibili', e),
           );
+
+          // If directSync, also update Google Sheets immediately
+          if (formData.value.directSync) {
+            const { GoogleSheetsService } = await import('../services/GoogleSheetsService');
+            const sheetsService = new GoogleSheetsService(configStore.activeConfig as AppConfig);
+            const currentRow = activeRows[i];
+            if (currentRow) {
+              const note = `Approvazione Automatica (Admin: ${creatorName}) | 🔄 Da: ${currentRow.scheduledShift} ➔ A: ${currentRow.selectedShift}${currentRow.note ? ` | 📝 ${currentRow.note}` : ''}`;
+              sheetsService.updateShiftOnSheets(absentOperatorName, currentRow.date, currentRow.selectedShift, note)
+                .catch(e => logger.error('Direct sync failed', e));
+            }
+          }
         }
       }
 

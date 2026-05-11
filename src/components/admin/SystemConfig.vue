@@ -107,6 +107,16 @@ async function createConfiguration() {
       createdAt: Date.now(),
       createdBy: authStore.currentUser!.uid,
       isActive: false,
+      // Default mapping indices (§1.12)
+      dateRowIndex: 0,
+      nameColumnIndex: 0,
+      dataStartRowIndex: 1,
+      dataStartColIndex: 1,
+      contactsUrl: '',
+      contactsStartRow: 1,
+      contactNameCol: 0,
+      contactEmailCol: 1,
+      contactPhoneCol: 2,
     };
     await addDoc(collection(db, 'systemConfigurations'), newConfig);
     $q.notify({ type: 'positive', message: 'Configurazione creata!' });

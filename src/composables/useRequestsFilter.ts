@@ -49,7 +49,7 @@ const logger = useSecureLogger();
 export function useRequestsFilter() {
   const authStore = useAuthStore();
   const scenarioStore = useScenarioStore();
-  const { getCompatibleScenarios } = useShiftLogic();
+  const { getCompatibleScenarios, isRequestExpired } = useShiftLogic();
   const $q = useQuasar();
 
   // ─── State ──────────────────────────────────────────────────────────────────
@@ -157,13 +157,11 @@ export function useRequestsFilter() {
           const isMine = data.absentOperatorId === myOpId;
           const alreadyOffered = data.offeringOperatorIds?.includes(myOpId) ?? false;
           if (!isMine && !alreadyOffered) {
-            const opShift = authStore.currentOperator?.schedule?.[data.date] ?? 'R';
             const compatible = getCompatibleScenarios(
-              data.originalShift,
-              opShift,
-              data.date,
-              authStore.currentOperator?.schedule,
+              { date: data.date, originalShift: data.originalShift },
+              authStore.currentOperator!
             );
+
             if (compatible && compatible.length > 0) {
               loaded.push({ ...data, id: docSnap.id });
             }
@@ -227,13 +225,22 @@ export function useRequestsFilter() {
     compatibleScenarios.value = [];
     selectedScenario.value = null;
     if (authStore.currentOperator) {
-      const opShift = authStore.currentOperator.schedule?.[req.date] ?? 'R';
-      compatibleScenarios.value = getCompatibleScenarios(
-        req.originalShift,
-        opShift,
-        req.date,
-        authStore.currentOperator.schedule,
+      const raw = getCompatibleScenarios(
+        { date: req.date, originalShift: req.originalShift },
+        authStore.currentOperator
       );
+
+      // De-duplicate by unique role combination (Expert System Step 2.3)
+      const seen = new Set<string>();
+      const unique: CompatibleScenario[] = [];
+      for (const s of raw) {
+        const key = `${s.roleLabel}|${s.newShift}|${s.incentive}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(s);
+        }
+      }
+      compatibleScenarios.value = unique;
     }
     loadingCompatibility.value = false;
   } /*end openOfferDialog*/
@@ -247,7 +254,9 @@ export function useRequestsFilter() {
         id: `offer-${Date.now()}`,
         operatorId: authStore.currentOperator.id,
         operatorName: authStore.currentOperator.name,
-        scenarioLabel: `${selectedScenario.value.scenarioLabel} - ${selectedScenario.value.roleLabel}`,
+        roleLabel: selectedScenario.value.roleLabel,
+        scenarioLabel: selectedScenario.value.scenarioLabel, // Kept for legacy, but roleLabel is master
+        newShift: selectedScenario.value.newShift,
         timestamp: Date.now(),
       };
       await updateDoc(reqRef, {
@@ -331,6 +340,12 @@ export function useRequestsFilter() {
   function getMyOfferStatusLabel(req: ShiftRequest): string {
     const myOpId = authStore.currentOperator?.id;
     if (!myOpId) return 'Sconosciuto';
+    
+    // 1. Check for real-time expiration (Clock Guard)
+    if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) {
+      return 'Scaduta (Tempo Esaurito)';
+    }
+
     if (req.status === 'CLOSED') {
       const myOffer = getMyOffer(req);
       return myOffer && req.acceptedOfferId === myOffer.id

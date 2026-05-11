@@ -26,6 +26,7 @@
 9. **§1.9 No `eslint-disable`**: MAI disabilitare le regole di linting
 10. **§1.10 Skeleton UI (UX)**: OBBLIGATORIO l'uso di `<q-skeleton>` per i caricamenti asincroni, eliminando gli schermi vuoti.
 11. **§1.11 Component Decomposition**: File superiori a 500 righe DEVONO essere analizzati per scomposizione in componenti riutilizzabili o composables. Logiche complesse (es. form multi-step) vanno estratte in file separati.
+12. **§1.12 DRY & Single Source of Truth**: Tutta la logica di business riguardante la compatibilità tra Operatori, Turni e Scenari deve risiedere **esclusivamente** in `src/composables/useShiftLogic.ts`. Questo garantisce coerenza tra Suggerimenti Admin, Dashboard Utente e invio Notifiche.
 
 ---
 
@@ -598,8 +599,38 @@ function isAdmin() {
 ### **Script di Sincronizzazione Iniziale**
 
 Quando si aggiunge questa feature, eseguire una volta:
+
 ```bash
 node api/migrate-claims.js
 ```
+
 Questo script legge tutti gli utenti da Firestore e scrive il loro `role` come Custom Claim nel JWT, garantendo la retrocompatibilità con gli utenti già registrati.
 
+---
+
+## 🧩 **§1.12 DRY & Single Source of Truth - COERENZA LOGICA**
+
+**REGOLA**: La logica che determina se un operatore è "compatibile" con una richiesta di copertura (incrocio turni, regole di riposo, guardia temporale) deve essere definita **una sola volta** in `src/composables/useShiftLogic.ts`.
+
+**PERCHÉ**:
+
+- ❌ **EVITARE**: L'Admin vede un suggerimento ma l'Utente non vede l'opportunità.
+- ❌ **EVITARE**: L'invio di notifiche a persone che l'app considera già "fuori orario" (Rumore di fondo).
+- ✅ **GARANTIRE**: Se Mart... Be... è considerata idonea per un turno P, deve esserlo contemporaneamente per l'Admin che la cerca e per Mart... Be... che guarda la sua dashboard.
+
+**ESEMPIO DI APPLICAZIONE**:
+
+```typescript
+// ❌ VIETATO: Scrivere logiche di filtro manuali nelle Pagine
+const candidates = operators.filter((op) => op.shift === 'R' && !isRequestExpired(req));
+
+// ✅ OBBLIGATORIO: Usare il motore centralizzato
+const { isOperatorEligibleForRole } = useShiftLogic();
+const candidates = operators.filter((op) => isOperatorEligibleForRole(req, op, role));
+```
+
+**Benefici**:
+
+- Riduzione drastica del debito tecnico.
+- Notifiche "intelligenti" che non disturbano chi non può realmente aiutare.
+- Sincronizzazione totale tra visione Admin e visione Utente.

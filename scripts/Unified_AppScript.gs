@@ -184,16 +184,21 @@ function doPost(e) {
 
     if (rowIndex != -1 && colIndex != -1) {
       var cell = sheet.getRange(rowIndex + 1, colIndex + 1);
+      
+      // Set shift value and color
       cell.setValue(newShift);
+      cell.setFontColor(data.color || "red"); // Default to red for backward compatibility
 
-      // Phase 30: Visual marker for app-driven updates (Purple text)
-      cell.setFontColor('#9C27B0');
-
+      // 3. Set Note (Robustly)
+      var noteContent = (note || "").toString().trim();
       var finalNote = "Modificato dall'app";
-      if (note && note.trim() !== '') {
-        finalNote += '\n' + note.trim();
+      if (noteContent !== '') {
+        finalNote += "\n" + noteContent;
       }
       cell.setNote(finalNote);
+
+      // 4. Force immediate update
+      SpreadsheetApp.flush();
 
       return ContentService.createTextOutput(
         JSON.stringify({

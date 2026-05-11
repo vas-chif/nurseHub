@@ -86,6 +86,18 @@ function getSwapStatusColor(swap: ShiftSwap): string {
   return map[swap.status] || 'grey';
 } /*end getSwapStatusColor*/
 
+function getSwapStatusLabel(swap: ShiftSwap): string {
+  if (swap.status === 'OPEN' && isRequestExpired(swap.date, swap.offeredShift)) return 'Scaduto';
+  const map: Record<ShiftSwapStatus, string> = {
+    OPEN: 'In attesa',
+    MATCHED: 'Abbinato',
+    PENDING_ADMIN: 'In revisione',
+    APPROVED: 'Approvato',
+    REJECTED: 'Rifiutato',
+  };
+  return map[swap.status] || swap.status;
+} /*end getSwapStatusLabel*/
+
 async function submitSwap(): Promise<void> {
   const uid = authStore.currentUser?.uid;
   const operatorId = authStore.currentOperator?.id;
@@ -334,6 +346,14 @@ function getStatusColor(req: ShiftRequest): string {
       return 'grey';
   }
 } /*end getStatusColor*/
+
+function getStatusLabel(req: ShiftRequest): string {
+  if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) return 'Scaduto';
+  if (req.status === 'CLOSED') {
+    return req.rejectionReason ? 'Rifiutata' : 'Approvata';
+  }
+  return 'In attesa';
+} /*end getStatusLabel*/
 </script>
 
 <template>
@@ -411,8 +431,8 @@ function getStatusColor(req: ShiftRequest): string {
               <q-item-label caption>{{ req.requestNote ?? req.reason }}</q-item-label>
             </q-item-section>
             <q-item-section side>
-              <q-chip :color="getStatusColor(req)" text-color="white" size="sm">
-                {{ req.status }}
+              <q-chip :color="getStatusColor(req)" text-color="white" size="sm" class="text-weight-bold">
+                {{ getStatusLabel(req) }}
               </q-chip>
             </q-item-section>
           </template>
@@ -582,8 +602,8 @@ function getStatusColor(req: ShiftRequest): string {
             </div>
           </div>
           <div class="column items-end q-gutter-y-xs">
-            <q-badge :color="getSwapStatusColor(swap)" class="q-pa-xs">
-              {{ swap.status }}
+            <q-badge :color="getSwapStatusColor(swap)" class="q-pa-xs text-weight-bold">
+              {{ getSwapStatusLabel(swap) }}
             </q-badge>
             <q-btn
               v-if="swap.status === 'OPEN'"

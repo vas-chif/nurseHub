@@ -93,15 +93,23 @@ export class OperatorsService {
 
     const target = normalize(fullName);
     
-    // 1. Direct match
-    let match = allOps.find((op) => normalize(op.name) === target);
+    // 1. Direct match on consolidated name
+    let match = allOps.find((op) => normalize(op.name || '') === target);
     if (match) return match;
 
-    // 2. Reversed name order match (e.g. "Chifeac Vasile" vs "Vasile Chifeac")
+    // 2. Match on combined firstName and lastName
+    match = allOps.find((op) => {
+      const combined = normalize(`${op.firstName || ''}${op.lastName || ''}`);
+      const combinedRev = normalize(`${op.lastName || ''}${op.firstName || ''}`);
+      return combined === target || combinedRev === target;
+    });
+    if (match) return match;
+
+    // 3. Reversed name order match for consolidated name
     const parts = fullName.split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
       const reversed = normalize(parts.reverse().join(' '));
-      match = allOps.find((op) => normalize(op.name) === reversed);
+      match = allOps.find((op) => normalize(op.name || '') === reversed);
     }
 
     return match ?? null;

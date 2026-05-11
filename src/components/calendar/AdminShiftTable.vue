@@ -11,18 +11,21 @@
  */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { date as quasarDate, type QTableColumn } from 'quasar';
+import { date as quasarDate, type QTableColumn, useQuasar } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { itLocale } from '../../constants/locales';
 import GlobalSyncBtn from '../common/GlobalSyncBtn.vue';
 import { useConfigStore } from '../../stores/configStore';
 import { useScheduleStore } from '../../stores/scheduleStore';
-import type { Operator, ShiftCode } from '../../types/models';
+import { useAuthStore } from '../../stores/authStore';
+import type { Operator, ShiftCode, AppConfig } from '../../types/models';
+import { useSyncStore } from '../../stores/syncStore';
 
 interface TableRow {
   id: string;
   operatorName: string;
   schedule: Record<string, string>; // Keep raw schedule for filtering
+  notes: Record<string, string>; // Shift notes (§1.12)
   [key: string]: string | number | Record<string, string>; // Index signature
 }
 
@@ -49,6 +52,15 @@ const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
 
 const pagination = ref({ rowsPerPage: 0 }); // Show all rows for virtual scroll
 const showLegend = ref(false);
+const showOnlyWithNotes = ref(false);
+
+const $q = useQuasar();
+const authStore = useAuthStore();
+const syncStore = useSyncStore();
+const pendingChanges = ref<Record<string, Record<string, string>>>({}); // operatorId -> { date -> newShift }
+const savingChanges = ref(false);
+
+const hasPendingChanges = computed(() => Object.keys(pendingChanges.value).length > 0);
 
 
 function formatDate(dt: string) {
@@ -166,9 +178,9 @@ async function fetchData(forceRefresh = false) {
 
     // Sort by ID number to preserve Google Sheets order
     filteredOps.sort((a, b) => {
-      const numA = parseInt(a.id.replace('op-', '')) || 0;
-      const numB = parseInt(b.id.replace('op-', '')) || 0;
-      return numA - numB;
+      const orderA = a.sheetOrder ?? 999;
+      const orderB = b.sheetOrder ?? 999;
+      return orderA - orderB;
     });
 
     operatorOptions.value = filteredOps;
@@ -237,6 +249,7 @@ const filteredRows = computed(() => {
       id: op.id,
       operatorName: op.name,
       schedule: op.schedule || {},
+      notes: op.notes || {},
     };
 
     // 2. Map schedule to row properties
@@ -267,12 +280,26 @@ const filteredRows = computed(() => {
     });
   }
 
+  // 4. Filter by Rows with Notes (§3.1)
+  if (showOnlyWithNotes.value) {
+    operatorRows = operatorRows.filter((row) => {
+      return Object.values(row.notes).some(note => note && note.trim().length > 0);
+    });
+  }
+
   return operatorRows;
 });
 
-function isShiftVisible(code: string): boolean {
-  if (selectedShiftCodes.value.length === 0) return true;
-  return selectedShiftCodes.value.includes(code);
+function isShiftVisible(code: string, operatorId: string, date: string): boolean {
+  if (selectedShiftCodes.value.length > 0 && !selectedShiftCodes.value.includes(code)) return false;
+  
+  // New Note-specific filter logic (§3.1)
+  if (showOnlyWithNotes.value) {
+    const op = operatorOptions.value.find(o => o.id === operatorId);
+    if (!op || !op.notes || !op.notes[date]) return false;
+  }
+  
+  return true;
 }
 
 function getShiftColor(code: ShiftCode): string {
@@ -288,6 +315,62 @@ function getShiftColor(code: ShiftCode): string {
 
   // Default fallback
   return 'primary text-white';
+}
+
+function handleShiftEdit(operatorId: string, date: string, newShift: string) {
+  if (!pendingChanges.value[operatorId]) {
+    pendingChanges.value[operatorId] = {};
+  }
+  pendingChanges.value[operatorId][date] = newShift;
+}
+
+function isPending(operatorId: string, date: string) {
+  return pendingChanges.value[operatorId]?.[date] !== undefined;
+}
+
+function getDisplayShift(row: TableRow, date: string) {
+  return pendingChanges.value[row.id]?.[date] || (row[date] as string) || '';
+}
+
+async function savePendingChanges() {
+  if (!hasPendingChanges.value || !configStore.activeConfigId) return;
+
+  savingChanges.value = true;
+  try {
+    const { GoogleSheetsService } = await import('../../services/GoogleSheetsService');
+    const sheetsService = new GoogleSheetsService(configStore.activeConfig as AppConfig);
+    
+    const adminName = `${authStore.currentUser?.firstName || ''} ${authStore.currentUser?.lastName || ''}`.trim() || 'Admin';
+    let totalSaved = 0;
+
+    for (const [opId, dates] of Object.entries(pendingChanges.value)) {
+      const op = operatorOptions.value.find(o => o.id === opId);
+      if (!op) continue;
+
+      for (const [date, newShift] of Object.entries(dates)) {
+        const oldShift = op.schedule[date] || '-';
+        const note = `🛠️ Modifica Manuale (Admin: ${adminName}) | 🔄 Da: ${oldShift} ➔ A: ${newShift}`;
+        // Manual edits are BLUE in GAS
+        await sheetsService.updateShiftOnSheets(op.name, date, newShift, note, 'blue');
+        totalSaved++;
+      }
+    }
+
+    $q.notify({
+      type: 'positive',
+      message: `${totalSaved} modifiche salvate correttamente su Excel!`,
+      icon: 'cloud_done'
+    });
+
+    pendingChanges.value = {};
+    await fetchData(true);
+    void syncStore.recordSync(configStore.activeConfigId);
+  } catch (e) {
+    logger.error('Error saving pending changes', e);
+    $q.notify({ type: 'negative', message: 'Errore durante il salvataggio su Excel' });
+  } finally {
+    savingChanges.value = false;
+  }
 }
 </script>
 
@@ -340,6 +423,15 @@ function getShiftColor(code: ShiftCode): string {
       </div>
 
       <div class="col-12 col-md-3 row no-wrap items-center justify-end q-gutter-x-sm">
+        <q-btn
+          :flat="!showOnlyWithNotes"
+          :color="showOnlyWithNotes ? 'amber-9' : 'grey-7'"
+          icon="sticky_note_2"
+          @click="showOnlyWithNotes = !showOnlyWithNotes"
+          dense
+        >
+          <q-tooltip>Mostra solo righe con note</q-tooltip>
+        </q-btn>
         <GlobalSyncBtn size="md" />
         <q-btn icon="refresh" label="Aggiorna" outline dense color="primary" @click="() => fetchData(true)" no-caps>
           <q-tooltip>Ricarica Dati Locale</q-tooltip>
@@ -451,15 +543,68 @@ function getShiftColor(code: ShiftCode): string {
 
             <q-td v-for="col in dateColumns" :key="col.name" :props="props" class="text-center q-pa-none" :class="{
               'bg-red-1': col.isHoliday,
+              'pending-cell': isPending(props.row.id, col.name)
             }" style="padding: 1px !important">
               <!-- Highlight badge only if it matches filter or no filter set -->
-              <q-badge v-if="props.row[col.name] && isShiftVisible(props.row[col.name])"
-                :color="getShiftColor(props.row[col.name])" class="cursor-pointer shadow-1 full-width flex flex-center"
-                style="height: 24px; font-size: 0.75rem; border-radius: 4px">
-                {{ props.row[col.name] }}
-              </q-badge>
+              <div v-if="getDisplayShift(props.row, col.name) && isShiftVisible(getDisplayShift(props.row, col.name), props.row.id, col.name)"
+                class="full-width full-height flex flex-center">
+                <q-badge
+                  :color="getShiftColor(getDisplayShift(props.row, col.name))" 
+                  class="cursor-pointer shadow-1 full-width flex flex-center relative-position shift-badge"
+                  :class="{ 'pending-badge': isPending(props.row.id, col.name) }"
+                  style="height: 24px; font-size: 0.75rem; border-radius: 4px"
+                >
+                  {{ getDisplayShift(props.row, col.name) }}
+                  
+                  <!-- Visual indicator for note (Excel-style red triangle) -->
+                  <div v-if="props.row.notes[col.name]" class="note-indicator"></div>
+
+                  <q-tooltip v-if="props.row.notes[col.name]" 
+                    class="glass-tooltip text-white shadow-10" 
+                    :offset="[0, 12]"
+                    anchor="bottom middle" self="top middle"
+                  >
+                    <div class="tooltip-content">
+                      <div class="row no-wrap items-center q-mb-xs border-bottom-soft q-pb-xs">
+                        <q-icon name="sticky_note_2" size="14px" class="q-mr-sm text-amber" />
+                        <span class="text-weight-bold text-uppercase tracking-wider" style="font-size: 0.7rem">Dettagli Nota Excel</span>
+                      </div>
+                      <div class="note-text q-mt-sm">{{ props.row.notes[col.name] }}</div>
+                    </div>
+                  </q-tooltip>
+
+                  <!-- Edit Menu (Opens on standard click) -->
+                  <q-menu touch-position>
+                    <q-list style="min-width: 100px">
+                      <q-item v-for="code in shiftCodeOptions" :key="code" clickable v-close-popup @click="handleShiftEdit(props.row.id, col.name, code)">
+                        <q-item-section avatar>
+                          <q-badge :color="getShiftColor(code)" size="sm">{{ code }}</q-badge>
+                        </q-item-section>
+                        <q-item-section>{{ code }}</q-item-section>
+                      </q-item>
+                      <q-separator />
+                      <q-item clickable v-close-popup @click="handleShiftEdit(props.row.id, col.name, '')">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section>Rimuovi</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
+                </q-badge>
+              </div>
               <!-- Empty spacer or grey text if filtered out -->
-              <span v-else-if="props.row[col.name]" class="text-grey-3 text-caption"> - </span>
+              <div v-else class="full-width full-height cursor-pointer" style="min-height: 24px">
+                <span class="text-grey-3 text-caption"> - </span>
+                <q-menu v-if="!showOnlyWithNotes" touch-position>
+                  <q-list style="min-width: 100px">
+                    <q-item v-for="code in shiftCodeOptions" :key="code" clickable v-close-popup @click="handleShiftEdit(props.row.id, col.name, code)">
+                      <q-item-section avatar>
+                        <q-badge :color="getShiftColor(code)" size="sm">{{ code }}</q-badge>
+                      </q-item-section>
+                      <q-item-section>{{ code }}</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </div>
             </q-td>
           </q-tr>
         </template>
@@ -511,6 +656,20 @@ function getShiftColor(code: ShiftCode): string {
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Floating Batch Save Button -->
+    <q-page-sticky position="bottom-right" :offset="[18, 18]" v-if="hasPendingChanges">
+      <q-btn
+        fab
+        icon="cloud_upload"
+        color="indigo-10"
+        label="Salva su Excel"
+        @click="savePendingChanges"
+        :loading="savingChanges"
+      >
+        <q-badge color="red" floating>{{ Object.values(pendingChanges).reduce((acc, curr) => acc + Object.keys(curr).length, 0) }}</q-badge>
+      </q-btn>
+    </q-page-sticky>
   </div>
 </template>
 
@@ -560,5 +719,58 @@ function getShiftColor(code: ShiftCode): string {
 :deep(.sticky-header-table thead tr:nth-child(4) th) {
   top: 111px;
   /* 83 + 28 */
+}
+
+/* Note Indicator styles */
+.note-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 6px 6px 0;
+  border-color: transparent #ff1744 transparent transparent;
+  border-radius: 0 4px 0 0;
+}
+
+/* Premium Tooltip Styles */
+.glass-tooltip {
+  background: rgba(15, 23, 42, 0.92) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px !important;
+  border-radius: 12px !important;
+  max-width: 320px !important;
+}
+
+.border-bottom-soft {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tracking-wider {
+  letter-spacing: 0.05em;
+}
+
+.note-text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap; /* Preserve line breaks from Excel */
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pending-badge {
+  border: 2px dashed white !important;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5) !important;
+}
+
+.pending-cell {
+  background-color: rgba(25, 118, 210, 0.1) !important;
+}
+
+.shift-badge:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+  transition: all 0.2s;
 }
 </style>

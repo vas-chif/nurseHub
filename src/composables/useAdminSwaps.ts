@@ -173,9 +173,10 @@ export function useAdminSwaps(
         const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? 'Operatore 2';
         // Sync creator's new shift with richer note
         const creatorNote = [
-          `Scambio con ${counterName}`,
-          adminSwapNote.value ? `Nota Admin: ${adminSwapNote.value}` : ''
-        ].filter(Boolean).join(' - ');
+          `🔄 Scambio via App`,
+          `👥 Con: ${counterName}`,
+          adminSwapNote.value ? `📝 ${adminSwapNote.value}` : ''
+        ].filter(Boolean).join(' | ');
         void syncToSheets(creatorName, swap.date, swap.desiredShift, creatorNote);
         
         // Rule: If creator gets Night, sync Smonto for next day
@@ -186,9 +187,10 @@ export function useAdminSwaps(
         // Sync counterpart's new shift with richer note
         if (counterName) {
           const counterNote = [
-            `Scambio con ${creatorName}`,
-            adminSwapNote.value ? `Nota Admin: ${adminSwapNote.value}` : ''
-          ].filter(Boolean).join(' - ');
+            `🔄 Scambio via App`,
+            `👥 Con: ${creatorName}`,
+            adminSwapNote.value ? `📝 ${adminSwapNote.value}` : ''
+          ].filter(Boolean).join(' | ');
           void syncToSheets(counterName, swap.date, swap.offeredShift, counterNote);
 
           // Rule: If counterpart gets Night, sync Smonto for next day

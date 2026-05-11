@@ -35,7 +35,7 @@ const scheduleStore = useScheduleStore();
 const adminStore = useAdminStore();
 const scenarioStore = useScenarioStore();
 const { suggestions, selectedSuggestions, calculating } = storeToRefs(adminStore);
-const { checkCompliance } = useShiftLogic();
+const { isOperatorEligibleForRole, getOperatorDisplayName } = useShiftLogic();
 
 // Active tab
 const activeTab = ref('pending');
@@ -45,7 +45,17 @@ const reqs = useAdminRequests();
 const swaps = useAdminSwaps(reqs.syncToSheets, reqs.operators);
 
 // Destructure for easier template usage and to fix v-model Ref types
-const { showApprovalDialog, adminApprovalNote, syncMode, approvalContext, processApproval } = reqs;
+const { 
+  showApprovalDialog, 
+  adminApprovalNote, 
+  syncMode, 
+  approvalContext, 
+  processApproval,
+  showConflictDialog,
+  conflicts,
+  isVerifying,
+  startApprovalVerification
+} = reqs;
 
 const {
   showSwapApprovalDialog,
@@ -56,12 +66,6 @@ const {
 } = swaps;
 
 // ─── Smart-Suggest Logic ──────────────────────────────────────────────────────
-const EXCLUDED_KEYWORDS = ['SUB INTENSIVA', 'PS', 'BLOCCO OPERATORIO', 'IFC', 'COORDINATORE'];
-
-function isExcluded(op: Operator): boolean {
-  const n = op.name.toUpperCase();
-  return EXCLUDED_KEYWORDS.some((k) => n.includes(k));
-}
 
 function hasRestInWindow(op: Operator, date: string, windowDays = 14): boolean {
   if (!op.schedule) return false;
@@ -110,36 +114,21 @@ async function findSubstitutes(req: ShiftRequest): Promise<void> {
 
       group.positions.forEach((pos) => {
         Object.values(reqs.operators.value).forEach((op) => {
-          if (op.id === req.absentOperatorId || op.id === req.creatorId || isExcluded(op)) return;
-          const nextDate = new Date(new Date(req.date).getTime() + 86400000)
-            .toISOString()
-            .split('T')[0]!;
-          const cur = op.schedule?.[req.date] ?? 'R';
-          const nxt = op.schedule?.[nextDate] ?? 'R';
-          
-          let match = pos.isNextDay ? nxt === pos.originalShift : cur === pos.originalShift;
-          
-          // CRITICAL FIX: If the operator is already working exactly what we need (e.g. they are P and we need P),
-          // don't notify them unless the scenario actually changes their shift (e.g. P -> MP).
-          if (match && pos.newShift === (pos.isNextDay ? nxt : cur)) {
-            match = false;
-          }
+          if (op.id === req.absentOperatorId || op.id === req.creatorId) return;
 
-          if (match && pos.requiredNextShift && nxt !== pos.requiredNextShift) match = false;
-          
-          if (match) {
-            const shiftCheck = pos.isNextDay ? nxt : cur;
-            const compliance = checkCompliance(shiftCheck, pos.newShift);
-            if (compliance.allowed) {
-              pos.candidates.push({
-                operatorId: op.id,
-                name: op.name,
-                ...(op.phone ? { phone: op.phone } : {}),
-                currentShift: shiftCheck,
-                proposal: pos.roleLabel,
-                priority: calculatePriority(op, cur, req.originalShift, req.date),
-              });
-            }
+          if (isOperatorEligibleForRole(req.date, req.originalShift, op, pos)) {
+            const shiftCheck = pos.isNextDay 
+              ? (op.schedule?.[new Date(new Date(req.date).getTime() + 86400000).toISOString().split('T')[0]!] || 'R')
+              : (op.schedule?.[req.date] || 'R');
+
+            pos.candidates.push({
+              operatorId: op.id,
+              name: getOperatorDisplayName(op),
+              ...(op.phone ? { phone: op.phone } : {}),
+              currentShift: shiftCheck,
+              proposal: pos.roleLabel,
+              priority: calculatePriority(op, shiftCheck, req.originalShift, req.date),
+            });
           }
         });
         pos.candidates.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
@@ -177,12 +166,39 @@ function toggleAllInPosition(reqId: string, cands: Suggestion[], val: boolean | 
 async function publishRequest(req: ShiftRequest): Promise<void> {
   const selected = selectedSuggestions.value[req.id] ?? [];
   if (!selected.length) return;
+
+  // UNIFIED FILTERING BEFORE PUBLISHING (Anti-Noise Guard)
+  const currentOperators = reqs.operators.value;
+  const scenarios = scenarioStore.scenarios.filter((s) => s.targetShift === req.originalShift);
+
+  const validSelectedIds = selected.filter((opId) => {
+    const op = currentOperators[opId];
+    if (!op) return false;
+    return scenarios.some((scen) =>
+      scen.roles.some((role) => isOperatorEligibleForRole(req.date, req.originalShift, op, role)),
+    );
+  });
+
+  if (validSelectedIds.length === 0) {
+    $q.notify({
+      type: 'warning',
+      message: 'Nessuno dei candidati selezionati è più idoneo (tempo scaduto o cambio turno).',
+    });
+    return;
+  }
+
   try {
-    await updateDoc(doc(db, 'shiftRequests', req.id), { candidateIds: selected });
+    await updateDoc(doc(db, 'shiftRequests', req.id), { candidateIds: validSelectedIds });
     $q.notify({
       type: 'positive',
-      message: `Richiesta pubblicata a ${selected.length} operatori!`,
+      message: `Richiesta pubblicata a ${validSelectedIds.length} operatori!`,
     });
+    if (validSelectedIds.length < selected.length) {
+      $q.notify({
+        type: 'info',
+        message: `${selected.length - validSelectedIds.length} candidati esclusi perché non più idonei.`,
+      });
+    }
   } catch (e) {
     logger.error('Error publishing', e);
     $q.notify({ type: 'negative', message: 'Errore pubblicazione' });
@@ -220,7 +236,9 @@ watch(
     if (v) {
       await reqs.fetchOperators();
       void scenarioStore.loadScenarios(v);
-      // Re-subscribe swaps with the now-available configId
+      
+      // Re-initialize listeners for the new config context
+      reqs.initRealtimeRequests();
       swaps.stopRealtimeSwaps();
       swaps.initRealtimeSwaps();
     }
@@ -236,6 +254,28 @@ onUnmounted(() => {
   reqs.stopRealtimeRequests();
   swaps.stopRealtimeSwaps();
 });
+
+// Searchable operator filter logic
+const filteredOperatorOptions = ref(reqs.operatorOptions.value);
+
+watch(() => reqs.operatorOptions.value, (newVal) => {
+  filteredOperatorOptions.value = newVal;
+});
+
+function filterOperators(val: string, update: (fn: () => void) => void) {
+  if (val === '') {
+    update(() => {
+      filteredOperatorOptions.value = reqs.operatorOptions.value;
+    });
+    return;
+  }
+  update(() => {
+    const needle = val.toLowerCase();
+    filteredOperatorOptions.value = reqs.operatorOptions.value.filter(
+      (v) => v.label.toLowerCase().indexOf(needle) > -1
+    );
+  });
+}
 </script>
 
 <template>
@@ -247,23 +287,73 @@ onUnmounted(() => {
     </div>
 
     <!-- Filters -->
-    <q-card flat bordered class="q-mb-md">
-      <q-card-section>
-        <div class="text-subtitle2 q-mb-sm">Filtri</div>
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-md-3">
-            <AppDateInput v-model="reqs.filters.value.dateFrom" label="Da Data" hint="Filtra da" />
+    <q-card flat bordered class="q-mb-md shadow-1 bg-white" style="border-radius: 12px">
+      <q-card-section class="q-pb-sm">
+        <div class="row items-center q-mb-md">
+          <q-icon name="tune" color="primary" size="sm" class="q-mr-sm" />
+          <div class="text-subtitle1 text-weight-bold">Filtri di Ricerca</div>
+          <q-space />
+          <q-btn flat dense color="grey-7" label="Reset Filtri" icon="restart_alt" size="sm" 
+            @click="reqs.filters.value = { dateFrom: '', dateTo: '', operators: [], withOffers: false }" />
+        </div>
+        
+        <div class="row q-col-gutter-md items-end">
+          <!-- Date Range -->
+          <div class="col-12 col-sm-6 col-md-2">
+            <AppDateInput v-model="reqs.filters.value.dateFrom" label="Dal giorno" />
           </div>
-          <div class="col-12 col-md-3">
-            <AppDateInput v-model="reqs.filters.value.dateTo" label="A Data" hint="Filtra a" />
+          <div class="col-12 col-sm-6 col-md-2">
+            <AppDateInput v-model="reqs.filters.value.dateTo" label="Al giorno" />
           </div>
-          <div class="col-12 col-md-3">
-            <q-select v-model="reqs.filters.value.operators" :options="reqs.operatorOptions.value"
-              label="Filtra Operatori" multiple use-chips dense outlined emit-value map-options clearable />
+          
+          <!-- Operator Multi-Select -->
+          <div class="col-12 col-md-4">
+            <q-select
+              v-model="reqs.filters.value.operators"
+              :options="filteredOperatorOptions"
+              label="Operatori"
+              multiple
+              use-chips
+              use-input
+              dense
+              outlined
+              bg-color="white"
+              emit-value
+              map-options
+              clearable
+              @filter="filterOperators"
+              class="operator-select"
+            >
+              <template v-slot:prepend>
+                <q-icon name="group" color="primary" />
+              </template>
+            </q-select>
           </div>
-          <div class="col-12 col-md-3">
-            <q-select v-model="reqs.sortBy.value" :options="reqs.sortOptions" label="Ordina per" dense outlined
-              emit-value map-options />
+
+          <!-- Sorting -->
+          <div class="col-12 col-sm-6 col-md-2">
+            <q-select
+              v-model="reqs.sortBy.value"
+              :options="reqs.sortOptions"
+              label="Ordina"
+              dense
+              outlined
+              bg-color="white"
+              emit-value
+              map-options
+            >
+              <template v-slot:prepend>
+                <q-icon name="sort" color="primary" />
+              </template>
+            </q-select>
+          </div>
+
+          <!-- Offers Toggle -->
+          <div class="col-12 col-sm-6 col-md-2">
+            <div class="filter-toggle-box bg-blue-1 q-pa-xs rounded-borders flex items-center justify-between" style="height: 40px; border: 1px solid #bbdefb">
+              <div class="text-caption text-weight-bold text-primary q-ml-sm">Solo offerte</div>
+              <q-toggle v-model="reqs.filters.value.withOffers" color="primary" dense />
+            </div>
           </div>
         </div>
       </q-card-section>
@@ -377,8 +467,57 @@ onUnmounted(() => {
         </q-card-section>
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Annulla" v-close-popup />
-          <q-btn unelevated color="positive" label="Conferma & Chiudi" @click="processApproval()"
-            :loading="reqs.loading.value" />
+          <q-btn unelevated color="positive" label="Conferma & Chiudi" @click="startApprovalVerification()"
+            :loading="isVerifying || reqs.loading.value" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Conflict Resolution Dialog (Expert System Step 1.2) -->
+    <q-dialog v-model="showConflictDialog" persistent>
+      <q-card style="min-width: 450px">
+        <q-card-section class="bg-warning text-white row items-center">
+          <q-icon name="warning" size="md" class="q-mr-sm" />
+          <div class="text-h6">Incongruenza Turni Rilevata!</div>
+        </q-card-section>
+
+        <q-card-section class="q-pa-md">
+          <div class="text-body1 q-mb-md">
+            Il sistema ha rilevato che i turni su <strong>Excel</strong> non corrispondono a quelli dell'App.
+          </div>
+
+          <q-list bordered separator class="rounded-borders q-mb-md">
+            <q-item v-for="(conflict, index) in conflicts" :key="index">
+              <q-item-section avatar>
+                <q-avatar color="grey-2" text-color="primary" icon="person" size="sm" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">{{ conflict.operatorName }}</q-item-label>
+                <q-item-label caption>Data: {{ reqs.formatDate(conflict.date) }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row no-wrap items-center">
+                  <q-badge color="grey-7" :label="conflict.expected" />
+                  <q-icon name="arrow_forward" size="xs" class="q-mx-xs" />
+                  <q-badge color="negative" :label="conflict.actual" class="text-weight-bolder" />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+
+          <div class="bg-red-1 q-pa-sm rounded-borders border-negative q-mb-sm">
+            <div class="text-caption text-negative text-weight-bold">
+              Procedendo con "Forza", il valore su Excel verrà sovrascritto.
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-gutter-sm q-pa-md">
+          <q-btn flat label="Annulla" color="grey-8" v-close-popup />
+          <q-btn unelevated label="Gestione Manuale" color="grey-3" text-color="black" 
+            @click="processApproval('manual')" />
+          <q-btn unelevated label="Forza Sovrascrittura" color="negative" 
+            @click="processApproval('force')" />
         </q-card-actions>
       </q-card>
     </q-dialog>

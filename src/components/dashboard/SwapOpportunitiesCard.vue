@@ -1,14 +1,14 @@
 /**
- * @file SwapOpportunitiesCard.vue
- * @description Dashboard component for browsing and accepting shift swap proposals from colleagues.
- * @author Nurse Hub Team
- * @created 2026-03-12
- * @modified 2026-05-03
- * @notes
- * - Filters swaps based on compatibility with user's own schedule.
- * - Implements "Not Interested" logic and ignored proposals section.
- * - Supports sorting by creation date or shift date.
- */
+* @file SwapOpportunitiesCard.vue
+* @description Dashboard component for browsing and accepting shift swap proposals from colleagues.
+* @author Nurse Hub Team
+* @created 2026-03-12
+* @modified 2026-05-03
+* @notes
+* - Filters swaps based on compatibility with user's own schedule.
+* - Implements "Not Interested" logic and ignored proposals section.
+* - Supports sorting by creation date or shift date.
+*/
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useQuasar, date as qDate } from 'quasar';
@@ -126,7 +126,7 @@ async function loadOpportunities() {
     const isHidden = swap.hiddenBy?.includes(uid) || false;
     // Expiration check
     const isExpired = isRequestExpired(swap.date, swap.offeredShift);
-    
+
     return isCompatible && isFreeOnOfferedDate && !isHidden && !isExpired;
   });
 
@@ -289,7 +289,8 @@ function acceptSwap(swap: ShiftSwap) {
           </div>
           <q-btn-dropdown flat dense size="sm" color="grey-7" :icon="sortOptions.find(o => o.value === sortBy)?.icon">
             <q-list dense>
-              <q-item v-for="opt in sortOptions" :key="opt.value" clickable v-close-popup @click="sortBy = opt.value as 'created' | 'date'">
+              <q-item v-for="opt in sortOptions" :key="opt.value" clickable v-close-popup
+                @click="sortBy = opt.value as 'created' | 'date'">
                 <q-item-section avatar>
                   <q-icon :name="opt.icon" size="xs" />
                 </q-item-section>
@@ -347,24 +348,27 @@ function acceptSwap(swap: ShiftSwap) {
                 </div>
                 <div class="row items-center q-gutter-xs">
                   <span class="text-caption">Lui lavora il tuo</span>
-                  <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense class="text-weight-bold">
+                  <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense
+                    class="text-weight-bold">
                     {{ swap.desiredShift }}
                   </q-chip>
                   <span class="text-caption">({{ formatDate(swap.desiredDate) }})</span>
                 </div>
                 <div class="row items-center q-gutter-xs q-mt-xs">
                   <span class="text-caption">E tu ricevi il suo</span>
-                  <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense class="text-weight-bold">
+                  <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense
+                    class="text-weight-bold">
                     {{ swap.offeredShift }}
                   </q-chip>
                   <span class="text-caption">il {{ formatDate(swap.date) }}</span>
                 </div>
               </div>
               <div class="row items-center q-gutter-x-xs no-wrap">
-                <q-btn flat round size="sm" color="grey-6" icon="visibility_off" @click.stop="toggleInterest(swap.id, false)">
+                <q-btn flat round size="sm" color="grey-6" icon="visibility_off"
+                  @click.stop="toggleInterest(swap.id, false)">
                   <q-tooltip>Non mi interessa</q-tooltip>
                 </q-btn>
-                <q-btn unelevated color="primary" icon="handshake" label="Accetta" size="sm" 
+                <q-btn unelevated color="primary" icon="handshake" label="Accetta" size="sm"
                   :loading="accepting[swap.id]" @click="acceptSwap(swap)" />
               </div>
             </div>
@@ -439,9 +443,11 @@ function acceptSwap(swap: ShiftSwap) {
   border-left: 3px solid var(--q-primary);
   transition: box-shadow 0.2s ease;
 }
+
 .swap-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
 .my-swap-card {
   border-left: 3px solid #9c9c9c;
   background: #fafafa;

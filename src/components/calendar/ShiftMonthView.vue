@@ -110,6 +110,12 @@ function getShiftForDate(d: Date) {
   return currentOperator.value.schedule?.[key] || null;
 }
 
+function getNoteForDate(d: Date) {
+  if (!currentOperator.value) return null;
+  const key = quasarDate.formatDate(d, 'YYYY-MM-DD');
+  return currentOperator.value.notes?.[key] || null;
+}
+
 function getShiftStyles(code: string | null): ShiftStyle {
   const map: Record<string, ShiftStyle> = {
     M: { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
@@ -193,6 +199,24 @@ function getShiftStyles(code: string | null): ShiftStyle {
               :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
               class="q-mt-xs"
             />
+            
+            <!-- Visual indicator for note (Excel-style red triangle) -->
+            <div v-if="getNoteForDate(day.date)" class="note-indicator"></div>
+
+            <!-- Admin-only Tooltip for Excel Notes (§1.12) -->
+            <q-tooltip v-if="authStore.isAnyAdmin && getNoteForDate(day.date)" 
+              class="glass-tooltip text-white shadow-10" 
+              :offset="[0, 12]"
+              anchor="bottom middle" self="top middle"
+            >
+              <div class="tooltip-content">
+                <div class="row no-wrap items-center q-mb-xs border-bottom-soft q-pb-xs">
+                  <q-icon name="sticky_note_2" size="14px" class="q-mr-sm text-amber" />
+                  <span class="text-weight-bold text-uppercase tracking-wider" style="font-size: 0.7rem">Dettagli Nota Excel</span>
+                </div>
+                <div class="note-text q-mt-sm">{{ getNoteForDate(day.date) }}</div>
+              </div>
+            </q-tooltip>
           </div>
           <div v-else class="flex-grow"></div>
         </div>
@@ -363,5 +387,44 @@ function getShiftStyles(code: string | null): ShiftStyle {
   .shift-info {
     padding-top: 4px;
   }
+}
+/* ── end today highlight ────────────────────────────────────────────────── */
+
+/* Note Indicator styles (Excel-like corner) */
+.note-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 10px 10px 0;
+  border-color: transparent #ff1744 transparent transparent;
+  z-index: 10;
+}
+
+/* Premium Tooltip Styles */
+.glass-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px !important;
+  border-radius: 12px !important;
+  max-width: 320px !important;
+}
+
+.border-bottom-soft {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tracking-wider {
+  letter-spacing: 0.05em;
+}
+
+.note-text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.9);
 }
 </style>

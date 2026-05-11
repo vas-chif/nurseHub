@@ -157,7 +157,7 @@ export class GoogleSheetsService {
         const result = await response.json();
         if (result.success && result.data) {
           logger.info('Sync via GAS successful');
-          return this.parseGasData(result.data);
+          return this.parseGasData(result.data, result.notes);
         }
         logger.warn('GAS sync returned failure, falling back to Gviz', { error: result.error });
       } catch (e) {
@@ -245,6 +245,7 @@ export class GoogleSheetsService {
               schedule,
               email: cMap[name.toUpperCase()]?.email || '',
               phone: cMap[name.toUpperCase()]?.phone || '',
+              sheetOrder: i,
             });
           }
         }
@@ -260,7 +261,10 @@ export class GoogleSheetsService {
   /**
    * Parses raw array data from GAS doGet
    */
-  private parseGasData(rows: (string | number | boolean | Date | null)[][]): Operator[] {
+  private parseGasData(
+    rows: (string | number | boolean | Date | null)[][],
+    notes?: (string | null)[][],
+  ): Operator[] {
     const colToDate: Record<number, string> = {};
     const dateRow = rows[this.config.dateRowIndex - 1] || [];
     
@@ -290,10 +294,19 @@ export class GoogleSheetsService {
         const name = String(nameVal).trim();
         if (name.length > 1) {
           const schedule: Record<string, string> = {};
+          const opNotes: Record<string, string> = {};
+          
           Object.entries(colToDate).forEach(([idx, dateStr]) => {
-            const val = row[parseInt(idx)];
+            const colIdx = parseInt(idx);
+            const val = row[colIdx];
             if (val !== undefined && val !== null && val !== '') {
               schedule[dateStr] = String(val).toUpperCase().trim();
+            }
+            
+            // Extract note if available
+            const noteVal = notes?.[i]?.[colIdx];
+            if (noteVal) {
+              opNotes[dateStr] = String(noteVal).trim();
             }
           });
 
@@ -301,8 +314,10 @@ export class GoogleSheetsService {
             id: this.slugifyName(name),
             name,
             schedule,
-            email: '', // Contacts handled separately if needed, or we could add them to GAS
+            notes: opNotes,
+            email: '', 
             phone: '',
+            sheetOrder: i,
           });
         }
       }
@@ -348,19 +363,21 @@ export class GoogleSheetsService {
    * @param date Date in YYYY-MM-DD format
    * @param newShift New shift code to set
    * @param note Optional text to add as a cell note
+   * @param color Optional font color
    */
   public async updateShiftOnSheets(
     operatorName: string,
     date: string,
     newShift: string,
-    note?: string
+    note?: string,
+    color?: string
   ): Promise<boolean> {
     const gasWebUrl = this.config.gasWebUrl;
     
     // 1. Prefer GAS Web App (Direct & Secure)
     if (gasWebUrl) {
       try {
-        logger.info('Updating shift via GAS Web App...', { operatorName, date, newShift, hasNote: !!note });
+        logger.info('Updating shift via GAS Web App...', { operatorName, date, newShift, hasNote: !!note, color });
         const response = await fetch(gasWebUrl, {
           method: 'POST',
           body: JSON.stringify({
@@ -368,6 +385,7 @@ export class GoogleSheetsService {
             date,
             newShift,
             note, // Pass the note to GAS
+            color, // Pass the color to GAS
             dateRowIndex: this.config.dateRowIndex,
             nameColumnIndex: this.config.nameColumnIndex,
           }),

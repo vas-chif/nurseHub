@@ -23,7 +23,7 @@ import {
 } from 'firebase/firestore';
 import { db, messaging } from '../boot/firebase';
 import { getToken } from 'firebase/messaging';
-import type { Notification, NotificationType, ShiftRequest, ShiftSwap } from '../types/models';
+import type { Notification, NotificationType, ShiftRequest, ShiftSwap, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
@@ -254,10 +254,8 @@ export async function notifyEligibleOperators(
       // 2. Check Compatibility
       const opShift = opData.schedule?.[requestObj.date] || 'R';
       const compatible = getCompatibleScenarios(
-        requestObj.originalShift,
-        opShift,
-        requestObj.date,
-        opData.schedule,
+        { date: requestObj.date, originalShift: requestObj.originalShift },
+        { ...opData, id: opId } as Operator
       );
 
       // 3. If compatible, trigger notification!

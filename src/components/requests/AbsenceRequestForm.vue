@@ -129,6 +129,22 @@ onMounted(async () => {
           <AppDateInput v-model="formData.endDate" label="Data Fine" required />
         </div>
 
+        <!-- Admin Direct Overwrite Toggle (§Punto 1) -->
+        <div v-if="isAnyAdmin" class="col-12">
+          <q-banner dense class="bg-blue-1 text-primary rounded-borders q-mb-sm">
+            <template v-slot:avatar>
+              <q-icon name="bolt" color="primary" />
+            </template>
+            <div class="row items-center justify-between">
+              <div>
+                <div class="text-weight-bold">Sovrascrittura Diretta su Excel</div>
+                <div class="text-caption">Sincronizza subito i turni su Google Sheets saltando l'approvazione.</div>
+              </div>
+              <q-toggle v-model="formData.directSync" color="primary" />
+            </div>
+          </q-banner>
+        </div>
+
         <!-- Input Mode Toggle -->
         <div class="col-12">
           <div class="row items-center q-gutter-x-md">

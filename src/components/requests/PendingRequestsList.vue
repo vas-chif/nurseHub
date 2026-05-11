@@ -14,6 +14,7 @@ import { inject } from 'vue';
 import type { useAdminRequests } from '../../composables/useAdminRequests';
 import type { ShiftRequest, ShiftCode, ScenarioGroup, Suggestion } from '../../types/models';
 import { useShiftLogic } from '../../composables/useShiftLogic';
+import { useScenarioStore } from '../../stores/scenarioStore';
 import type { Ref } from 'vue';
 
 const ctx = inject<ReturnType<typeof useAdminRequests>>('adminReqsContext')!;
@@ -29,11 +30,68 @@ const smart = inject<{
   publishRequest: (req: ShiftRequest) => void;
 }>('adminSmartContext')!;
 
-const { isRequestExpired } = useShiftLogic();
+const scenarioStore = useScenarioStore();
+const { isRequestExpired, isScenarioTimeValid } = useShiftLogic();
+
+function isOfferExpired(req: ShiftRequest, offer: NonNullable<ShiftRequest['offers']>[number]): boolean {
+  // 1. Check if the request itself is expired
+  if (isRequestExpired(req.date, req.originalShift)) return true;
+  
+  // 2. Check if the specific scenario action is now in the past
+  if (offer.newShift) {
+    return !isScenarioTimeValid(req.date, req.originalShift, offer.newShift);
+  }
+  
+  return false; 
+}
 
 function getShiftChipColor(code: ShiftCode): string {
   const map: Record<string, string> = { M: 'amber-9', P: 'deep-orange-6', N: 'blue-8' };
   return map[code] ?? 'grey-7';
+}
+
+function getGroupedOffers(req: ShiftRequest) {
+  const offers = req.offers;
+  if (!offers || offers.length === 0) return [];
+  
+  const groupsMap: Record<string, NonNullable<ShiftRequest['offers']>> = {};
+  
+  // 1. Get all predefined scenarios for this target shift
+  const scenarios = scenarioStore.scenarios.filter(s => s.targetShift === req.originalShift);
+  
+  offers.forEach(offer => {
+    let matched = false;
+    
+    // 2. For each scenario, check if this offer's role/newShift matches any role in that scenario
+    scenarios.forEach(scen => {
+      const hasMatchingRole = scen.roles.some(role => 
+        role.roleLabel === offer.roleLabel && 
+        role.newShift === offer.newShift
+      );
+      
+      if (hasMatchingRole) {
+        matched = true;
+        if (!groupsMap[scen.label]) groupsMap[scen.label] = [];
+        groupsMap[scen.label]!.push(offer);
+      }
+    });
+    
+    // 3. Fallback for legacy offers or direct covers
+    if (!matched) {
+      const key = offer.scenarioLabel || 'Offerta Diretta / Altro';
+      if (!groupsMap[key]) groupsMap[key] = [];
+      groupsMap[key].push(offer);
+    }
+  });
+  
+  return Object.entries(groupsMap).map(([label, list]) => ({
+    label,
+    offers: list
+  })).sort((a, b) => {
+    if (a.label.includes('Offerta Diretta')) return -1;
+    if (b.label.includes('Offerta Diretta')) return 1;
+    return a.label.localeCompare(b.label);
+  });
 }
 </script>
 
@@ -114,31 +172,40 @@ function getShiftChipColor(code: ShiftCode): string {
                 </q-list>
               </div>
 
-              <!-- Offerte -->
+              <!-- Offerte (Expert System Step 2.1) -->
               <div class="col-12">
                 <div class="text-h6 q-mb-sm">Monitoraggio Offerte</div>
-                <q-list separator bordered class="bg-grey-1 rounded-borders">
-                  <div v-if="!req.offers?.length" class="q-pa-md text-grey text-center">Nessuna offerta recente.</div>
-                  <q-item v-for="offer in req.offers ?? []" :key="offer.id">
-                    <q-item-section avatar>
-                      <q-avatar icon="person" color="grey-2" text-color="primary" />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label class="text-weight-bold">{{ offer.operatorName ?? 'Operatore' }}</q-item-label>
-                      <q-item-label caption>
-                        Offerta per: {{ ctx.formatDate(req.date) }} - <q-badge :label="req.originalShift" color="primary" />
-                      </q-item-label>
-                      <q-item-label caption class="text-orange" v-if="offer.scenarioLabel">Scenario: {{ offer.scenarioLabel }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <div v-if="offer.isRejected" class="text-negative text-caption text-weight-bold">Rifiutata</div>
-                      <div v-else class="row q-gutter-xs">
-                        <q-btn round flat color="negative" icon="close" size="sm" @click="ctx.rejectOffer(req.id, offer.id)" :disable="isRequestExpired(req.date, req.originalShift)" />
-                        <q-btn round flat color="positive" icon="check" size="sm" @click="ctx.acceptOffer(req.id, offer.id)" :disable="isRequestExpired(req.date, req.originalShift)" />
-                      </div>
-                    </q-item-section>
-                  </q-item>
-                </q-list>
+                <div v-if="!req.offers?.length" class="q-pa-md text-grey text-center bg-grey-1 rounded-borders">Nessuna offerta recente.</div>
+                <div v-else v-for="group in getGroupedOffers(req)" :key="group.label" class="q-mb-md">
+                  <div class="bg-primary text-white q-pa-xs q-px-sm text-weight-bold rounded-top text-caption flex items-center">
+                    <q-icon name="category" size="xs" class="q-mr-xs" />
+                    {{ group.label }}
+                  </div>
+                  <q-list separator bordered class="bg-white rounded-bottom">
+                    <q-item v-for="offer in group.offers" :key="offer.id">
+                      <q-item-section avatar>
+                        <q-avatar icon="person" color="grey-2" text-color="primary" />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label class="text-weight-bold">
+                          {{ offer.operatorName ?? 'Operatore' }}
+                          <span v-if="offer.roleLabel" class="text-primary text-caption q-ml-sm">— {{ offer.roleLabel }}</span>
+                        </q-item-label>
+                        <q-item-label caption>
+                          Offerta per: {{ ctx.formatDate(req.date) }} - <q-badge :label="req.originalShift" color="primary" />
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <div v-if="offer.isRejected" class="text-negative text-caption text-weight-bold">Rifiutata</div>
+                        <div v-else-if="isOfferExpired(req, offer)" class="text-grey text-caption text-weight-bold">SCADUTA</div>
+                        <div v-else class="row q-gutter-xs">
+                          <q-btn round flat color="negative" icon="close" size="sm" @click="ctx.rejectOffer(req.id, offer.id)" />
+                          <q-btn round flat color="positive" icon="check" size="sm" @click="ctx.acceptOffer(req.id, offer.id)" />
+                        </div>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </div>
               </div>
 
               <!-- Gestione + Sostituti -->
@@ -146,7 +213,8 @@ function getShiftChipColor(code: ShiftCode): string {
                 <div class="text-h6 q-mb-sm">Gestione</div>
                 <div class="row q-gutter-sm q-mb-md">
                   <q-btn outline color="negative" label="Rifiuta (Abusiva)" @click="ctx.rejectRequest(req)" :disable="isRequestExpired(req.date, req.originalShift)" />
-                  <q-btn unelevated color="positive" label="Approva (Coperto)" @click="ctx.approveRequest(req)" :disable="isRequestExpired(req.date, req.originalShift)" />
+                  <q-btn v-if="!isRequestExpired(req.date, req.originalShift)" unelevated color="positive" label="Approva (Coperto)" @click="ctx.approveRequest(req)" />
+                  <q-btn v-else unelevated color="grey-7" icon="archive" label="Archivia (Scaduta)" @click="ctx.closeAsExpired(req)" />
                 </div>
                 <q-separator class="q-my-md" />
                 <div class="text-subtitle2 q-mb-xs">Sostituti Suggeriti</div>

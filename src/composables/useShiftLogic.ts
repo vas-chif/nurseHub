@@ -16,6 +16,7 @@ import type {
   CompatibleScenario,
   ReplacementScenario,
   ReplacementRole,
+  Operator,
 } from '../types/models';
 
 export function useShiftLogic() {
@@ -68,64 +69,34 @@ export function useShiftLogic() {
 
   /**
    * Finds all possible replacement scenarios for a target shift shortage,
-   * given a specific operator's current shift.
-   *
-   * @param scenarios Optional — pass Firestore-loaded scenarios to use live data.
-   *                  Falls back to current scenarios in scenarioStore if omitted.
+   * given a specific operator.
+   * 
+   * @param req - The request details (date and original shift).
+   * @param op - The operator to check.
+   * @param scenarios - Optional custom scenarios list.
    */
   function getCompatibleScenarios(
-    targetShift: ShiftCode,
-    operatorShift: ShiftCode,
-    reqDate?: string,
-    operatorSchedule?: Record<string, string>,
+    req: { date: string; originalShift: ShiftCode },
+    op: Operator,
     scenarios?: ReplacementScenario[],
   ): CompatibleScenario[] {
     const validScenarios: CompatibleScenario[] = [];
     const sourceScenarios = scenarios ?? useScenarioStore().scenarios;
     const filtered = sourceScenarios.filter(
-      (s: ReplacementScenario) => s.targetShift === targetShift,
+      (s: ReplacementScenario) => s.targetShift === req.originalShift,
     );
-
-    let nextShift: ShiftCode = 'R';
-    if (reqDate && operatorSchedule) {
-      const shiftDate = new Date(reqDate);
-      const nextDateObj = new Date(shiftDate);
-      nextDateObj.setDate(shiftDate.getDate() + 1);
-      const nextDateStr = nextDateObj.toISOString().split('T')[0]!;
-      nextShift = (operatorSchedule[nextDateStr] as ShiftCode) || 'R';
-    }
 
     for (const scenario of filtered) {
       scenario.roles.forEach((role: ReplacementRole, index: number) => {
-        let isMatch = false;
-
-        if (role.isNextDay) {
-          if (reqDate && operatorSchedule) {
-            isMatch = nextShift === role.originalShift;
-          }
-        } else {
-          isMatch = operatorShift === role.originalShift;
-        }
-
-        if (isMatch && role.requiredNextShift) {
-          if (!reqDate || !operatorSchedule || nextShift !== role.requiredNextShift) {
-            isMatch = false;
-          }
-        }
-
-        if (isMatch) {
-          const shiftToCheck = role.isNextDay ? nextShift : operatorShift;
-          const compliance = checkCompliance(shiftToCheck, role.newShift, targetShift);
-          if (compliance.allowed) {
-            validScenarios.push({
-              scenarioId: scenario.id,
-              scenarioLabel: scenario.label,
-              roleIndex: index,
-              roleLabel: role.roleLabel,
-              newShift: role.newShift,
-              incentive: role.incentive,
-            });
-          }
+        if (isOperatorEligibleForRole(req.date, req.originalShift, op, role)) {
+          validScenarios.push({
+            scenarioId: scenario.id,
+            scenarioLabel: scenario.label,
+            roleIndex: index,
+            roleLabel: role.roleLabel,
+            newShift: role.newShift,
+            incentive: role.incentive,
+          });
         }
       });
     }
@@ -207,11 +178,140 @@ export function useShiftLogic() {
     return overlapMinutes >= 60; // At least 1 hour
   }
 
+  /**
+   * Checks if a specific scenario role is still valid based on current time.
+   * Prevents suggesting "MP" (Morning+Afternoon) to someone at 12:00 PM
+   * because the "Morning" part has already started/passed.
+   */
+  function isScenarioTimeValid(dateStr: string, currentShift: ShiftCode, newShift: ShiftCode): boolean {
+    const now = new Date();
+    const shiftDate = new Date(dateStr);
+    
+    // Only applies to "Today"
+    const todayStr = now.toISOString().split('T')[0];
+    if (dateStr !== todayStr) return true;
+
+    // 1. Check if the currentShift has already started.
+    // If it has, we can ONLY "Prolong" it. We cannot "Replace" it.
+    const currentRange = getShiftTimeRange(currentShift);
+    const toMinutes = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
+    const currentStartMins = toMinutes(currentRange[0]);
+    const currentEndMins = toMinutes(currentRange[1]);
+    
+    if (currentStartMins > 0 || currentEndMins > 0) {
+      const startTime = new Date(shiftDate);
+      const [sh, sm] = currentRange[0].split(':').map(Number);
+      startTime.setHours(sh || 0, sm || 0, 0, 0);
+
+      const endTime = new Date(shiftDate);
+      const [eh, em] = currentRange[1].split(':').map(Number);
+      endTime.setHours(eh || 0, em || 0, 0, 0);
+      
+      // Handle cross-day shifts (e.g. Night shift ends next day)
+      if (currentEndMins <= currentStartMins && currentStartMins > 0) {
+        endTime.setDate(endTime.getDate() + 1);
+      }
+
+      // A. END TIME GUARD: If current shift ended more than 30 mins ago, operator is GONE.
+      if (now.getTime() > endTime.getTime() + (30 * 60 * 1000)) {
+        return false;
+      }
+
+      // B. START TIME GUARD (In-Shift Logic)
+      if (now.getTime() > startTime.getTime() + (30 * 60 * 1000)) {
+        // We are "In Shift".
+        // The newShift MUST contain the currentShift (Prolongation).
+        const newRange = getShiftTimeRange(newShift);
+        const newStartMins = toMinutes(newRange[0]);
+        
+        if (newStartMins > currentStartMins) {
+          return false;
+        }
+      }
+    }
+
+    // 2. Original Logic: Check if the newShift itself is in the past (Anticipi)
+    const newRange = getShiftTimeRange(newShift);
+    const newStart = toMinutes(newRange[0]);
+    const oldStart = currentStartMins;
+
+    if (newStart < oldStart && oldStart > 0) {
+      const startTime = new Date(shiftDate);
+      const [h, m] = newRange[0].split(':').map(Number);
+      startTime.setHours(h || 0, m || 0, 0, 0);
+      return now.getTime() < startTime.getTime() + (30 * 60 * 1000);
+    }
+
+    return true;
+  }
+
+  /**
+   * Centralized Matching Engine (Expert System).
+   * Decides if an operator is eligible for a specific role in a scenario.
+   * This is the Single Source of Truth for Admin Suggestions, User Dashboard, and Notifications.
+   */
+  function isOperatorEligibleForRole(
+    reqDate: string,
+    targetShift: ShiftCode,
+    op: Operator,
+    role: {
+      originalShift: ShiftCode;
+      newShift: ShiftCode;
+      isNextDay?: boolean;
+      requiredNextShift?: ShiftCode;
+    }
+  ): boolean {
+    // 1. Keyword Exclusion (PS, Coordinatore, etc.)
+    if (isExcluded(op)) return false;
+
+    const nextDate = new Date(new Date(reqDate).getTime() + 86400000)
+      .toISOString()
+      .split('T')[0]!;
+    
+    const cur = op.schedule?.[reqDate] ?? 'R';
+    const nxt = op.schedule?.[nextDate] ?? 'R';
+
+    // 2. Shift Match Check (Does the operator have the required shift in calendar?)
+    const isMatch = role.isNextDay ? nxt === role.originalShift : cur === role.originalShift;
+    if (!isMatch) return false;
+
+    // 3. Redundancy Check (If they already work what we need, e.g. P->P, skip notification)
+    if (role.newShift === (role.isNextDay ? nxt : cur)) return false;
+
+    // 4. Required Next Shift Check (e.g. must be R tomorrow to do N tonight)
+    if (role.requiredNextShift && nxt !== role.requiredNextShift) return false;
+
+    // 5. Compliance & Temporal Guard
+    const shiftToCheck = role.isNextDay ? nxt : cur;
+    const compliance = checkCompliance(shiftToCheck, role.newShift, targetShift);
+    const isTimeValid = isScenarioTimeValid(reqDate, shiftToCheck, role.newShift);
+
+    return compliance.allowed && isTimeValid;
+  }
+
+  const EXCLUDED_KEYWORDS = ['SUB INTENSIVA', 'PS', 'BLOCCO OPERATORIO', 'IFC', 'COORDINATORE'];
+  function isExcluded(op: Operator): boolean {
+    const fullName = (op.name || `${op.firstName || ''} ${op.lastName || ''}`).toUpperCase();
+    return EXCLUDED_KEYWORDS.some((k) => fullName.includes(k));
+  }
+
+  function getOperatorDisplayName(op: Operator): string {
+    return (op.name || `${op.firstName || ''} ${op.lastName || ''}`).trim() || 'Operatore';
+  }
+
   return {
     checkCompliance,
     getCompatibleScenarios,
     isRequestExpired,
+    isScenarioTimeValid,
+    isOperatorEligibleForRole,
     getShiftTimeRange,
     hasSignificantOverlap,
+    isExcluded,
+    getOperatorDisplayName,
   };
 }

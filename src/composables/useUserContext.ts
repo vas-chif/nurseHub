@@ -72,10 +72,8 @@ export function useUserContext() {
     }
 
     const compatibleScenarios = getCompatibleScenarios(
-      request.originalShift,
-      userShift,
-      request.date,
-      authStore.currentOperator.schedule,
+      { date: request.date, originalShift: request.originalShift },
+      authStore.currentOperator
     );
 
     return compatibleScenarios.length > 0;

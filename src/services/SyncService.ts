@@ -86,8 +86,10 @@ export class SyncService {
             {
               name: op.name,
               schedule: op.schedule,
+              notes: op.notes ?? {}, // Sync notes from Sheets (§1.12)
               email: op.email ?? existing.name, // keep fields that may exist
               phone: op.phone,
+              sheetOrder: op.sheetOrder,
               lastSync: serverTimestamp(),
               // userId is intentionally NOT included here — merge:true preserves it
             },
