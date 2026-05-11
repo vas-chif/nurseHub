@@ -60,6 +60,7 @@ const shiftBaseOptions = [
 const allShiftOptions = [
   ...shiftBaseOptions,
   { label: 'MP - Mattina+Pomeriggio', value: 'MP' },
+  { label: 'MP12 - Mattina+Pomeriggio (20:00)', value: 'MP12' },
   { label: 'N11 - Notte anticipata', value: 'N11' },
   { label: 'N12 - Notte prolungata', value: 'N12' },
 ];
@@ -78,6 +79,7 @@ function getShiftColor(shift: string): string {
     S: 'teal-7',
     R: 'green-7',
     MP: 'purple-7',
+    MP12: 'purple-9',
     N11: 'indigo-6',
     N12: 'indigo-8',
   };

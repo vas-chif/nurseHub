@@ -12,7 +12,7 @@
 <script setup lang="ts">
 import { inject } from 'vue';
 import type { useAdminRequests } from '../../composables/useAdminRequests';
-import type { ShiftRequest, ShiftCode, ScenarioGroup, Suggestion } from '../../types/models';
+import type { ShiftRequest, ShiftCode, ScenarioGroup, Suggestion, ApprovalOffer } from '../../types/models';
 import { useShiftLogic } from '../../composables/useShiftLogic';
 import { useScenarioStore } from '../../stores/scenarioStore';
 import type { Ref } from 'vue';
@@ -29,6 +29,9 @@ const smart = inject<{
   toggleAllInPosition: (id: string, cands: Suggestion[], val: boolean | null) => void;
   publishRequest: (req: ShiftRequest) => void;
 }>('adminSmartContext')!;
+
+import { ref } from 'vue';
+const selectedOffersMap = ref<Record<string, string[]>>({}); // requestId -> offerIds[]
 
 const scenarioStore = useScenarioStore();
 const { isRequestExpired, isScenarioTimeValid } = useShiftLogic();
@@ -84,10 +87,14 @@ function getGroupedOffers(req: ShiftRequest) {
     }
   });
   
-  return Object.entries(groupsMap).map(([label, list]) => ({
-    label,
-    offers: list
-  })).sort((a, b) => {
+  return Object.entries(groupsMap).map(([label, list]) => {
+    const scen = scenarios.find(s => s.label === label);
+    return {
+      label,
+      offers: list,
+      requiredCount: scen ? scen.roles.length : 1
+    };
+  }).sort((a, b) => {
     if (a.label.includes('Offerta Diretta')) return -1;
     if (b.label.includes('Offerta Diretta')) return 1;
     return a.label.localeCompare(b.label);
@@ -177,12 +184,55 @@ function getGroupedOffers(req: ShiftRequest) {
                 <div class="text-h6 q-mb-sm">Monitoraggio Offerte</div>
                 <div v-if="!req.offers?.length" class="q-pa-md text-grey text-center bg-grey-1 rounded-borders">Nessuna offerta recente.</div>
                 <div v-else v-for="group in getGroupedOffers(req)" :key="group.label" class="q-mb-md">
-                  <div class="bg-primary text-white q-pa-xs q-px-sm text-weight-bold rounded-top text-caption flex items-center">
-                    <q-icon name="category" size="xs" class="q-mr-xs" />
-                    {{ group.label }}
+                  <div class="bg-primary text-white q-pa-xs q-px-sm text-weight-bold rounded-top text-caption flex items-center justify-between">
+                    <div class="flex items-center">
+                      <q-icon name="category" size="xs" class="q-mr-xs" />
+                      {{ group.label }}
+                    </div>
+                     <q-btn 
+                      v-if="group.offers.length > 1 && group.requiredCount > 1"
+                      size="xs" 
+                      color="white" 
+                      text-color="primary" 
+                      label="Approva Selezione" 
+                      icon="check_circle"
+                      unelevated
+                      :disable="(selectedOffersMap[req.id + group.label]?.length !== group.requiredCount)"
+                      @click="() => {
+                        const currentMap = selectedOffersMap[req.id + group.label] || [];
+                        const selectedInGroup = group.offers.filter(o => currentMap.includes(o.id));
+                        const mapped: ApprovalOffer[] = selectedInGroup.map(o => ({
+                          id: o.id,
+                          operatorId: o.operatorId,
+                          operatorName: o.operatorName || 'Operatore',
+                          scenarioLabel: o.scenarioLabel || group.label,
+                          roleLabel: o.roleLabel || 'Copertura',
+                          newShift: (o.newShift as ShiftCode) || req.originalShift,
+                          isNextDay: o.isNextDay
+                        }));
+                        ctx.approveCombined(req.id, mapped);
+                      }"
+                    />
                   </div>
                   <q-list separator bordered class="bg-white rounded-bottom">
                     <q-item v-for="offer in group.offers" :key="offer.id">
+                      <q-item-section avatar side>
+                        <q-checkbox 
+                          v-if="!offer.isRejected && !isOfferExpired(req, offer)"
+                          :model-value="(selectedOffersMap[req.id + group.label] || []).includes(offer.id)" 
+                          :disable="group.offers.length < group.requiredCount"
+                          @update:model-value="(val) => {
+                            const key = req.id + group.label;
+                            if (!selectedOffersMap[key]) selectedOffersMap[key] = [];
+                            const list = selectedOffersMap[key];
+                            if (list) {
+                              if (val) list.push(offer.id);
+                              else selectedOffersMap[key] = list.filter(id => id !== offer.id);
+                            }
+                          }"
+                          dense
+                        />
+                      </q-item-section>
                       <q-item-section avatar>
                         <q-avatar icon="person" color="grey-2" text-color="primary" />
                       </q-item-section>
@@ -200,7 +250,15 @@ function getGroupedOffers(req: ShiftRequest) {
                         <div v-else-if="isOfferExpired(req, offer)" class="text-grey text-caption text-weight-bold">SCADUTA</div>
                         <div v-else class="row q-gutter-xs">
                           <q-btn round flat color="negative" icon="close" size="sm" @click="ctx.rejectOffer(req.id, offer.id)" />
-                          <q-btn round flat color="positive" icon="check" size="sm" @click="ctx.acceptOffer(req.id, offer.id)" />
+                          <q-btn round flat color="positive" icon="check" size="sm" @click="ctx.acceptOffer(req.id, {
+                            id: offer.id,
+                            operatorId: offer.operatorId,
+                            operatorName: offer.operatorName || 'Operatore',
+                            scenarioLabel: offer.scenarioLabel || group.label,
+                            roleLabel: offer.roleLabel || 'Copertura',
+                            newShift: (offer.newShift as ShiftCode) || req.originalShift,
+                            isNextDay: offer.isNextDay
+                          } as ApprovalOffer)" />
                         </div>
                       </q-item-section>
                     </q-item>

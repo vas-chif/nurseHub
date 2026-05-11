@@ -45,21 +45,27 @@ interface DateColumn {
 
 const scheduleStore = useScheduleStore();
 const operatorOptions = ref<Operator[]>([]);
-const selectedOperators = ref<string[]>([]); // Array of IDs
-
-const startDate = ref(quasarDate.formatDate(new Date(), 'YYYY-MM-DD'));
-const daysToShow = ref(30);
-
-const selectedShiftCodes = ref<string[]>([]);
-const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
-
-const pagination = ref({ rowsPerPage: 0 }); // Show all rows for virtual scroll
-const showLegend = ref(false);
-const showOnlyWithNotes = ref(false);
-
 const $q = useQuasar();
 const authStore = useAuthStore();
 const syncStore = useSyncStore();
+
+// --- Persistence Keys ---
+const STORAGE_KEY_OPERATORS = 'admin_filter_operators';
+const STORAGE_KEY_START_DATE = 'admin_filter_start_date';
+const STORAGE_KEY_DAYS = 'admin_filter_days';
+const STORAGE_KEY_SHIFT_CODES = 'admin_filter_shift_codes';
+const STORAGE_KEY_ONLY_NOTES = 'admin_filter_only_notes';
+
+// --- Filter State (Initialized from LocalStorage) ---
+const selectedOperators = ref<string[]>(JSON.parse(localStorage.getItem(STORAGE_KEY_OPERATORS) || '[]'));
+const startDate = ref(localStorage.getItem(STORAGE_KEY_START_DATE) || quasarDate.formatDate(new Date(), 'YYYY-MM-DD'));
+const daysToShow = ref(Number(localStorage.getItem(STORAGE_KEY_DAYS)) || 30);
+const selectedShiftCodes = ref<string[]>(JSON.parse(localStorage.getItem(STORAGE_KEY_SHIFT_CODES) || '[]'));
+const showOnlyWithNotes = ref(localStorage.getItem(STORAGE_KEY_ONLY_NOTES) === 'true');
+const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
+const showLegend = ref(false);
+const pagination = ref({ rowsPerPage: 0 }); // Show all rows
+
 const pendingChanges = ref<Record<string, Record<string, { shift: string; note: string }>>>({}); // operatorId -> { date -> {shift, note} }
 const savingChanges = ref(false);
 const tempNote = ref(''); // Temporary note for the currently open menu
@@ -75,10 +81,37 @@ watch(operatorSortOrder, (val) => {
 
 watch(daysToShow, (newVal) => {
   if (newVal < 1) daysToShow.value = 1;
+  localStorage.setItem(STORAGE_KEY_DAYS, String(daysToShow.value));
 });
+
+watch(selectedOperators, (val) => localStorage.setItem(STORAGE_KEY_OPERATORS, JSON.stringify(val)), { deep: true });
+watch(startDate, (val) => localStorage.setItem(STORAGE_KEY_START_DATE, val));
+watch(selectedShiftCodes, (val) => localStorage.setItem(STORAGE_KEY_SHIFT_CODES, JSON.stringify(val)), { deep: true });
+watch(showOnlyWithNotes, (val) => localStorage.setItem(STORAGE_KEY_ONLY_NOTES, String(val)));
 
 const hasPendingChanges = computed(() => Object.keys(pendingChanges.value).length > 0);
 
+
+function resetFilters() {
+  selectedOperators.value = [];
+  startDate.value = quasarDate.formatDate(new Date(), 'YYYY-MM-DD');
+  daysToShow.value = 30;
+  selectedShiftCodes.value = [];
+  showOnlyWithNotes.value = false;
+  
+  localStorage.removeItem(STORAGE_KEY_OPERATORS);
+  localStorage.removeItem(STORAGE_KEY_START_DATE);
+  localStorage.removeItem(STORAGE_KEY_DAYS);
+  localStorage.removeItem(STORAGE_KEY_SHIFT_CODES);
+  localStorage.removeItem(STORAGE_KEY_ONLY_NOTES);
+  
+  $q.notify({
+    message: 'Filtri resettati',
+    color: 'grey-8',
+    icon: 'filter_alt_off',
+    timeout: 1000
+  });
+}
 
 function formatDate(dt: string) {
   if (!dt) return '';
@@ -504,6 +537,9 @@ async function savePendingChanges() {
       </div>
 
       <div class="col-12 col-md-3 row no-wrap items-center justify-end q-gutter-x-sm">
+        <q-btn flat color="grey-7" icon="filter_alt_off" @click="resetFilters" dense>
+          <q-tooltip>Reset Filtri</q-tooltip>
+        </q-btn>
         <q-btn :flat="!showOnlyWithNotes" :color="showOnlyWithNotes ? 'amber-9' : 'grey-7'" icon="sticky_note_2"
           @click="showOnlyWithNotes = !showOnlyWithNotes" dense>
           <q-tooltip>Mostra solo righe con note</q-tooltip>

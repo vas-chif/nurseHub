@@ -132,3 +132,19 @@ Il sistema è stato potenziato per trasformare `AdminShiftTable.vue` in una cons
 - **Integrità & Performance**:
   - **Batch Write**: Tutte le modifiche locali (turni + storico) vengono inviate a Firestore in un'unica transazione atomica per garantire la coerenza dei dati.
   - **Auto-Cleanup**: Alla chiusura dei menu di modifica, lo stato temporaneo viene resettato automaticamente per evitare errori di inserimento.
+- **Sorting Persistente**: L'ordine di visualizzazione (Excel vs Alfabetico) è salvato nel `localStorage` e ripristinato ad ogni accesso.
+- **Filtri Persistenti**: Lo stato dei filtri (operatori, date, codici turno, note) viene salvato automaticamente nel `localStorage` per una navigazione senza attriti.
+
+### 8. Gestione Scenari Combinati & Turni Tecnici Differenziati (Phase 33 - Expert System Advance)
+Il sistema è ora in grado di gestire sostituzioni complesse che richiedono la collaborazione di più operatori (es. copertura di un pomeriggio tramite un prolungamento mattina + un anticipo notte).
+
+- **Mappatura Turni Tecnici (MP, MP12, N11, N12)**:
+  - Introdotta la distinzione tra **MP** (Mattina+Pomeriggio standard fino alle 19:00) e **MP12** (Mattina+Pomeriggio prolungato fino alle 20:00).
+  - La logica speculare si applica alle notti: **N11** (Anticipata) e **N12** (Prolungata).
+- **Batch Approval Workflow (Copertura di Gruppo)**:
+  - **Selezione Multipla**: Nella sezione "Monitoraggio Offerte", l'Admin può selezionare tramite checkbox più operatori all'interno dello stesso scenario combinato.
+  - **Approvazione Atomica**: Il pulsante "Approva Selezione" esegue un'operazione batch che chiude la richiesta e aggiorna contemporaneamente i calendari di tutti i partecipanti.
+  - **Mapping Automatico**: L'app deduce autonomamente il codice turno tecnico (es. MP12 invece di P) in base al ruolo dell'operatore nello scenario, eliminando errori di inserimento manuale.
+- **Audit Log Sincronizzato**:
+  - Le note su Google Sheets per l'operatore assente mostrano l'elenco completo dei sostituti (`Sostituito da: Op A + Op B`).
+  - Ogni sostituto riceve sul proprio calendario la nota specifica relativa allo scenario e al ruolo ricoperto.

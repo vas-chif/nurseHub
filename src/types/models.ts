@@ -13,7 +13,8 @@ export type ShiftCode =
   | 'R' // Riposo
   | 'A' // Assenza
   | 'S' // Smonto
-  | 'MP' // Mattina + Pomeriggio (Doppio Turno)
+  | 'MP' // Mattina + Pomeriggio (Fino alle 19:00)
+  | 'MP12' // Mattina + Pomeriggio Prolungato (Fino alle 20:00)
   | 'N11' // Notte Anticipata (20:00)
   | 'N12' // Notte Prolungata (19:00)
   | (string & {}); // Fallback per codici custom
@@ -102,6 +103,7 @@ export interface ShiftRequest {
     scenarioLabel?: string;
     roleLabel?: string;
     newShift?: ShiftCode;
+    isNextDay?: boolean | undefined;
     timestamp?: number;
     isRejected?: boolean;
   }>; // Offerte ricevute dagli operatori
@@ -114,9 +116,13 @@ export interface ShiftRequest {
 
   // Expert System Step 1.3: Permanent closure metadata
   resolutionMetadata?: {
-    substituteId: string | null;
-    substituteName: string;
-    scenarioLabel: string;
+    substituteId?: string | null;
+    substituteName?: string;
+    scenarioLabel?: string;
+    // Multi-operator support (Step 33)
+    substituteIds?: string[];
+    substituteNames?: string;
+    scenarioLabels?: string;
     closedBy?: string;
     closedAt: number;
   };
@@ -154,6 +160,13 @@ export interface ShiftOffer {
   // Scenario details
   scenarioId: string; // References predefined scenarios
   roleIndex: number; // Which role in the scenario (if multi-role)
+  
+  // Flattened for history/sheets
+  operatorName?: string;
+  scenarioLabel?: string;
+  roleLabel?: string;
+  newShift?: ShiftCode;
+  isNextDay?: boolean | undefined;
 
   timestamp: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
@@ -247,6 +260,16 @@ export interface ScenarioGroup {
   id: string;
   label: string;
   positions: ScenarioPosition[];
+}
+
+export interface ApprovalOffer {
+  id: string;
+  operatorId: string;
+  operatorName: string;
+  scenarioLabel: string;
+  roleLabel: string;
+  newShift: ShiftCode;
+  isNextDay?: boolean | undefined;
 }
 
 // --- Phase 10.2: Multi-Configuration System ---

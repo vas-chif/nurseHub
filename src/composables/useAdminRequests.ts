@@ -43,7 +43,7 @@ import { DEFAULT_SHEETS_CONFIG } from '../config/sheets';
 import { operatorsService } from '../services/OperatorsService';
 import { formatToItalian } from '../utils/dateUtils';
 import { useSecureLogger } from '../utils/secureLogger';
-import type { ShiftRequest, ShiftCode, Operator } from '../types/models';
+import type { ShiftRequest, ShiftCode, Operator, ApprovalOffer } from '../types/models';
 
 const logger = useSecureLogger();
 
@@ -58,6 +58,7 @@ export function useAdminRequests() {
   const syncStore = useSyncStore();
   const notificationStore = useNotificationStore();
   const { isRequestExpired } = useShiftLogic();
+  
 
   // --- State ---
   const loading = ref(false);
@@ -89,13 +90,7 @@ export function useAdminRequests() {
   const adminApprovalNote = ref('');
   const approvalContext = ref<{
     req: ShiftRequest;
-    offer?: {
-      id: string;
-      operatorId?: string | undefined;
-      operatorName?: string | undefined;
-      scenarioLabel?: string | undefined;
-      roleLabel?: string | undefined;
-    };
+    offers?: ApprovalOffer[];
   } | null>(null);
 
   // Conflict handling
@@ -245,11 +240,11 @@ export function useAdminRequests() {
   function getResolutionDetails(req: ShiftRequest): { who: string; scenario: string } | null {
     if (req.status !== 'CLOSED') return null;
 
-    // Priority 1: New Snapshot Metadata (Step 1.3)
+    // Priority 1: New Snapshot Metadata (Step 1.3 / Step 33)
     if (req.resolutionMetadata) {
       return {
-        who: req.resolutionMetadata.substituteName || 'Admin',
-        scenario: req.resolutionMetadata.scenarioLabel || 'Manuale',
+        who: req.resolutionMetadata.substituteNames || req.resolutionMetadata.substituteName || 'Admin',
+        scenario: req.resolutionMetadata.scenarioLabels || req.resolutionMetadata.scenarioLabel || 'Manuale',
       };
     }
 
@@ -463,20 +458,27 @@ export function useAdminRequests() {
     showApprovalDialog.value = true;
   }
 
-  function acceptOffer(requestId: string, offerId: string): void {
+
+  function acceptOffer(requestId: string, offer: ApprovalOffer): void {
     const req = requests.value.find((r) => r.id === requestId);
     if (!req) return;
-    const offer = req.offers?.find((o) => o.id === offerId);
-    if (!offer) return;
+    
     approvalContext.value = {
       req,
-      offer: {
-        id: offer.id,
-        operatorId: offer.operatorId,
-        operatorName: offer.operatorName,
-        scenarioLabel: offer.scenarioLabel,
-        roleLabel: offer.roleLabel,
-      },
+      offers: [offer],
+    };
+    syncMode.value = 'auto';
+    adminApprovalNote.value = '';
+    showApprovalDialog.value = true;
+  }
+
+  function approveCombined(requestId: string, selectedOffers: ApprovalOffer[]): void {
+    const req = requests.value.find((r) => r.id === requestId);
+    if (!req || !selectedOffers.length) return;
+    
+    approvalContext.value = {
+      req,
+      offers: selectedOffers,
     };
     syncMode.value = 'auto';
     adminApprovalNote.value = '';
@@ -485,7 +487,7 @@ export function useAdminRequests() {
 
   async function startApprovalVerification(): Promise<void> {
     if (!approvalContext.value) return;
-    const { req, offer } = approvalContext.value;
+    const { req, offers } = approvalContext.value;
     isVerifying.value = true;
     conflicts.value = [];
 
@@ -515,21 +517,21 @@ export function useAdminRequests() {
         }
       }
 
-      // 3. Check Substitute (if present)
-      if (offer?.operatorId) {
-        const freshOp = opMap[offer.operatorId];
-        const actualShift = freshOp?.schedule?.[req.date] || 'R';
-        // We expect the substitute to be in 'R' or a specific shift defined by logic
-        // For simplicity, we check if it matches what our app currently thinks they have
-        const expectedShift = operators.value[offer.operatorId]?.schedule?.[req.date] || 'R';
+      // 3. Check Substitutes
+      if (offers && offers.length > 0) {
+        for (const off of offers) {
+          const freshOp = opMap[off.operatorId];
+          const actualShift = freshOp?.schedule?.[req.date] || 'R';
+          const expectedShift = operators.value[off.operatorId]?.schedule?.[req.date] || 'R';
 
-        if (actualShift !== expectedShift) {
-          conflicts.value.push({
-            operatorName: freshOp?.name || offer.operatorName || 'Sostituto',
-            date: req.date,
-            expected: expectedShift,
-            actual: actualShift,
-          });
+          if (actualShift !== expectedShift) {
+            conflicts.value.push({
+              operatorName: freshOp?.name || off.operatorName || 'Sostituto',
+              date: req.date,
+              expected: expectedShift,
+              actual: actualShift,
+            });
+          }
         }
       }
 
@@ -549,7 +551,7 @@ export function useAdminRequests() {
 
   async function processApproval(forceMode: 'auto' | 'manual' | 'force' = 'auto'): Promise<void> {
     if (!approvalContext.value) return;
-    const { req, offer } = approvalContext.value;
+    const { req, offers = [] } = approvalContext.value;
 
     // Final safety check before commit
     if (isRequestExpired(req.date, req.originalShift)) {
@@ -565,11 +567,15 @@ export function useAdminRequests() {
     loading.value = true;
     try {
       const batch = writeBatch(db);
+      const acceptedOfferId = offers.length === 1 ? offers[0]?.id : undefined;
+      const acceptedOfferIds = offers.length > 1 ? offers.map((o: ApprovalOffer) => o.id) : undefined;
+
       batch.update(doc(db, 'shiftRequests', req.id), {
         status: 'CLOSED',
         approvalTimestamp: Date.now(),
         adminId: authStore.currentUser?.uid,
-        ...(offer ? { acceptedOfferId: offer.id } : {}),
+        ...(acceptedOfferId ? { acceptedOfferId } : {}),
+        ...(acceptedOfferIds ? { acceptedOfferIds } : {}),
       });
       if (req.absentOperatorId && configStore.activeConfigId) {
         batch.update(
@@ -583,46 +589,42 @@ export function useAdminRequests() {
           { [`schedule.${req.date}`]: 'A' },
         );
       }
-      if (offer?.operatorId && configStore.activeConfigId) {
-        const updates: Record<string, string> = { [`schedule.${req.date}`]: req.originalShift };
-        if (req.originalShift === 'N') {
-          updates[`schedule.${nextDate}`] = 'S';
+      
+      // Update all substitutes
+      for (const off of offers) {
+        if (!configStore.activeConfigId) continue;
+        const targetDate = off.isNextDay ? nextDate : req.date;
+        const updates: Record<string, string> = { [`schedule.${targetDate}`]: off.newShift };
+        
+        // Post-night safety rest (S) logic still applies if the NEW shift is N
+        if (off.newShift === 'N') {
+          const dayAfter = dateUtil.formatDate(dateUtil.addToDate(targetDate, { days: 1 }), 'YYYY-MM-DD');
+          updates[`schedule.${dayAfter}`] = 'S';
         }
+        
         batch.update(
           doc(
             db,
             'systemConfigurations',
             configStore.activeConfigId,
             'operators',
-            offer.operatorId,
+            off.operatorId,
           ),
           updates,
         );
       }
       await batch.commit();
 
-      const notificationMsg = offer
-        ? `La tua richiesta per il ${req.date} è stata coperta da ${offer.operatorName}`
+      const substituteNames = offers.map(o => o.operatorName).join(' + ');
+      const notificationMsg = offers.length > 0
+        ? `La tua richiesta per il ${req.date} è stata coperta da ${substituteNames}`
         : `La tua richiesta per il ${req.date} è stata approvata.`;
       await notifyUser(
         req.creatorId,
-        offer ? 'OFFER_ACCEPTED' : 'REQUEST_APPROVED',
+        offers.length > 0 ? 'OFFER_ACCEPTED' : 'REQUEST_APPROVED',
         notificationMsg,
         req.id,
       );
-
-      if (offer?.operatorId) {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const subDoc = usersSnap.docs.find((d) => d.data().operatorId === offer.operatorId);
-        if (subDoc) {
-          await notifyUser(
-            subDoc.id,
-            'OFFER_ACCEPTED',
-            `La tua offerta di sostituzione per il ${req.date} è stata accettata!`,
-            req.id,
-          );
-        }
-      }
 
       if (forceMode !== 'manual' && syncMode.value === 'auto') {
         const adminName = authStore.currentUser
@@ -630,22 +632,17 @@ export function useAdminRequests() {
           : 'Admin';
         const separator = '-------------------------';
 
-        const scenarioInfo = offer?.scenarioLabel
-          ? `📋 Scenario: ${offer.scenarioLabel}`
-          : forceMode === 'force'
-            ? '📋 Scenario: Gestione Forzata'
-            : '';
-        const roleInfo = offer?.roleLabel ? `📍 Ruolo: ${offer.roleLabel}` : '';
-
+        // Notify Absent Operator
         if (req.absentOperatorId) {
           const absName = operators.value[req.absentOperatorId]?.name || req.absentOperatorName;
+          const scenarioInfo = offers.length > 0 ? `📋 Scenari: ${[...new Set(offers.map(o => o.scenarioLabel))].join(', ')}` : '';
+          
           const fullNote = [
             separator,
             `👤 Operatore: ${absName}`,
             req.requestNote ? `📝 Nota Op: ${req.requestNote}` : '',
-            offer ? `🤝 Sostituito da: ${offer.operatorName}` : '',
+            offers.length > 0 ? `🤝 Sostituito da: ${offers.map(o => o.operatorName).join(' + ')}` : '',
             scenarioInfo,
-            roleInfo,
             adminApprovalNote.value ? `✍️ Nota Admin: ${adminApprovalNote.value}` : '',
             `✅ Approvato da: ${adminName}`,
           ]
@@ -655,10 +652,13 @@ export function useAdminRequests() {
           if (absName) void syncToSheets(absName, req.date, 'A', fullNote);
         }
 
-        if (offer?.operatorName) {
+        // Notify and Sync all substitutes
+        for (const off of offers) {
+          const scenarioInfo = `📋 Scenario: ${off.scenarioLabel}`;
+          const roleInfo = `📍 Ruolo: ${off.roleLabel}`;
           const fullNote = [
             separator,
-            `🛡️ Copertura: ${offer.operatorName}`,
+            `🛡️ Copertura: ${off.operatorName}`,
             req.requestNote ? `📝 Nota Op: ${req.requestNote}` : '',
             scenarioInfo,
             roleInfo,
@@ -668,14 +668,28 @@ export function useAdminRequests() {
             .filter(Boolean)
             .join('\n');
 
-          void syncToSheets(offer.operatorName, req.date, req.originalShift, fullNote);
+          const targetDate = off.isNextDay ? nextDate : req.date;
+          void syncToSheets(off.operatorName, targetDate, off.newShift, fullNote);
 
-          if (req.originalShift === 'N') {
+          if (off.newShift === 'N') {
+            const dayAfter = dateUtil.formatDate(dateUtil.addToDate(targetDate, { days: 1 }), 'YYYY-MM-DD');
             void syncToSheets(
-              offer.operatorName,
-              nextDate,
+              off.operatorName,
+              dayAfter,
               'S',
               `${separator}\n💤 Smonto automatico post-notte\n${scenarioInfo}\n${roleInfo}\n✅ Approvato da: ${adminName}`.trim(),
+            );
+          }
+          
+          // Send Notifications
+          const usersSnap = await getDocs(collection(db, 'users'));
+          const subDoc = usersSnap.docs.find((d) => d.data().operatorId === off.operatorId);
+          if (subDoc) {
+            await notifyUser(
+              subDoc.id,
+              'OFFER_ACCEPTED',
+              `La tua offerta di sostituzione (${off.roleLabel}) per il ${req.date} è stata accettata!`,
+              req.id,
             );
           }
         }
@@ -683,9 +697,9 @@ export function useAdminRequests() {
 
       // 1.3 Snapshot di Chiusura (Storico)
       const resolution = {
-        substituteId: offer?.operatorId || null,
-        substituteName: offer?.operatorName || (forceMode === 'manual' ? 'Manuale' : 'Admin'),
-        scenarioLabel: offer?.scenarioLabel || (forceMode === 'force' ? 'Forzata' : 'Manuale'),
+        substituteIds: offers.map((o: ApprovalOffer) => o.operatorId),
+        substituteNames: offers.map((o: ApprovalOffer) => o.operatorName).join(' + '),
+        scenarioLabels: [...new Set(offers.map((o: ApprovalOffer) => o.scenarioLabel))].join(', '),
         closedBy: authStore.currentUser?.uid,
         closedAt: Date.now(),
       };
@@ -920,6 +934,7 @@ export function useAdminRequests() {
     confirmReject,
     approveRequest,
     acceptOffer,
+    approveCombined,
     startApprovalVerification,
     processApproval,
     rejectOffer,

@@ -437,14 +437,26 @@ function filterOperators(val: string, update: (fn: () => void) => void) {
           <span class="q-ml-sm text-h6">Conferma Copertura</span>
         </q-card-section>
         <q-card-section class="q-pt-none">
-          <div v-if="approvalContext?.offer" class="q-mb-md">
-            Stai accettando l'offerta di <strong>{{ approvalContext.offer.operatorName }}</strong>.
+          <div v-if="approvalContext?.offers?.length" class="q-mb-md">
+            <div class="text-subtitle2 q-mb-xs">Operatori Sostituti:</div>
+            <q-list dense bordered class="rounded-borders bg-blue-1">
+              <q-item v-for="off in approvalContext.offers" :key="off.id">
+                <q-item-section avatar>
+                  <q-icon name="person" color="primary" size="xs" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold">{{ off.operatorName }}</q-item-label>
+                  <q-item-label caption>{{ off.roleLabel }} ({{ off.newShift }})</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <div class="q-mt-sm text-caption text-grey-8">
+              Stai confermando la copertura per <strong>{{ reqs.getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req) }}</strong>.
+            </div>
           </div>
           <div v-else-if="approvalContext?.req" class="q-mb-md">
-            Stai confermando la copertura per
-            <strong>{{
-              reqs.getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req)
-              }}</strong>.
+            Stai confermando la copertura per 
+            <strong>{{ reqs.getOperatorName(approvalContext.req.absentOperatorId, approvalContext.req) }}</strong>.
           </div>
           <div class="bg-grey-2 q-pa-md rounded-borders">
             <div class="text-subtitle2 q-mb-sm">Sincronizzazione Google Sheets</div>
