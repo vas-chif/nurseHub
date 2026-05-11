@@ -348,7 +348,11 @@ export function useRequestsFilter() {
 
     if (req.status === 'CLOSED') {
       const myOffer = getMyOffer(req);
-      return myOffer && req.acceptedOfferId === myOffer.id
+      const isAccepted = myOffer && (
+        req.acceptedOfferId === myOffer.id || 
+        (req.acceptedOfferIds && req.acceptedOfferIds.includes(myOffer.id))
+      );
+      return isAccepted
         ? 'Approvata - Assegnato a te'
         : 'Rifiutata / Coperta da altri';
     }

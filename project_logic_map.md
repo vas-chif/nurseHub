@@ -142,9 +142,11 @@ Il sistema è ora in grado di gestire sostituzioni complesse che richiedono la c
   - Introdotta la distinzione tra **MP** (Mattina+Pomeriggio standard fino alle 19:00) e **MP12** (Mattina+Pomeriggio prolungato fino alle 20:00).
   - La logica speculare si applica alle notti: **N11** (Anticipata) e **N12** (Prolungata).
 - **Batch Approval Workflow (Copertura di Gruppo)**:
-  - **Selezione Multipla**: Nella sezione "Monitoraggio Offerte", l'Admin può selezionare tramite checkbox più operatori all'interno dello stesso scenario combinato.
-  - **Approvazione Atomica**: Il pulsante "Approva Selezione" esegue un'operazione batch che chiude la richiesta e aggiorna contemporaneamente i calendari di tutti i partecipanti.
+  - **Selezione Multipla Isolata**: Nella sezione "Monitoraggio Offerte", l'Admin può selezionare tramite checkbox più operatori all'interno dello stesso scenario combinato. La selezione è isolata per gruppo per evitare confusione visiva.
+  - **Approvazione Atomica**: Il pulsante "Approva Selezione" esegue un'operazione batch che chiude la richiesta e aggiorna contemporaneamente i calendari di tutti i partecipanti. Il pulsante si abilita solo se il numero di operatori selezionati corrisponde esattamente ai ruoli richiesti dallo scenario.
   - **Mapping Automatico**: L'app deduce autonomamente il codice turno tecnico (es. MP12 invece di P) in base al ruolo dell'operatore nello scenario, eliminando errori di inserimento manuale.
-- **Audit Log Sincronizzato**:
-  - Le note su Google Sheets per l'operatore assente mostrano l'elenco completo dei sostituti (`Sostituito da: Op A + Op B`).
-  - Ogni sostituto riceve sul proprio calendario la nota specifica relativa allo scenario e al ruolo ricoperto.
+- **Audit Log & Dashboard Utente**:
+  - **Firestore Schema**: Introdotto il campo `acceptedOfferIds` (array) per tracciare tutti i vincitori di una copertura multipla.
+  - **Resolution Metadata**: Lo storico admin salva uno snapshot completo (`substituteNames`, `scenarioLabels`) per mostrare l'intero team coinvolto.
+  - **Feedback Utente**: La dashboard "Le mie candidature" riconosce ora sia le approvazioni singole che quelle multiple, mostrando correttamente lo stato "Approvata" a tutti i membri del team di copertura.
+  - **Note Professionali Excel**: Le note su Google Sheets sono sincronizzate per riflettere la collaborazione (`Sostituito da: Op A + Op B`) e specificare il ruolo tecnico per ogni sostituto.

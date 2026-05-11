@@ -111,6 +111,7 @@ export interface ShiftRequest {
   // Phase 18: History & Archiving
   offeringOperatorIds?: string[]; // IDs of operators who offered (for easy querying)
   acceptedOfferId?: string; // ID of the accepted offer
+  acceptedOfferIds?: string[]; // IDs of the accepted offers (Multi-operator)
   hiddenBy?: string[]; // UIDs of users who deleted this from their view
   isArchived?: boolean; // True if auto-archived (> 3 months)
 
