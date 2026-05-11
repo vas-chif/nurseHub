@@ -139,6 +139,8 @@ export function useAdminSwaps(
     const swap = approvalSwapContext.value;
     swapLoading.value = true;
 
+    const nextDate = dateUtil.formatDate(dateUtil.addToDate(swap.date, { days: 1 }), 'YYYY-MM-DD');
+
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
         status: 'APPROVED',
@@ -147,8 +149,6 @@ export function useAdminSwaps(
       });
 
       if (configStore.activeConfigId) {
-        const nextDate = dateUtil.formatDate(dateUtil.addToDate(swap.date, { days: 1 }), 'YYYY-MM-DD');
-
         if (swap.creatorOperatorId) {
           const updates: Record<string, string> = { [`schedule.${swap.date}`]: swap.desiredShift };
           // Rule: If new shift is Night (N), the next day MUST be Smonto (S)
@@ -171,7 +171,6 @@ export function useAdminSwaps(
       if (swapSyncMode.value === 'auto') {
         const creatorName = swap.creatorName ?? (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '') ?? 'Operatore 1';
         const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? 'Operatore 2';
-        
         // Sync creator's new shift with richer note
         const creatorNote = [
           `Scambio con ${counterName}`,
@@ -179,6 +178,11 @@ export function useAdminSwaps(
         ].filter(Boolean).join(' - ');
         void syncToSheets(creatorName, swap.date, swap.desiredShift, creatorNote);
         
+        // Rule: If creator gets Night, sync Smonto for next day
+        if (swap.desiredShift === 'N') {
+          void syncToSheets(creatorName, nextDate, 'S', 'Smonto automatico post-notte (scambio)');
+        }
+
         // Sync counterpart's new shift with richer note
         if (counterName) {
           const counterNote = [
@@ -186,6 +190,11 @@ export function useAdminSwaps(
             adminSwapNote.value ? `Nota Admin: ${adminSwapNote.value}` : ''
           ].filter(Boolean).join(' - ');
           void syncToSheets(counterName, swap.date, swap.offeredShift, counterNote);
+
+          // Rule: If counterpart gets Night, sync Smonto for next day
+          if (swap.offeredShift === 'N') {
+            void syncToSheets(counterName, nextDate, 'S', 'Smonto automatico post-notte (scambio)');
+          }
         }
       }
 

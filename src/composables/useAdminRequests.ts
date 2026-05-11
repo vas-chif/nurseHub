@@ -378,6 +378,7 @@ export function useAdminRequests() {
   async function processApproval(): Promise<void> {
     if (!approvalContext.value) return;
     const { req, offer } = approvalContext.value;
+    const nextDate = dateUtil.formatDate(dateUtil.addToDate(req.date, { days: 1 }), 'YYYY-MM-DD');
     loading.value = true;
     try {
       const batch = writeBatch(db);
@@ -389,7 +390,11 @@ export function useAdminRequests() {
         batch.update(doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', req.absentOperatorId), { [`schedule.${req.date}`]: 'A' });
       }
       if (offer?.operatorId && configStore.activeConfigId) {
-        batch.update(doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', offer.operatorId), { [`schedule.${req.date}`]: req.originalShift });
+        const updates: Record<string, string> = { [`schedule.${req.date}`]: req.originalShift };
+        if (req.originalShift === 'N') {
+          updates[`schedule.${nextDate}`] = 'S';
+        }
+        batch.update(doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', offer.operatorId), updates);
       }
       await batch.commit();
 
@@ -417,8 +422,14 @@ export function useAdminRequests() {
           
           if (absName) void syncToSheets(absName, req.date, 'A', fullNote);
         }
+
         if (offer?.operatorName) {
           void syncToSheets(offer.operatorName, req.date, req.originalShift, adminApprovalNote.value);
+          
+          // Phase 30: Sync Smonto to Sheets
+          if (req.originalShift === 'N') {
+            void syncToSheets(offer.operatorName, nextDate, 'S', 'Smonto automatico post-notte (copertura)');
+          }
         }
       }
 

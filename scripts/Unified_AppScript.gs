@@ -187,7 +187,7 @@ function doPost(e) {
       cell.setValue(newShift);
 
       // Phase 30: Visual marker for app-driven updates (Purple text)
-      cell.setFontColor('#431657ff');
+      cell.setFontColor('#9C27B0');
 
       var finalNote = "Modificato dall'app";
       if (note && note.trim() !== '') {
