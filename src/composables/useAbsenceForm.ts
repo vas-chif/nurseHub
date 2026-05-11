@@ -226,13 +226,17 @@ export function useAbsenceForm(onSuccess: () => void) {
           inputMode.value === 'SHIFT' &&
           scheduledShift !== null &&
           scheduledShift !== formData.value.shift;
+        const excluded =
+          scheduledShift === 'R' ||
+          scheduledShift === 'S' ||
+          scheduledShift === 'A';
         return {
           date,
           scheduledShift,
           selectedShift,
           absenceLabel: formData.value.absenceLabel,
           note: formData.value.note,
-          excluded: false,
+          excluded,
           conflict,
         };
       });

@@ -116,8 +116,17 @@ async function findSubstitutes(req: ShiftRequest): Promise<void> {
             .split('T')[0]!;
           const cur = op.schedule?.[req.date] ?? 'R';
           const nxt = op.schedule?.[nextDate] ?? 'R';
+          
           let match = pos.isNextDay ? nxt === pos.originalShift : cur === pos.originalShift;
+          
+          // CRITICAL FIX: If the operator is already working exactly what we need (e.g. they are P and we need P),
+          // don't notify them unless the scenario actually changes their shift (e.g. P -> MP).
+          if (match && pos.newShift === (pos.isNextDay ? nxt : cur)) {
+            match = false;
+          }
+
           if (match && pos.requiredNextShift && nxt !== pos.requiredNextShift) match = false;
+          
           if (match) {
             const shiftCheck = pos.isNextDay ? nxt : cur;
             const compliance = checkCompliance(shiftCheck, pos.newShift);

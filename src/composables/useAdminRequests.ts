@@ -409,7 +409,13 @@ export function useAdminRequests() {
       if (syncMode.value === 'auto') {
         if (req.absentOperatorId) {
           const absName = operators.value[req.absentOperatorId]?.name ?? req.absentOperatorName;
-          if (absName) void syncToSheets(absName, req.date, 'A', adminApprovalNote.value || req.requestNote);
+          const fullNote = [
+            `Operatore: ${absName}`,
+            req.requestNote ? `Motivo: ${req.requestNote}` : '',
+            adminApprovalNote.value ? `Nota Admin: ${adminApprovalNote.value}` : ''
+          ].filter(Boolean).join(' - ');
+          
+          if (absName) void syncToSheets(absName, req.date, 'A', fullNote);
         }
         if (offer?.operatorName) {
           void syncToSheets(offer.operatorName, req.date, req.originalShift, adminApprovalNote.value);

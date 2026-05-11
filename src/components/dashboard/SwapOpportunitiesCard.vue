@@ -336,25 +336,28 @@ function acceptSwap(swap: ShiftSwap) {
         <q-icon name="search_off" size="xs" /> Nessuna proposta compatibile al momento.
       </div>
 
-      <div v-else class="q-gutter-xs q-mb-md">
+      <div v-else class="q-gutter-sm q-mb-md">
         <q-card v-for="swap in compatibleSwaps" :key="swap.id" flat class="swap-card bg-blue-1 rounded-borders">
-          <q-card-section class="q-py-sm q-px-md">
+          <q-card-section class="q-py-md q-px-md">
             <div class="row items-center justify-between no-wrap">
               <div class="col">
-                <div class="text-caption text-grey-7 q-mb-xs">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />
-                  Cede il {{ formatDate(swap.date) }}
+                <div class="text-subtitle2 text-primary q-mb-xs">
+                  <q-icon name="person_outline" size="xs" class="q-mr-xs" />
+                  Un collega ti propone un cambio:
                 </div>
                 <div class="row items-center q-gutter-xs">
-                  <span class="text-caption">Cede</span>
-                  <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense>
-                    {{ swap.offeredShift }}
-                  </q-chip>
-                  <span class="text-caption">per tuo</span>
-                  <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense>
+                  <span class="text-caption">Lui lavora il tuo</span>
+                  <q-chip :color="getShiftColor(swap.desiredShift)" text-color="white" size="sm" dense class="text-weight-bold">
                     {{ swap.desiredShift }}
                   </q-chip>
-                  <span class="text-caption text-grey-6">({{ formatDate(swap.desiredDate) }})</span>
+                  <span class="text-caption">({{ formatDate(swap.desiredDate) }})</span>
+                </div>
+                <div class="row items-center q-gutter-xs q-mt-xs">
+                  <span class="text-caption">E tu ricevi il suo</span>
+                  <q-chip :color="getShiftColor(swap.offeredShift)" text-color="white" size="sm" dense class="text-weight-bold">
+                    {{ swap.offeredShift }}
+                  </q-chip>
+                  <span class="text-caption">il {{ formatDate(swap.date) }}</span>
                 </div>
               </div>
               <div class="row items-center q-gutter-x-xs no-wrap">

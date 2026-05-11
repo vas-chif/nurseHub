@@ -185,12 +185,15 @@ function doPost(e) {
     if (rowIndex != -1 && colIndex != -1) {
       var cell = sheet.getRange(rowIndex + 1, colIndex + 1);
       cell.setValue(newShift);
-      
+
+      // Phase 30: Visual marker for app-driven updates (Purple text)
+      cell.setFontColor('#431657ff');
+
+      var finalNote = "Modificato dall'app";
       if (note && note.trim() !== '') {
-        cell.setNote(note);
-      } else {
-        cell.clearNote();
+        finalNote += '\n' + note.trim();
       }
+      cell.setNote(finalNote);
 
       return ContentService.createTextOutput(
         JSON.stringify({

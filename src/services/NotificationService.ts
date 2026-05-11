@@ -263,7 +263,15 @@ export async function notifyEligibleOperators(
       // 3. If compatible, trigger notification!
       if (compatible && compatible.length > 0) {
         notifiedUids.add(opUserId); // Mark as notified
-        const messageStr = `Nuovo turno scoperto: ${requestObj.date} (Turno ${requestObj.originalShift}). Sei compatibile!`;
+        
+        // Take the first scenario for the message (usually the most relevant)
+        const bestScen = compatible[0]!;
+        const instruction = bestScen.newShift !== opShift 
+          ? `facendo ${bestScen.newShift} al posto di ${opShift}`
+          : `coprendo come ${bestScen.roleLabel}`;
+
+        const messageStr = `Richiesta Copertura: ${requestObj.date} (Turno ${requestObj.originalShift}). Puoi aiutarci ${instruction}?`;
+        
         // Chiamata fire-and-forget
         notifyUser(opUserId, 'NEW_OPPORTUNITY', messageStr, requestObj.id).catch((e) =>
           logger.error('Silent fail on notifyUser', e),

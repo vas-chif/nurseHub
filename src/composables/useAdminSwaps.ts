@@ -146,29 +146,46 @@ export function useAdminSwaps(
         resolvedAt: Date.now(),
       });
 
-      if (swap.creatorOperatorId && configStore.activeConfigId) {
-        await updateDoc(
-          doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', swap.creatorOperatorId),
-          { [`schedule.${swap.date}`]: swap.desiredShift },
-        );
-      }
-      if (swap.counterpartOperatorId && configStore.activeConfigId) {
-        await updateDoc(
-          doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', swap.counterpartOperatorId),
-          { [`schedule.${swap.date}`]: swap.offeredShift },
-        );
+      if (configStore.activeConfigId) {
+        const nextDate = dateUtil.formatDate(dateUtil.addToDate(swap.date, { days: 1 }), 'YYYY-MM-DD');
+
+        if (swap.creatorOperatorId) {
+          const updates: Record<string, string> = { [`schedule.${swap.date}`]: swap.desiredShift };
+          // Rule: If new shift is Night (N), the next day MUST be Smonto (S)
+          if (swap.desiredShift === 'N') {
+            updates[`schedule.${nextDate}`] = 'S';
+          }
+          await updateDoc(doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', swap.creatorOperatorId), updates);
+        }
+
+        if (swap.counterpartOperatorId) {
+          const updates: Record<string, string> = { [`schedule.${swap.date}`]: swap.offeredShift };
+          // Rule: If new shift is Night (N), the next day MUST be Smonto (S)
+          if (swap.offeredShift === 'N') {
+            updates[`schedule.${nextDate}`] = 'S';
+          }
+          await updateDoc(doc(db, 'systemConfigurations', configStore.activeConfigId, 'operators', swap.counterpartOperatorId), updates);
+        }
       }
 
       if (swapSyncMode.value === 'auto') {
         const creatorName = swap.creatorName ?? (swap.creatorOperatorId ? operators.value[swap.creatorOperatorId]?.name : '') ?? 'Operatore 1';
         const counterName = swap.counterpartName ?? (swap.counterpartOperatorId ? operators.value[swap.counterpartOperatorId]?.name : '') ?? 'Operatore 2';
         
-        // Sync creator's new shift with admin note
-        void syncToSheets(creatorName, swap.date, swap.desiredShift, adminSwapNote.value);
+        // Sync creator's new shift with richer note
+        const creatorNote = [
+          `Scambio con ${counterName}`,
+          adminSwapNote.value ? `Nota Admin: ${adminSwapNote.value}` : ''
+        ].filter(Boolean).join(' - ');
+        void syncToSheets(creatorName, swap.date, swap.desiredShift, creatorNote);
         
-        // Sync counterpart's new shift with admin note
+        // Sync counterpart's new shift with richer note
         if (counterName) {
-          void syncToSheets(counterName, swap.date, swap.offeredShift, adminSwapNote.value);
+          const counterNote = [
+            `Scambio con ${creatorName}`,
+            adminSwapNote.value ? `Nota Admin: ${adminSwapNote.value}` : ''
+          ].filter(Boolean).join(' - ');
+          void syncToSheets(counterName, swap.date, swap.offeredShift, counterNote);
         }
       }
 

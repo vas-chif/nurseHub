@@ -20,18 +20,49 @@ import type {
 
 export function useShiftLogic() {
   /**
-   * Checks if an operator can perform a new shift on a specific date.
+   * Checks if an operator can perform a new shift on a specific date,
+   * considering their current shift and potential time overlaps.
    */
-  function checkCompliance(currentShift: ShiftCode, newShift: ShiftCode): ComplianceResult {
+  function checkCompliance(
+    currentShift: ShiftCode,
+    newShift: ShiftCode,
+    targetShift?: ShiftCode,
+  ): ComplianceResult {
+    // 1. Basic equality check (unless it's Rest)
     if (currentShift === newShift && currentShift !== 'R') {
       return { allowed: false, reason: `Già in turno ${currentShift}` };
     }
+
+    // 2. Night-to-Morning rule (Standard Italian safety rest)
     if (currentShift === 'N' && newShift === 'M') {
       return { allowed: false, reason: 'Smonto Notte non può fare Mattina' };
     }
+
+    // 3. Absence check
     if (currentShift === 'A') {
       return { allowed: false, reason: 'Operatore Assente' };
     }
+
+    // 4. Overlap/Collision Detection (Phase 30 Fix)
+    // If the operator is already working during the target shift's time, 
+    // they can only cover it if the newShift is a recognized expansion (e.g. MP).
+    if (targetShift && currentShift !== 'R' && currentShift !== 'S') {
+      const currentRange = getShiftTimeRange(currentShift);
+      const targetRange = getShiftTimeRange(targetShift);
+      
+      const overlaps = hasSignificantOverlap(
+        currentRange[0], currentRange[1],
+        targetRange[0], targetRange[1]
+      );
+
+      // If they overlap, they are only eligible if the newShift is DIFFERENT from currentShift
+      // and ideally encompasses the need (the scenario logic usually handles this, 
+      // but we add a safety barrier here).
+      if (overlaps && newShift === currentShift) {
+        return { allowed: false, reason: 'Collisione oraria: già in servizio' };
+      }
+    }
+
     return { allowed: true };
   }
 
@@ -84,7 +115,7 @@ export function useShiftLogic() {
 
         if (isMatch) {
           const shiftToCheck = role.isNextDay ? nextShift : operatorShift;
-          const compliance = checkCompliance(shiftToCheck, role.newShift);
+          const compliance = checkCompliance(shiftToCheck, role.newShift, targetShift);
           if (compliance.allowed) {
             validScenarios.push({
               scenarioId: scenario.id,
