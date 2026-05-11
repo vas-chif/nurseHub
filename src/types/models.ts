@@ -61,6 +61,7 @@ export interface Operator {
   notes?: Record<string, string>; // YYYY-MM-DD -> Note text (§1.12)
   lastSync?: number | object; // Timestamp ultima sincronizzazione (number or FieldValue)
   sheetOrder?: number; // Sorting order from Google Sheets (§1.12)
+  history?: Record<string, Array<{ from: string; to: string; by: string; at: number; note?: string | undefined }>>; // Audit trail (§1.12)
 }
 
 export interface ShiftRequest {

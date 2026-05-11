@@ -113,18 +113,22 @@ L'app funge da "Vigile Intelligente" tra Database e Google Sheets per garantire 
 - **Standardizzazione UI**: Design vibrante, lettere dei turni ad alta visibilità e uso sistematico di `AppDateInput`.
 - **Elite Formatting**: Le note inviate a Google Sheets utilizzano emoji e formattazione multiriga (👤 Operatore, 📝 Nota, 🤝 Sostituto, 📋 Scenario, ✅ Approvazione) per massima chiarezza visiva sul file Excel.
 
-### 7. Gestione Avanzata Turni & Audit Log (Phase 32)
-Il sistema è stato potenziato per permettere agli Admin una gestione chirurgica e immediata dei turni, garantendo al contempo un audit log chiaro su Excel.
-- **Logica di Sovrascrittura Multi-giorno**:
-  - Nelle richieste di assenza multi-giorno, i turni **S** (Smonto) e **R** (Riposo) vengono sovrascritti automaticamente per evitare dati sporchi in calendario.
-  - I turni **A** (Assenza) vengono invece preservati, evitando sovrapposizioni di giustificativi.
-- **Toggle "Sovrascrittura Diretta" (Admin Fast-Track)**: Permette agli Admin di inviare la richiesta e aggiornare Google Sheets istantaneamente, saltando lo stato `OPEN`.
-- **Modifica Diretta in Tabella Admin (Batch Edit)**:
-  - Le celle di `AdminShiftTable.vue` sono interattive (cliccabili).
-  - **Stato Pendente**: Le modifiche locali vengono evidenziate con un bordo tratteggiato e salvate in una "coda di sincronizzazione".
-  - **Batch Sync**: Un unico pulsante flottante permette di inviare tutte le modifiche accumulate a Google Sheets in un'unica operazione, ottimizzando le performance e riducendo gli errori.
-- **Audit Log Cromatico (Excel Audit)**:
-  - **Rosso**: Identifica modifiche derivanti da **Richieste** (Assenze/Cambi).
-  - **Blu**: Identifica modifiche effettuate **Manualmente** dall'Admin tramite la tabella.
-  - **Firma Admin**: Ogni nota di modifica manuale include automaticamente il nome dell'Admin che ha effettuato l'operazione.
-- **Readability Emojis**: Tutte le note di sincronizzazione ora includono emoji standardizzate (🔄 Scambio, 🛠️ Modifica Manuale, 📝 Nota, 👤 Operatore) per una consultazione rapida del foglio Excel.
+### 7. Gestione Avanzata Turni & Audit Log (Phase 32 - Ottimizzazione Admin)
+Il sistema è stato potenziato per trasformare `AdminShiftTable.vue` in una console di comando chirurgica, garantendo tracciabilità totale (Audit Trail) sia su Firebase che su Excel.
+
+- **Modifica Diretta & UX "Interattiva"**:
+  - **Grid-based Selector**: La lista di modifica è stata sostituita da una griglia compatta di badge colorati (M, P, N, R, A, S) per una selezione immediata.
+  - **Workflow "Select -> Note -> Confirm"**: L'admin seleziona il turno (evidenziato con bordo indigo e zoom), inserisce una nota opzionale e solo allora clicca "Conferma". Questo evita chiusure accidentali e promuove la documentazione delle modifiche.
+  - **Visual Feedback**: Le celle con modifiche pendenti mostrano un bordo tratteggiato (`pending-badge`). Il pulsante flottante "Salva su Excel" appare dinamicamente solo in presenza di modifiche e mostra il conteggio totale.
+- **Audit Trail Persistente (App History)**:
+  - Ogni operatore possiede un campo `history` in Firestore che registra: turno precedente, nuovo turno, autore della modifica, timestamp e la nota inserita.
+  - **Row Expander Premium**: Cliccando sull'icona orologio (🕒) si apre un'area di dettaglio che mostra:
+    - **Cronologia Modifiche**: Timeline visiva dei cambiamenti effettuati dall'app.
+    - **Note Excel Associate**: Riepilogo di tutti i commenti presenti sul file Excel per quell'operatore.
+    - **Ordinamento Dinamico**: Un toggle permette di visualizzare la cronologia in ordine "Più recenti" (Discendente) o "Più vecchi" (Crescente).
+- **Sincronizzazione Excel Certificata**:
+  - **Audit Log Cromatico**: Le modifiche da App sono distinte per colore (Rosso per richieste, Blu per modifiche manuali admin).
+  - **Note Professionali**: Ogni nota su Excel è formattata con l'intestazione `Modificato dall'app` seguita dai dettagli: `🛠️ Modifica: [Nota] (Admin: Nome) | 🔄 Da: X ➔ a: Y`.
+- **Integrità & Performance**:
+  - **Batch Write**: Tutte le modifiche locali (turni + storico) vengono inviate a Firestore in un'unica transazione atomica per garantire la coerenza dei dati.
+  - **Auto-Cleanup**: Alla chiusura dei menu di modifica, lo stato temporaneo viene resettato automaticamente per evitare errori di inserimento.

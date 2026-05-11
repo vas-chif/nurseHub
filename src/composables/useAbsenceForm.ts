@@ -311,15 +311,24 @@ export function useAbsenceForm(onSuccess: () => void) {
             logger.error('Errore notifica operatori eleggibili', e),
           );
 
-          // If directSync, also update Google Sheets immediately
+          // If directSync, also update Google Sheets AND Firestore immediately
           if (formData.value.directSync) {
             const { GoogleSheetsService } = await import('../services/GoogleSheetsService');
             const sheetsService = new GoogleSheetsService(configStore.activeConfig as AppConfig);
             const currentRow = activeRows[i];
             if (currentRow) {
               const note = `Approvazione Automatica (Admin: ${creatorName}) | 🔄 Da: ${currentRow.scheduledShift} ➔ A: ${currentRow.selectedShift}${currentRow.note ? ` | 📝 ${currentRow.note}` : ''}`;
+              
+              // 1. Update Sheets
               sheetsService.updateShiftOnSheets(absentOperatorName, currentRow.date, currentRow.selectedShift, note)
-                .catch(e => logger.error('Direct sync failed', e));
+                .catch(e => logger.error('Direct sync (Sheets) failed', e));
+
+              // 2. Update Firestore immediately for UI reactivity (§1.12)
+              const { doc, updateDoc } = await import('firebase/firestore');
+              const opRef = doc(db, 'systemConfigurations', configId, 'operators', targetOperatorId);
+              updateDoc(opRef, {
+                [`schedule.${currentRow.date}`]: currentRow.selectedShift
+              }).catch(e => logger.error('Direct sync (Firestore) failed', e));
             }
           }
         }
