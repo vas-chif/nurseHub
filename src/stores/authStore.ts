@@ -18,6 +18,7 @@ import type { User, Operator } from '../types/models';
 import { userService } from '../services/UserService';
 import { operatorsService } from '../services/OperatorsService';
 import { useConfigStore } from './configStore';
+import { useUiStore } from './uiStore';
 import type { UserRole, IUserPermissions } from '../types/auth';
 import {
   onAuthStateChanged,
@@ -90,6 +91,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   const canManageAdmins = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageAdmins));
   const canManageSystem = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageSystem));
+
+  /**
+   * Phase 34: Dual-View Management.
+   * effectiveIsAdmin = true only if user HAS admin claim AND viewMode is 'admin'.
+   * JWT claim is never altered — this is a frontend presentation filter only (§1.10).
+   */
+  const effectiveIsAdmin = computed(() => {
+    const uiStore = useUiStore();
+    return isAnyAdmin.value && uiStore.viewMode === 'admin';
+  });
+
+  const effectiveIsUser = computed(() => !effectiveIsAdmin.value);
 
   // --- Private helpers ---
 
@@ -377,6 +390,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     isSuperAdmin,
     isAnyAdmin,
+    effectiveIsAdmin,
+    effectiveIsUser,
     isVerified,
     canManageConfig,
     canManageAdmins,

@@ -217,6 +217,10 @@ export function useAdminRequests() {
 
   function getStatusColor(req: ShiftRequest): string {
     if (req.status === 'OPEN' && isRequestExpired(req.date, req.originalShift)) return 'negative';
+    
+    // Expert System: Distinguish between Approved and Rejected in CLOSED state
+    if (req.status === 'CLOSED' && req.rejectionReason) return 'negative';
+
     const map: Record<string, string> = {
       CLOSED: 'positive',
       EXPIRED: 'negative',

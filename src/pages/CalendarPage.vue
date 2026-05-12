@@ -35,7 +35,7 @@ const isPageLoading = computed(() => !authStore.isInitialized);
     </div>
 
     <!-- Admin View: Full Table (Full Width) -->
-    <div v-else-if="authStore.isAnyAdmin" class="col column">
+    <div v-else-if="authStore.effectiveIsAdmin" class="col column">
       <AdminShiftTable />
     </div>
 

@@ -168,3 +168,34 @@ Il sistema è ora in grado di gestire sostituzioni complesse che richiedono la c
   - **Resolution Metadata**: Lo storico admin salva uno snapshot completo (`substituteNames`, `scenarioLabels`) per mostrare l'intero team coinvolto.
   - **Feedback Utente**: La dashboard "Le mie candidature" riconosce ora sia le approvazioni singole che quelle multiple, mostrando correttamente lo stato "Approvata" a tutti i membri del team di copertura.
   - **Note Professionali Excel**: Le note su Google Sheets sono sincronizzate per riflettere la collaborazione (`Sostituito da: Op A + Op B`) e specificare il ruolo tecnico per ogni sostituto.
+
+### 9. Dual-View Management (Phase 34)
+Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità Operatore** per visualizzare e usare l'app esattamente come un dipendente normale, mantenendo intatti i loro permessi reali (JWT).
+
+- **`viewMode` in `uiStore`** (§1.8 Single Source of Truth per UI State):
+  - Valori: `'admin'` | `'user'`
+  - Persistito nel `localStorage` con chiave `nhub_view_mode`.
+  - Separato per device: un admin può usare Modalità Admin su PC e Modalità Operatore su cellulare simultaneamente.
+  - Default: `'admin'` per garantire backward compatibility.
+
+- **`effectiveIsAdmin` / `effectiveIsUser` in `authStore`** (§1.10 JWT-First):
+  - `effectiveIsAdmin = isAnyAdmin && viewMode === 'admin'`
+  - `effectiveIsUser = !effectiveIsAdmin`
+  - Il JWT **non viene mai alterato**. Questi computed sono esclusivamente filtri di presentazione frontend.
+  - Le Firestore Security Rules continuano a usare il claim JWT reale → nessun rischio di privilege downgrade.
+
+- **Notifiche Dinamiche** (`notificationStore` + `MainLayout.vue`):
+  - Un `watch(viewMode)` in `MainLayout.vue` ferma e riattiva il listener corretto al cambio di modalità.
+  - **Modalità Admin**: `initAdminListener()` → notifiche globali di coordinamento (nuove richieste, cambi turno).
+  - **Modalità Operatore**: `initUserListener()` → solo notifiche personali (aggiornamenti sulle proprie richieste).
+
+- **UI & Navigazione** (`MainLayout.vue` footer tabs):
+  - In Modalità Admin: tab `/admin/requests`, `/admin/users`, `/admin/analytics`, `/admin`.
+  - In Modalità Operatore: tab `/requests` (le mie candidature), Home con "I Tuoi Turni" personali.
+  - Toggle nel menu profilo (dropdown account), visibile solo se `isAnyAdmin`.
+
+- **`ShiftCalendar.vue`**:
+  - In Modalità Operatore: auto-selezione dell'operatore collegato all'admin → il calendario mostra i propri turni personali.
+  - In Modalità Admin: nessuna auto-selezione → il selettore multi-operatore è disponibile per la gestione globale.
+
+- **Componenti Aggiornati**: `uiStore.ts`, `authStore.ts`, `MainLayout.vue`, `ShiftCalendar.vue`.

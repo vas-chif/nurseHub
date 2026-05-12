@@ -29,7 +29,7 @@ const hasSearchModule = ref(true);
 
 // Fetch Operators
 async function loadData(force = false) {
-  const configId = authStore.isAnyAdmin
+  const configId = authStore.effectiveIsAdmin
     ? (configStore.activeConfigId || authStore.currentUser?.configId)
     : authStore.currentUser?.configId;
 
@@ -48,7 +48,7 @@ async function loadData(force = false) {
 onMounted(() => { void loadData(); });
 
 watch(() => [configStore.activeConfigId, authStore.currentUser?.configId], async ([newAdminId, userConfigId]) => {
-  const relevantId = authStore.isAnyAdmin ? newAdminId : userConfigId;
+  const relevantId = authStore.effectiveIsAdmin ? newAdminId : userConfigId;
   if (relevantId) await loadData();
 }, { deep: true });
 
@@ -60,7 +60,9 @@ watchEffect(() => {
   const options = operatorOptions.value;
   if (options.length === 0 || !authStore.isAuthenticated) return;
   const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
-  if (selectedOperator.value.length === 0 && !authStore.isAnyAdmin && targetId) {
+  // Phase 34: In User Mode (effectiveIsUser), admins auto-select their own operator profile.
+  // In Admin Mode (effectiveIsAdmin), no auto-selection — they use the search selector.
+  if (selectedOperator.value.length === 0 && authStore.effectiveIsUser && targetId) {
     const match = options.find((o) => o.id === targetId);
     if (match) selectedOperator.value = [match];
   }
@@ -117,7 +119,8 @@ function onSwipe() {}
         <q-icon name="calendar_today" color="primary" size="xs" />
         <div class="text-subtitle1 text-weight-bolder text-grey-9">I Tuoi Turni</div>
       </div>
-      <div style="min-width: 200px" v-if="authStore.isAnyAdmin && hasSearchModule">
+      <!-- Admin Mode only: multi-operator search selector -->
+      <div style="min-width: 200px" v-if="authStore.effectiveIsAdmin && hasSearchModule">
         <q-select v-model="selectedOperator" :options="operatorOptions" label="Cerca" dense outlined
           options-dense rounded bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
           <template v-slot:append><q-icon name="search" size="xs" /></template>

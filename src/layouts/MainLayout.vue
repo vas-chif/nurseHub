@@ -36,6 +36,42 @@ const isMobile = computed(() => $q.platform.is.mobile);
 
 let unsubs: (() => void)[] = [];
 
+// Phase 34: Dual-View listener orchestration — hoisted at script-setup scope.
+// Both onMounted and watch(viewMode) call this to ensure the correct listener is always active.
+function activateListeners() {
+  notificationStore.stopListeners();
+
+  if (authStore.effectiveIsAdmin) {
+    // Admin Mode: watch ALL pending requests for the managed config
+    notificationStore.initAdminListener(() => {
+      if (router.currentRoute.value.path !== '/admin/requests') {
+        $q.notify({
+          message: 'Nuova richiesta ricevuta',
+          caption: 'Da un operatore',
+          color: 'primary',
+          icon: 'notifications',
+          position: 'top',
+          actions: [{ label: 'Vedi', color: 'white', handler: () => { void router.push('/admin/requests'); } }],
+        });
+      }
+    });
+  } else if (authStore.currentUser?.uid) {
+    // User Mode (also for admin in user-mode): watch own requests for status updates
+    notificationStore.initUserListener(authStore.currentUser.uid, (req) => {
+      if (router.currentRoute.value.path !== '/requests') {
+        $q.notify({
+          message: 'Aggiornamento richiesta',
+          caption: `La tua richiesta del ${req.date} è ora ${req.status}`,
+          color: req.status === 'CLOSED' ? 'positive' : 'warning',
+          icon: 'update',
+          position: 'top',
+          actions: [{ label: 'Vedi', color: 'white', handler: () => { void router.push('/requests'); } }],
+        });
+      }
+    });
+  }
+} /*end activateListeners*/
+
 // Load configurations on mount
 onMounted(async () => {
   scheduleStore.init();
@@ -49,7 +85,7 @@ onMounted(async () => {
     // 1. Request FCM Permission
     void requestNotificationPermission(authStore.currentUser.uid);
 
-    // 2. Start In-App Notification Listener
+    // 2. Start In-App Notification Listener (always active, regardless of viewMode)
     const unsubInApp = notificationStore.initInAppListener(authStore.currentUser.uid, (n: AppNotification) => {
       $q.notify({
         message: n.message,
@@ -57,9 +93,7 @@ onMounted(async () => {
         icon: 'notifications_active',
         position: 'top',
         timeout: 5000,
-        actions: [
-          { label: 'Chiudi', color: 'white' }
-        ]
+        actions: [{ label: 'Chiudi', color: 'white' }]
       });
     });
     unsubs.push(unsubInApp);
@@ -70,51 +104,13 @@ onMounted(async () => {
     await configStore.loadConfigurations();
   }
 
-  // Admin notification listener
-  if (authStore.isAnyAdmin) {
-    notificationStore.initAdminListener(() => {
-      if (router.currentRoute.value.path !== '/admin/requests') {
-        $q.notify({
-          message: `Nuova richiesta ricevuta`,
-          caption: `Da un operatore`,
-          color: 'primary',
-          icon: 'notifications',
-          position: 'top',
-          actions: [
-            {
-              label: 'Vedi',
-              color: 'white',
-              handler: () => {
-                void router.push('/admin/requests');
-              },
-            },
-          ],
-        });
-      }
-    });
-  } else if (authStore.currentUser?.uid) {
-    // User notification listener (for status updates)
-    notificationStore.initUserListener(authStore.currentUser.uid, (req) => {
-      if (router.currentRoute.value.path !== '/requests') {
-        $q.notify({
-          message: `Aggiornamento richiesta`,
-          caption: `La tua richiesta del ${req.date} è ora ${req.status}`,
-          color: req.status === 'CLOSED' ? 'positive' : 'warning',
-          icon: 'update',
-          position: 'top',
-          actions: [
-            {
-              label: 'Vedi',
-              color: 'white',
-              handler: () => {
-                void router.push('/requests');
-              },
-            },
-          ],
-        });
-      }
-    });
-  }
+  // 3. Activate the correct listener based on current viewMode
+  activateListeners();
+});
+
+// Phase 34: React to viewMode changes — switch listener dynamically
+watch(() => uiStore.viewMode, () => {
+  activateListeners();
 });
 
 function handleSwipe({ direction }: { direction: 'left' | 'right' | 'up' | 'down' }) {
@@ -302,32 +298,46 @@ function goBack() {
           :label="authStore.currentUser?.firstName" no-caps>
           <q-list>
             <q-item clickable v-close-popup @click="router.push('/profile')">
-              <q-item-section avatar>
-                <q-icon name="person" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>Dati Personali</q-item-label>
-              </q-item-section>
+              <q-item-section avatar><q-icon name="person" /></q-item-section>
+              <q-item-section><q-item-label>Dati Personali</q-item-label></q-item-section>
             </q-item>
 
             <q-item clickable v-close-popup @click="router.push('/settings')">
-              <q-item-section avatar>
-                <q-icon name="settings" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>Impostazioni</q-item-label>
-              </q-item-section>
+              <q-item-section avatar><q-icon name="settings" /></q-item-section>
+              <q-item-section><q-item-label>Impostazioni</q-item-label></q-item-section>
             </q-item>
 
-            <q-separator />
+            <!-- Phase 34: Dual-View Toggle (Admin & SuperAdmin only) -->
+            <template v-if="authStore.isAnyAdmin">
+              <q-separator />
+              <q-item>
+                <q-item-section avatar>
+                  <q-icon
+                    :name="uiStore.viewMode === 'admin' ? 'admin_panel_settings' : 'person'"
+                    :color="uiStore.viewMode === 'admin' ? 'primary' : 'grey-6'"
+                  />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold">Vista Corrente</q-item-label>
+                  <q-item-label caption :class="uiStore.viewMode === 'admin' ? 'text-primary' : 'text-grey-7'">
+                    {{ uiStore.viewMode === 'admin' ? '🛡️ Modalità Admin' : '👤 Modalità Operatore' }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-toggle
+                    :model-value="uiStore.viewMode === 'admin'"
+                    @update:model-value="uiStore.setViewMode($event ? 'admin' : 'user')"
+                    color="primary"
+                    keep-color
+                  />
+                </q-item-section>
+              </q-item>
+            </template>
 
+            <q-separator />
             <q-item clickable v-close-popup @click="logout">
-              <q-item-section avatar>
-                <q-icon name="logout" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>Logout</q-item-label>
-              </q-item-section>
+              <q-item-section avatar><q-icon name="logout" /></q-item-section>
+              <q-item-section><q-item-label>Logout</q-item-label></q-item-section>
             </q-item>
           </q-list>
         </q-btn-dropdown>
@@ -344,34 +354,27 @@ function goBack() {
 
     <q-footer bordered class="bg-white text-primary">
       <q-tabs no-caps active-color="primary" indicator-color="transparent" class="text-grey" align="justify">
-        <!-- Home: always visible for regular users, toggleable for admins -->
-        <q-route-tab v-if="!authStore.isAnyAdmin || uiStore.isTabVisible('home')" to="/" icon="dashboard"
-          label="Home" />
-        <q-route-tab v-if="!authStore.isAnyAdmin || uiStore.isTabVisible('calendar')" to="/calendar"
-          icon="calendar_month" label="Turni" />
+        <!-- Home: always visible for regular users; for admins only in admin-mode or if explicitly enabled -->
+        <q-route-tab v-if="authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('home')" to="/" icon="dashboard" label="Home" />
+        <q-route-tab v-if="authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('calendar')" to="/calendar" icon="calendar_month" label="Turni" />
 
-        <!-- User-only tabs -->
-        <q-route-tab v-if="!authStore.isAnyAdmin" to="/requests" icon="event_note" label="Richieste" />
+        <!-- User-mode tabs: visible for regular users OR admins in user-mode -->
+        <q-route-tab v-if="authStore.effectiveIsUser" to="/requests" icon="event_note" label="Richieste" />
 
-        <!-- Admin-only tabs (conditional on visibility settings) -->
-        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('new_request')" to="/requests" icon="add_circle"
-          label="Nuova Richiesta" />
+        <!-- Admin-only tabs: visible ONLY in Admin Mode -->
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('new_request')" to="/requests" icon="add_circle" label="Nuova Richiesta" />
 
-        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_requests')" to="/admin/requests"
-          icon="event_note" label="Richieste">
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_requests')" to="/admin/requests" icon="event_note" label="Richieste">
           <q-badge v-if="notificationStore.pendingRequestsCount > 0" color="red" floating>
             {{ notificationStore.pendingRequestsCount }}
           </q-badge>
         </q-route-tab>
 
-        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_users')" to="/admin/users" icon="people"
-          label="Utenti" />
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_users')" to="/admin/users" icon="people" label="Utenti" />
 
-        <q-route-tab v-if="authStore.isAnyAdmin && uiStore.isTabVisible('admin_analytics')" to="/admin/analytics"
-          icon="analytics" label="Stats" />
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_analytics')" to="/admin/analytics" icon="analytics" label="Stats" />
 
-        <q-route-tab v-if="authStore.isSuperAdmin && uiStore.isTabVisible('admin_system')" to="/admin"
-          icon="admin_panel_settings" label="Admin" />
+        <q-route-tab v-if="authStore.isSuperAdmin && authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_system')" to="/admin" icon="admin_panel_settings" label="Admin" />
       </q-tabs>
       <div class="row justify-center q-mx-md">
         <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>
