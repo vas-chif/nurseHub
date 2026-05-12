@@ -46,6 +46,7 @@ const formData = ref<RotationGroup>({
   isActive: true,
   currentColumnIndex: 0,
   nextChangeTimestamp: null,
+  intervalDays: 5,
   updatedAt: 0,
 });
 
@@ -110,6 +111,7 @@ function openCreate() {
     isActive: true,
     currentColumnIndex: 0,
     nextChangeTimestamp: null,
+    intervalDays: 5,
     updatedAt: Date.now(),
   };
   editMode.value = false;
@@ -261,6 +263,15 @@ function deleteGroup(g: RotationGroup) {
 
         <q-card-section class="q-gutter-md">
           <q-input v-model="formData.name" label="Nome Gruppo (es. Turno 4)" outlined />
+          
+          <q-input
+            v-model.number="formData.intervalDays"
+            type="number"
+            label="Giorni per ogni Step (es. 5 = avanza ogni 5 giorni)"
+            outlined
+            :min="1"
+            :max="30"
+          />
           
           <div class="row items-center q-gutter-md">
             <div class="text-subtitle1">Matrice Rotazione (Colonne: {{ columnsCount }})</div>

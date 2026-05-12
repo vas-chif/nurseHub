@@ -16,11 +16,11 @@ import HiddenRequestsArchive from './HiddenRequestsArchive.vue';
 
 const {
   activeTab, loading, sortBy, sortOptions,
-  offerDialog, loadingCompatibility, compatibleScenarios, selectedScenario, isSubmitting,
+  offerDialog, loadingCompatibility, compatibleScenarios, selectedScenarios, isSubmitting,
   surroundingShifts, urgentRequests, otherRequests, ignoredRequests, myHistoryRequests,
   toggleInterest, openOfferDialog, submitOffer, refreshDashboard,
   formatDate, formatDateLong, getShiftColor, formatFullDate,
-  getMyOfferTimestamp, getMyOfferLabel, getMyOfferStatusLabel,
+  getMyOffers, getMyOfferTimestamp, getMyOfferLabel, getMyOfferStatusLabel,
   getMyOfferStatusColor, getMyOfferIcon, getMyOfferAvatarColor, getMyOfferAvatarTextColor,
 } = useRequestsFilter();
 </script>
@@ -195,16 +195,46 @@ const {
                 <q-item-label caption>
                   Creata il: {{ formatFullDate(req.createdAt) }}
                 </q-item-label>
-                <q-item-label caption v-if="getMyOfferTimestamp(req)">
-                  Candidatura del: {{ formatFullDate(getMyOfferTimestamp(req)) }}
-                </q-item-label>
-                <q-item-label caption v-if="getMyOfferLabel(req)">
-                  Proposta: <span class="text-italic">{{ getMyOfferLabel(req) }}</span>
-                </q-item-label>
+                <!-- Phase 35: Show all offers from this operator for this request -->
                 <div class="q-mt-xs">
-                  <q-badge :color="getMyOfferStatusColor(req)">
-                    {{ getMyOfferStatusLabel(req) }}
-                  </q-badge>
+                  <template v-if="getMyOffers(req).length > 1">
+                    <!-- Multiple offers: show summary badge + expand sub-list -->
+                    <q-badge color="blue-2" text-color="blue-10" class="q-mb-xs">
+                      <q-icon name="layers" size="xs" class="q-mr-xs" />
+                      {{ getMyOffers(req).length }} proposte inviate
+                    </q-badge>
+                    <q-list dense class="q-mt-xs rounded-borders bg-grey-1">
+                      <q-item v-for="offer in getMyOffers(req)" :key="offer.id" class="q-py-xs">
+                        <q-item-section avatar style="min-width:32px">
+                          <q-badge :color="getShiftColor(offer.newShift as never)" text-color="white" style="font-size:0.7rem">
+                            {{ offer.newShift }}
+                          </q-badge>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label class="text-caption">{{ offer.roleLabel }}</q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                          <q-badge :color="getMyOfferStatusColor(req)" style="font-size:0.65rem">
+                            {{ offer.isRejected ? 'Rifiutata' : getMyOfferStatusLabel(req) }}
+                          </q-badge>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </template>
+                  <template v-else>
+                    <!-- Single offer: original compact view -->
+                    <q-item-label caption v-if="getMyOfferTimestamp(req)">
+                      Candidatura del: {{ formatFullDate(getMyOfferTimestamp(req)) }}
+                    </q-item-label>
+                    <q-item-label caption v-if="getMyOfferLabel(req)">
+                      Proposta: <span class="text-italic">{{ getMyOfferLabel(req) }}</span>
+                    </q-item-label>
+                    <div class="q-mt-xs">
+                      <q-badge :color="getMyOfferStatusColor(req)">
+                        {{ getMyOfferStatusLabel(req) }}
+                      </q-badge>
+                    </div>
+                  </template>
                 </div>
               </q-item-section>
             </q-item>
@@ -254,15 +284,33 @@ const {
             </div>
 
             <div class="text-subtitle2 q-mb-sm">Come vuoi coprire questo turno?</div>
+            <!-- Phase 35: Multi-select checkboxes (was q-radio single-select) -->
+            <div class="text-caption text-grey-7 q-mb-xs">
+              <q-icon name="info_outline" size="xs" /> Puoi selezionare più opzioni
+            </div>
             <q-list bordered separator>
               <q-item v-for="scenario in compatibleScenarios" :key="scenario.scenarioId + scenario.roleIndex"
-                tag="label" v-ripple :active="selectedScenario === scenario" active-class="bg-blue-1">
+                tag="label" v-ripple
+                :active="selectedScenarios.includes(scenario)"
+                active-class="bg-blue-1">
                 <q-item-section avatar>
-                  <q-radio v-model="selectedScenario" :val="scenario" />
+                  <q-checkbox
+                    :model-value="selectedScenarios.includes(scenario)"
+                    @update:model-value="(checked) => {
+                      if (checked) selectedScenarios.push(scenario);
+                      else selectedScenarios.splice(selectedScenarios.indexOf(scenario), 1);
+                    }"
+                    color="primary"
+                  />
                 </q-item-section>
                 <q-item-section>
                   <q-item-label>{{ scenario.roleLabel }}</q-item-label>
                   <q-item-label caption>{{ scenario.incentive }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-badge :color="getShiftColor(scenario.newShift as never)" text-color="white">
+                    {{ scenario.newShift }}
+                  </q-badge>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -271,8 +319,21 @@ const {
 
         <q-card-actions align="right" class="q-pb-md q-pr-md">
           <q-btn flat label="Annulla" color="grey" v-close-popup />
-          <q-btn unelevated label="Invia" color="primary" :disable="!selectedScenario" @click="submitOffer"
-            :loading="isSubmitting" />
+          <q-btn
+            unelevated
+            :label="selectedScenarios.length > 1
+              ? `Invia ${selectedScenarios.length} Proposte`
+              : 'Invia Candidatura'"
+            color="primary"
+            :disable="selectedScenarios.length === 0"
+            @click="submitOffer"
+            :loading="isSubmitting"
+          >
+            <q-badge v-if="selectedScenarios.length > 0" color="white" text-color="primary"
+              floating rounded style="font-weight:800">
+              {{ selectedScenarios.length }}
+            </q-badge>
+          </q-btn>
         </q-card-actions>
       </q-card>
     </q-dialog>

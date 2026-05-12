@@ -372,6 +372,8 @@ export interface RotationGroup {
   isActive: boolean; // false = Fuori Turno (Pausa estiva)
   currentColumnIndex: number; // 0 to length-1 of pattern
   nextChangeTimestamp: number | null; // Next execution time (ms)
+  /** Phase 36: How many days between each step advance. Defaults to 5 if absent. */
+  intervalDays?: number;
 
   updatedAt: number;
 }

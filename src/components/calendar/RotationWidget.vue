@@ -11,14 +11,20 @@
  */
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
+import {
+  collection, query, onSnapshot,
+  type Unsubscribe,
+} from 'firebase/firestore';
+import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
 import { rotationService } from '../../services/RotationService';
 import type { RotationGroup } from '../../types/models';
-import { date as quasarDate } from 'quasar';
+import { date as quasarDate, useQuasar } from 'quasar';
 import { useSecureLogger } from '../../utils/secureLogger';
 import AppDateInput from '../common/AppDateInput.vue';
 
+const $q = useQuasar();
 const logger = useSecureLogger();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
@@ -27,48 +33,97 @@ const userGroups = ref<RotationGroup[]>([]);
 const loading = ref(true);
 const expanded = ref(false);
 
-const timerInterval = ref<NodeJS.Timeout | null>(null);
+const timerInterval = ref<ReturnType<typeof setInterval> | null>(null);
 const now = ref(Date.now());
+// Phase 36: track if an advance is in progress to prevent concurrent calls
+const advancingGroupIds = ref<Set<string>>(new Set());
+
+// Phase 36: real-time Firestore unsubscribe reference
+let rotationUnsub: Unsubscribe | null = null;
 
 const showTimerDialog = ref(false);
 const selectedGroup = ref<RotationGroup | null>(null);
 const nextDate = ref(''); // YYYY-MM-DD
 const nextTime = ref('14:00');
 const startColumnIndex = ref(0);
+// Phase 36: interval between rotations (days)
+const intervalDays = ref(5);
 
-async function loadMyGroups() {
-  const configId = authStore.currentUser?.configId || configStore.activeConfigId;
-  if (!configId || !authStore.currentUser) return;
-  
+/**
+ * Phase 36: Subscribe to real-time Firestore updates for the user's rotation groups.
+ * Replaces the one-shot getDocs call so the widget reacts to changes from any device.
+ */
+function subscribeToGroups(configId: string): void {
+  if (rotationUnsub) rotationUnsub();
   loading.value = true;
-  try {
-    const allGroups = await rotationService.getGroups(configId);
-    const opId = authStore.currentOperator?.id || authStore.currentUser.operatorId;
+
+  const q = query(
+    collection(db, `systemConfigurations/${configId}/rotationGroups`),
+  );
+
+  rotationUnsub = onSnapshot(q, (snap) => {
+    const opId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
     const opName = authStore.currentOperator?.name;
 
-    userGroups.value = allGroups.filter(g => {
-      return g.operators.some(o => 
-        (opName && o.operatorName.trim().toLowerCase() === opName.trim().toLowerCase()) || 
+    userGroups.value = snap.docs
+      .map(d => d.data() as RotationGroup)
+      .filter(g => g.operators.some(o =>
+        (opName && o.operatorName.trim().toLowerCase() === opName.trim().toLowerCase()) ||
         (opId && o.operatorId === opId)
-      );
-    });
-  } catch (e) {
-    logger.error('Failed to load user rotation groups', e);
-  } finally {
+      ));
     loading.value = false;
+  }, (err) => {
+    logger.error('Failed to subscribe to rotation groups', err);
+    loading.value = false;
+  });
+} /*end subscribeToGroups*/
+
+/**
+ * Phase 36: Clock Guard — called every 60s.
+ * Checks if any active group has passed its nextChangeTimestamp
+ * and advances it if so. Guards against concurrent advances.
+ */
+async function checkAndAdvance(): Promise<void> {
+  const ts = Date.now();
+  for (const group of userGroups.value) {
+    if (
+      group.isActive &&
+      group.nextChangeTimestamp !== null &&
+      ts >= group.nextChangeTimestamp &&
+      !advancingGroupIds.value.has(group.id)
+    ) {
+      advancingGroupIds.value.add(group.id);
+      try {
+        logger.info('Clock Guard: advancing rotation', { groupId: group.id, step: group.currentColumnIndex });
+        await rotationService.advanceGroup(group.configId, group);
+        // onSnapshot will automatically update userGroups after Firestore write
+      } catch (e) {
+        logger.error('Clock Guard: advance failed', e);
+      } finally {
+        advancingGroupIds.value.delete(group.id);
+      }
+    }
   }
-}
+} /*end checkAndAdvance*/
 
 onMounted(() => {
-  void loadMyGroups();
-  timerInterval.value = setInterval(() => { now.value = Date.now(); }, 60000);
+  const configId = authStore.currentUser?.configId || configStore.activeConfigId;
+  if (configId) subscribeToGroups(configId);
+
+  timerInterval.value = setInterval(() => {
+    now.value = Date.now();
+    void checkAndAdvance(); // Phase 36: Clock Guard tick
+  }, 60000);
 });
 
 watch(() => authStore.currentUser?.configId, (newId) => {
-  if (newId && userGroups.value.length === 0) void loadMyGroups();
+  if (newId) subscribeToGroups(newId);
 });
 
-onUnmounted(() => { if (timerInterval.value) clearInterval(timerInterval.value); });
+onUnmounted(() => {
+  if (timerInterval.value) clearInterval(timerInterval.value);
+  if (rotationUnsub) rotationUnsub();
+});
 
 function formatTimeLeft(targetTs: number | null) {
   if (!targetTs) return 'Nessuna programmata';
@@ -79,23 +134,36 @@ function formatTimeLeft(targetTs: number | null) {
   return days > 0 ? `tra ${days}g e ${hours}h` : `tra ${hours} ore`;
 }
 
-function getColumnOperators(group: RotationGroup, letter: 'A' | 'B', isNext = false): string[] {
-  let col = group.currentColumnIndex;
-  if (isNext) {
-    const totalCols = group.operators[0]?.pattern.length || 18;
-    col = (col + 1) % totalCols;
-  }
+/**
+ * Phase 36: Get operators for a specific column index relative to current.
+ * @param offset - 0 for Active, 1 for Next (Timer), 2 for Following (+Interval)
+ */
+function getColumnOperators(group: RotationGroup, letter: 'A' | 'B', offset = 0): string[] {
+  const totalCols = group.operators[0]?.pattern.length || 18;
+  const col = (group.currentColumnIndex + offset) % totalCols;
   return group.operators.filter(o => o.pattern[col] === letter).map(o => o.operatorName);
 }
 
-function getNextDateStr(group: RotationGroup) {
+/**
+ * Phase 36: Calculate future date based on timer + interval offset.
+ */
+function getFutureDateStr(group: RotationGroup, offset = 1) {
   if (!group.nextChangeTimestamp) return 'TBD';
-  return new Date(group.nextChangeTimestamp).toLocaleDateString('it-IT');
+  const interval = group.intervalDays ?? 5;
+  const addedTime = (offset - 1) * interval * 24 * 60 * 60 * 1000;
+  return new Date(group.nextChangeTimestamp + addedTime).toLocaleDateString('it-IT');
+}
+
+function getNextDateStr(group: RotationGroup) {
+  return getFutureDateStr(group, 1);
 }
 
 function openResumeDialog(group: RotationGroup) {
   selectedGroup.value = group;
-  startColumnIndex.value = group.currentColumnIndex;
+  // Phase 36: The dialog sets the NEXT column, so default to current + 1
+  const totalCols = group.operators[0]?.pattern.length || 18;
+  startColumnIndex.value = (group.currentColumnIndex + 1) % totalCols;
+  intervalDays.value = group.intervalDays ?? 5; // Phase 36: load saved interval
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   nextDate.value = quasarDate.formatDate(tomorrow, 'YYYY-MM-DD');
@@ -106,11 +174,29 @@ async function setNextTimer() {
   if (!selectedGroup.value || !nextDate.value || !nextTime.value) return;
   const dateTimeStr = `${nextDate.value}T${nextTime.value}:00`;
   const targetTs = new Date(dateTimeStr).getTime();
-  if (targetTs <= Date.now()) return;
+  if (targetTs <= Date.now()) {
+    $q.notify({ type: 'warning', message: 'La data e ora devono essere nel futuro' });
+    return;
+  }
+
+  const totalCols = selectedGroup.value.operators[0]?.pattern.length || 18;
+  // Phase 36: startColumnIndex is the NEXT column the user wants to trigger.
+  // Therefore, we must set the CURRENT column to startColumnIndex - 1.
+  const newCurrentIndex = (startColumnIndex.value - 1 + totalCols) % totalCols;
+
   try {
-    await rotationService.updateTimerState(selectedGroup.value.configId, selectedGroup.value.id, true, startColumnIndex.value, targetTs);
+    // Phase 36: save intervalDays alongside the timer
+    await rotationService.updateTimerState(
+      selectedGroup.value.configId,
+      selectedGroup.value.id,
+      true,
+      newCurrentIndex,
+      targetTs,
+      intervalDays.value,
+    );
     showTimerDialog.value = false;
-    void loadMyGroups();
+    $q.notify({ type: 'positive', message: 'Timer programmato con successo' });
+    // onSnapshot will refresh userGroups automatically
   } catch (e) { logger.error('Failed to set timer', e); }
 }
 </script>
@@ -172,11 +258,15 @@ async function setNextTimer() {
               <!-- NEXT ROTATION PREVIEW (ULTRA COMPACT) -->
               <div class="next-rotation-container q-mt-sm q-pa-xs rounded-borders bg-grey-3">
                 <div class="row items-center justify-between q-px-xs q-mb-xs">
-                  <span class="text-caption text-grey-8 text-weight-bold" style="font-size: 0.65rem">🔜 PROSSIMO: {{ getNextDateStr(group) }}</span>
+                  <span class="text-caption text-grey-8 text-weight-bold" style="font-size: 0.65rem">
+                    🔜 PROSSIMO: {{ getNextDateStr(group) }}
+                    <span v-if="group.intervalDays" class="text-grey-6"> · ogni {{ group.intervalDays }}g</span>
+                  </span>
                   <span class="text-caption text-grey-7" style="font-size: 0.6rem">{{ formatTimeLeft(group.nextChangeTimestamp) }}</span>
                 </div>
 
-                <div class="row q-col-gutter-xs opacity-70 grayscale-light">
+                <!-- FIRST FUTURE STEP (Programmed) -->
+                <div class="row q-col-gutter-xs opacity-80 grayscale-light q-mb-xs">
                   <div v-for="nextLetter in (['A', 'B'] as const)" :key="'next-' + nextLetter" class="col-6">
                     <q-card flat bordered class="setting-premium-card mini-card" :class="nextLetter === 'A' ? 'border-amber-thin' : 'border-blue-thin'">
                       <q-card-section class="q-pa-xs row no-wrap items-center bg-grey-4 border-bottom">
@@ -186,11 +276,30 @@ async function setNextTimer() {
                         <span class="text-weight-bold text-grey-9" style="font-size: 0.6rem">Set {{ nextLetter }}</span>
                       </q-card-section>
                       <q-card-section class="q-pa-xs roster-mini-dense">
-                        <div v-for="nextName in getColumnOperators(group, nextLetter, true)" :key="'next-name-' + nextName" class="text-grey-9 q-px-xs" style="font-size: 0.55rem; line-height: 1.2">
+                        <div v-for="nextName in getColumnOperators(group, nextLetter, 1)" :key="'next-name-' + nextName" class="text-grey-9 q-px-xs" style="font-size: 0.55rem; line-height: 1.2">
                           • {{ nextName }}
                         </div>
                       </q-card-section>
                     </q-card>
+                  </div>
+                </div>
+
+                <!-- SECOND FUTURE STEP (Automatic Follow-up) -->
+                <div class="following-rotation q-pt-xs border-top-dashed">
+                  <div class="text-caption text-grey-7 q-px-xs q-mb-xs" style="font-size: 0.6rem; font-style: italic;">
+                    ➡️ SUCCESSIVO: {{ getFutureDateStr(group, 2) }}
+                  </div>
+                  <div class="row q-col-gutter-xs opacity-60 grayscale">
+                    <div v-for="folLetter in (['A', 'B'] as const)" :key="'fol-' + folLetter" class="col-6">
+                      <div class="row no-wrap items-center q-px-xs">
+                         <div class="text-weight-bold q-mr-xs" :style="{ color: folLetter === 'A' ? '#d97706' : '#1e3a8a', fontSize: '0.55rem' }">{{ folLetter }}</div>
+                         <div class="column">
+                           <div v-for="folName in getColumnOperators(group, folLetter, 2)" :key="'fol-name-' + folName" class="text-grey-8" style="font-size: 0.5rem; line-height: 1.1">
+                             {{ folName }}
+                           </div>
+                         </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -236,8 +345,18 @@ async function setNextTimer() {
             </template>
           </q-input>
 
-          <q-select dense filled v-model="startColumnIndex" label="Ripartenza da Colonna" 
-            :options="Array.from({length: selectedGroup?.operators[0]?.pattern.length || 18}, (_, i) => ({ label: `Colonna ${i + 1}`, value: i }))" 
+          <!-- Phase 36: Interval days between rotations -->
+          <q-input
+            dense filled
+            v-model.number="intervalDays"
+            type="number"
+            label="Ogni quanti giorni avanzare"
+            hint="Es. 5 = avanza ogni 5 giorni"
+            :min="1" :max="30"
+          />
+
+          <q-select dense filled v-model="startColumnIndex" label="Ripartenza da Colonna (Prossimo Step)"
+            :options="Array.from({length: selectedGroup?.operators[0]?.pattern.length || 18}, (_, i) => ({ label: `Colonna ${i + 1}`, value: i }))"
             emit-value map-options />
         </q-card-section>
 
@@ -281,6 +400,14 @@ async function setNextTimer() {
 .next-rotation-container {
   border: 1px solid #e2e8f0;
 }
+
+.border-top-dashed {
+  border-top: 1px dashed #cbd5e1;
+}
+
+.opacity-80 { opacity: 0.8; }
+.opacity-60 { opacity: 0.6; }
+.grayscale { filter: grayscale(0.5); }
 
 /* Pulse animation for the active-rotation badge */
 @keyframes badge-pulse {

@@ -78,22 +78,52 @@ export class RotationService {
     groupId: string,
     isActive: boolean,
     currentColumnIndex: number,
-    nextChangeTimestamp: number | null
+    nextChangeTimestamp: number | null,
+    intervalDays?: number,
   ): Promise<void> {
     try {
       const ref = doc(db, `systemConfigurations/${configId}/rotationGroups`, groupId);
-      await updateDoc(ref, {
+      const payload: Record<string, number | boolean | null> = {
         isActive,
         currentColumnIndex,
         nextChangeTimestamp,
-        updatedAt: Date.now()
-      });
+        updatedAt: Date.now(),
+      };
+      if (intervalDays !== undefined) payload['intervalDays'] = intervalDays;
+      await updateDoc(ref, payload);
       logger.info('Rotation group timer updated', { groupId, isActive, nextChangeTimestamp });
     } catch (e) {
       logger.error('Failed to update rotation timer', e);
       throw e;
     }
   }
+
+  /**
+   * Phase 36: Clock Guard — Advance the rotation by one step and schedule the next.
+   *
+   * Uses `group.nextChangeTimestamp` as the base for the next timestamp to prevent
+   * time-drift: if the app is opened 2h late, the cadence stays anchored to the
+   * original scheduled time (e.g. always 14:00) rather than shifting forward.
+   *
+   * @param configId - Active config ID
+   * @param group    - The rotation group to advance
+   */
+  async advanceGroup(configId: string, group: RotationGroup): Promise<void> {
+    const totalCols = group.operators[0]?.pattern.length || 18;
+    const nextIndex = advance(group.currentColumnIndex, totalCols);
+    const days = group.intervalDays ?? 5;
+    // Anchor next timestamp to the scheduled base, not to Date.now() (avoids drift)
+    const baseTs = group.nextChangeTimestamp ?? Date.now();
+    const nextTs = baseTs + days * 24 * 60 * 60 * 1000;
+
+    try {
+      await this.updateTimerState(configId, group.id, true, nextIndex, nextTs);
+      logger.info('Rotation advanced', { groupId: group.id, nextIndex, nextTs: new Date(nextTs).toISOString() });
+    } catch (e) {
+      logger.error('Failed to advance rotation group', e);
+      throw e;
+    }
+  } /*end advanceGroup*/
 }
 
 export const rotationService = new RotationService();

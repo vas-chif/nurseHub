@@ -102,11 +102,15 @@ L'app funge da "Vigile Intelligente" tra Database e Google Sheets per garantire 
 - **Cooldown Indipendente:** Il database e il client forzano un cooldown di 1 minuto per gli Admin e 2 ore per gli Utenti Base, applicato al singolo reparto.
 - **Auto-Refresh Intelligente:** Al cambio pagina o ritorno al focus, l'app verifica il timestamp specifico del reparto attivo; se c'è stata una sincronizzazione esterna per quel reparto, ricarica i dati.
 
-### 6. Sistema di Rotazione Interattiva (Phase 31)
+### 6. Sistema di Rotazione Interattiva & Clock Guard (Phase 36)
 
 - **Logica "State Machine":** Basata sul `currentColumnIndex`. Il sistema gestisce una matrice infinita tramite ciclo Modulo.
-- **Elite Preview**: Il `RotationWidget` mostra la rotazione attuale con badge vibranti e la **prossima rotazione** in formato ultra-compatto (`bg-grey-3`, font 0.55rem) per una gerarchia visiva chiara.
-- **Timer Autonomo & Manuale**: Avanzamento automatico ogni 5 giorni con possibilità di pausa e ripartenza manuale (Democratizzazione del timer).
+- **Elite Preview (Double Future):** Il `RotationWidget` mostra tre livelli temporali per una chiarezza assoluta:
+  - **Attivo:** Turnazione odierna con badge pulsanti.
+  - **Prossimo (Timer):** La turnazione programmata per la data di cambio scelta (offset +1).
+  - **Successivo (Automatica):** La turnazione che seguirà automaticamente dopo l'intervallo di giorni impostato (offset +2), permettendo all'operatore di verificare la correttezza del ciclo a lungo termine.
+- **Clock Guard (Auto-Advance):** Un meccanismo di guardia nel frontend monitora il timestamp di scadenza. Al superamento dell'orario programmato, l'app avanza automaticamente l'indice e ricalcola la prossima scadenza ancorandola al timestamp originale (`baseTs + intervalDays`) per prevenire derive temporali (drift) dovute ad accessi ritardati.
+- **Democratizzazione del Timer:** Anche gli utenti con ruolo `user` possono ora programmare o riavviare il timer (previa autorizzazione specifica nelle `firestore.rules` sui campi `isActive`, `currentColumnIndex`, `nextChangeTimestamp`, `intervalDays`).
 
 ## Note Tecniche di Manutenzione
 
@@ -168,6 +172,14 @@ Il sistema è ora in grado di gestire sostituzioni complesse che richiedono la c
   - **Resolution Metadata**: Lo storico admin salva uno snapshot completo (`substituteNames`, `scenarioLabels`) per mostrare l'intero team coinvolto.
   - **Feedback Utente**: La dashboard "Le mie candidature" riconosce ora sia le approvazioni singole che quelle multiple, mostrando correttamente lo stato "Approvata" a tutti i membri del team di copertura.
   - **Note Professionali Excel**: Le note su Google Sheets sono sincronizzate per riflettere la collaborazione (`Sostituito da: Op A + Op B`) e specificare il ruolo tecnico per ogni sostituto.
+- **Multi-Scenario Offer (Phase 35)**:
+  - **UX Candidatura**: Il dialogo di offerta usa **checkbox** al posto del radio button, permettendo all'operatore di selezionare più scenari compatibili contemporaneamente (es. "MP + Straordinario P").
+  - **Badge Turno Tecnico**: Ogni riga dello scenario mostra il badge del codice turno risultante (es. `MP`, `N12`) per massima chiarezza.
+  - **Invio Atomico**: `submitOffer()` genera un oggetto offerta per ogni scenario selezionato e li invia in un'unica operazione `arrayUnion(...offers)` — zero race condition.
+  - **Notifica Aggregata**: Una sola notifica admin per candidatura, con messaggio che riassume le opzioni scelte (es. "VASILE si è offerto con 2 opzioni: MP, P Straordinario"). Zero spam.
+  - **Storico Candidature**: In "Le mie Candidature", se l'operatore ha inviato più proposte per la stessa richiesta, appare una sotto-lista compatta con badge turno e stato individuale per ciascuna offerta.
+  - **Compatibilità Admin**: Nessuna modifica lato Admin — la Phase 33 già mostrava tutte le offerte ricevute per operatore nello stesso scenario.
+  - **File Modificati**: `useRequestsFilter.ts` (logica), `ActiveRequestsCard.vue` (UI), `project_logic_map.md`.
 
 ### 9. Dual-View Management (Phase 34)
 Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità Operatore** per visualizzare e usare l'app esattamente come un dipendente normale, mantenendo intatti i loro permessi reali (JWT).

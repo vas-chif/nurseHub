@@ -68,7 +68,8 @@ export function useRequestsFilter() {
   const offerDialog = ref({ show: false, req: null as ShiftRequest | null });
   const loadingCompatibility = ref(false);
   const compatibleScenarios = ref<CompatibleScenario[]>([]);
-  const selectedScenario = ref<CompatibleScenario | null>(null);
+  // Phase 35: Multi-Scenario Offer — array instead of single value
+  const selectedScenarios = ref<CompatibleScenario[]>([]);
   const isSubmitting = ref(false);
 
   let opportunitiesUnsub: Unsubscribe | null = null;
@@ -223,7 +224,7 @@ export function useRequestsFilter() {
     offerDialog.value = { show: true, req };
     loadingCompatibility.value = true;
     compatibleScenarios.value = [];
-    selectedScenario.value = null;
+    selectedScenarios.value = []; // Phase 35: reset array on new dialog open
     if (authStore.currentOperator) {
       const raw = getCompatibleScenarios(
         { date: req.date, originalShift: req.originalShift },
@@ -245,38 +246,61 @@ export function useRequestsFilter() {
     loadingCompatibility.value = false;
   } /*end openOfferDialog*/
 
+  /**
+   * Phase 35: Multi-Scenario Offer submission.
+   * Builds one offer object per selected scenario and sends them in a single
+   * atomic Firestore updateDoc. A single aggregated admin notification is sent
+   * to avoid notification spam (one per selection would be noisy).
+   */
   async function submitOffer(): Promise<void> {
-    if (!offerDialog.value.req || !selectedScenario.value || !authStore.currentOperator) return;
+    if (!offerDialog.value.req || selectedScenarios.value.length === 0 || !authStore.currentOperator) return;
     isSubmitting.value = true;
     try {
       const reqRef = doc(db, 'shiftRequests', offerDialog.value.req.id);
-      const offer = {
-        id: `offer-${Date.now()}`,
-        operatorId: authStore.currentOperator.id,
-        operatorName: authStore.currentOperator.name,
-        roleLabel: selectedScenario.value.roleLabel,
-        scenarioLabel: selectedScenario.value.scenarioLabel, // Kept for legacy, but roleLabel is master
-        newShift: selectedScenario.value.newShift,
-        timestamp: Date.now(),
-      };
+      const ts = Date.now();
+      const operator = authStore.currentOperator;
+
+      // Generate one offer object per selected scenario
+      const offers = selectedScenarios.value.map((scenario, idx) => ({
+        id: `offer-${ts}-${idx}`,
+        operatorId: operator.id,
+        operatorName: operator.name,
+        roleLabel: scenario.roleLabel,
+        scenarioLabel: scenario.scenarioLabel,
+        newShift: scenario.newShift,
+        timestamp: ts,
+      }));
+
+      // Single atomic write: all offers + operator registration
       await updateDoc(reqRef, {
-        offers: arrayUnion(offer),
-        offeringOperatorIds: arrayUnion(authStore.currentOperator.id),
+        offers: arrayUnion(...offers),
+        offeringOperatorIds: arrayUnion(operator.id),
       });
 
-      // Notify admins asynchronously (non-blocking)
+      // Single aggregated admin notification — no spam regardless of how many scenarios
       const { useConfigStore } = await import('../stores/configStore');
       const activeConfigId = useConfigStore().activeConfigId;
       if (activeConfigId) {
         const { notifyAdmins } = await import('../services/NotificationService');
+        const offerCount = offers.length;
+        const shiftLabel = offerDialog.value.req.date;
+        const scenarioSummary = offers.map((o) => o.roleLabel).join(', ');
         notifyAdmins(
-          `L'operatore ${authStore.currentOperator.name} si è offerto per coprire il turno: ${offerDialog.value.req.date}`,
+          offerCount === 1
+            ? `${operator.name} si è offerto per coprire il turno ${shiftLabel} (${scenarioSummary})`
+            : `${operator.name} si è offerto con ${offerCount} opzioni per il turno ${shiftLabel}: ${scenarioSummary}`,
           offerDialog.value.req.id,
           activeConfigId,
         ).catch((err) => logger.error('Error notifying admins', err));
       }
 
-      $q.notify({ type: 'positive', message: 'Candidatura inviata! Ti faremo sapere presto.' });
+      const offerCount = offers.length;
+      $q.notify({
+        type: 'positive',
+        message: offerCount === 1
+          ? 'Candidatura inviata! Ti faremo sapere presto.'
+          : `${offerCount} proposte inviate! L'admin sceglierà l'opzione migliore.`,
+      });
       offerDialog.value.show = false;
     } catch (e) {
       logger.error('Error submitting offer', e);
@@ -323,10 +347,19 @@ export function useRequestsFilter() {
 
   // ─── History Offer Helpers ───────────────────────────────────────────────────
 
-  function getMyOffer(req: ShiftRequest) {
+  /**
+   * Phase 35: Returns ALL offers from the current operator for a given request.
+   * Replaces the legacy single-offer getMyOffer() to support Multi-Scenario candidacies.
+   */
+  function getMyOffers(req: ShiftRequest) {
     const myOpId = authStore.currentOperator?.id;
-    if (!myOpId || !req.offers) return null;
-    return req.offers.find((o) => o.operatorId === myOpId) ?? null;
+    if (!myOpId || !req.offers) return [];
+    return req.offers.filter((o) => o.operatorId === myOpId);
+  } /*end getMyOffers*/
+
+  /** @deprecated Use getMyOffers() for multi-scenario support. Kept for single-offer legacy helpers. */
+  function getMyOffer(req: ShiftRequest) {
+    return getMyOffers(req)[0] ?? null;
   } /*end getMyOffer*/
 
   function getMyOfferTimestamp(req: ShiftRequest): number | undefined {
@@ -347,17 +380,18 @@ export function useRequestsFilter() {
     }
 
     if (req.status === 'CLOSED') {
-      const myOffer = getMyOffer(req);
-      const isAccepted = myOffer && (
-        req.acceptedOfferId === myOffer.id || 
-        (req.acceptedOfferIds && req.acceptedOfferIds.includes(myOffer.id))
+      // Phase 35: Check ALL my offers against acceptedOfferId(s)
+      const myOffersList = getMyOffers(req);
+      const isAnyAccepted = myOffersList.some((o) =>
+        req.acceptedOfferId === o.id ||
+        (req.acceptedOfferIds && req.acceptedOfferIds.includes(o.id))
       );
-      return isAccepted
+      return isAnyAccepted
         ? 'Approvata - Assegnato a te'
         : 'Rifiutata / Coperta da altri';
     }
     if (req.status === 'EXPIRED') return 'Scaduta / Annullata';
-    if (getMyOffer(req)?.isRejected) return "Rifiutata dall'Admin";
+    if (getMyOffers(req).some((o) => o.isRejected)) return "Rifiutata dall'Admin";
     return 'In Valutazione';
   } /*end getMyOfferStatusLabel*/
 
@@ -402,7 +436,7 @@ export function useRequestsFilter() {
   return {
     // State
     activeTab, loading, requests, historyRequests, sortBy, sortOptions,
-    offerDialog, loadingCompatibility, compatibleScenarios, selectedScenario, isSubmitting,
+    offerDialog, loadingCompatibility, compatibleScenarios, selectedScenarios, isSubmitting,
     // Computed
     surroundingShifts, urgentRequests, otherRequests, ignoredRequests, myHistoryRequests,
     // Actions
@@ -410,7 +444,7 @@ export function useRequestsFilter() {
     // Formatters
     formatDate, formatDateLong, getShiftColor, formatFullDate,
     // History helpers
-    getMyOfferTimestamp, getMyOfferLabel, getMyOfferStatusLabel,
+    getMyOffers, getMyOfferTimestamp, getMyOfferLabel, getMyOfferStatusLabel,
     getMyOfferStatusColor, getMyOfferIcon, getMyOfferAvatarColor, getMyOfferAvatarTextColor,
   };
 } /*end useRequestsFilter*/

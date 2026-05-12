@@ -574,10 +574,21 @@ export function useAdminRequests() {
       const acceptedOfferId = offers.length === 1 ? offers[0]?.id : undefined;
       const acceptedOfferIds = offers.length > 1 ? offers.map((o: ApprovalOffer) => o.id) : undefined;
 
+      // Phase 35 fix: merge resolutionMetadata into the main batch to avoid a
+      // second separate updateDoc that could leave the dialog stuck on loading.
+      const resolution = {
+        substituteIds: offers.map((o: ApprovalOffer) => o.operatorId),
+        substituteNames: offers.map((o: ApprovalOffer) => o.operatorName).join(' + '),
+        scenarioLabels: [...new Set(offers.map((o: ApprovalOffer) => o.scenarioLabel))].join(', '),
+        closedBy: authStore.currentUser?.uid,
+        closedAt: Date.now(),
+      };
+
       batch.update(doc(db, 'shiftRequests', req.id), {
         status: 'CLOSED',
         approvalTimestamp: Date.now(),
         adminId: authStore.currentUser?.uid,
+        resolutionMetadata: resolution,
         ...(acceptedOfferId ? { acceptedOfferId } : {}),
         ...(acceptedOfferIds ? { acceptedOfferIds } : {}),
       });
@@ -617,13 +628,32 @@ export function useAdminRequests() {
           updates,
         );
       }
+
+      // Single atomic commit — includes resolutionMetadata
       await batch.commit();
 
+      // Close the dialog IMMEDIATELY after the commit so the UI never stays stuck.
+      // Async GAS calls and notifications run non-blocking after this point.
+      showApprovalDialog.value = false;
+      showConflictDialog.value = false;
+      loading.value = false;
+
+      $q.notify({
+        type: 'positive',
+        message:
+          syncMode.value === 'auto'
+            ? 'Approvata e sincronizzata con Excel'
+            : 'Approvata (Sincronizzazione manuale richiesta)',
+      });
+
+      // --- Non-blocking post-approval tasks ---
+
+      // Notify absent operator
       const substituteNames = offers.map(o => o.operatorName).join(' + ');
       const notificationMsg = offers.length > 0
         ? `La tua richiesta per il ${req.date} è stata coperta da ${substituteNames}`
         : `La tua richiesta per il ${req.date} è stata approvata.`;
-      await notifyUser(
+      void notifyUser(
         req.creatorId,
         offers.length > 0 ? 'OFFER_ACCEPTED' : 'REQUEST_APPROVED',
         notificationMsg,
@@ -636,7 +666,7 @@ export function useAdminRequests() {
           : 'Admin';
         const separator = '-------------------------';
 
-        // Notify Absent Operator
+        // Sync absent operator to Sheets
         if (req.absentOperatorId) {
           const absName = operators.value[req.absentOperatorId]?.name || req.absentOperatorName;
           const scenarioInfo = offers.length > 0 ? `📋 Scenari: ${[...new Set(offers.map(o => o.scenarioLabel))].join(', ')}` : '';
@@ -656,7 +686,10 @@ export function useAdminRequests() {
           if (absName) void syncToSheets(absName, req.date, 'A', fullNote);
         }
 
-        // Notify and Sync all substitutes
+        // Sync substitutes to Sheets and notify them.
+        // Phase 35 fix: fetch users collection ONCE instead of once-per-offer.
+        const usersSnap = await getDocs(collection(db, 'users'));
+
         for (const off of offers) {
           const scenarioInfo = `📋 Scenario: ${off.scenarioLabel}`;
           const roleInfo = `📍 Ruolo: ${off.roleLabel}`;
@@ -685,11 +718,10 @@ export function useAdminRequests() {
             );
           }
           
-          // Send Notifications
-          const usersSnap = await getDocs(collection(db, 'users'));
+          // Notify substitute
           const subDoc = usersSnap.docs.find((d) => d.data().operatorId === off.operatorId);
           if (subDoc) {
-            await notifyUser(
+            void notifyUser(
               subDoc.id,
               'OFFER_ACCEPTED',
               `La tua offerta di sostituzione (${off.roleLabel}) per il ${req.date} è stata accettata!`,
@@ -699,34 +731,15 @@ export function useAdminRequests() {
         }
       }
 
-      // 1.3 Snapshot di Chiusura (Storico)
-      const resolution = {
-        substituteIds: offers.map((o: ApprovalOffer) => o.operatorId),
-        substituteNames: offers.map((o: ApprovalOffer) => o.operatorName).join(' + '),
-        scenarioLabels: [...new Set(offers.map((o: ApprovalOffer) => o.scenarioLabel))].join(', '),
-        closedBy: authStore.currentUser?.uid,
-        closedAt: Date.now(),
-      };
-
-      await updateDoc(doc(db, 'shiftRequests', req.id), {
-        resolutionMetadata: resolution,
-      });
-
-      showApprovalDialog.value = false;
-      showConflictDialog.value = false;
       if (configStore.activeConfigId) {
         void syncStore.recordSync(configStore.activeConfigId);
       }
-      $q.notify({
-        type: 'positive',
-        message:
-          syncMode.value === 'auto'
-            ? 'Approvata e sincronizzata con Excel'
-            : 'Approvata (Sincronizzazione manuale richiesta)',
-      });
     } catch (e) {
       logger.error('Approval Error', e);
       $q.notify({ type: 'negative', message: "Errore durante l'approvazione" });
+      // Ensure dialog closes even on error to prevent infinite loading
+      showApprovalDialog.value = false;
+      showConflictDialog.value = false;
     } finally {
       loading.value = false;
     }
