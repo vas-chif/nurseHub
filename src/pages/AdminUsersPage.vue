@@ -321,16 +321,27 @@ function confirmDeleteUser(user: User) {
 async function executeDeleteUser() {
   deleteUserDialog.value.loading = true;
   try {
-    await userService.deleteUser(
+    const { authDeleted } = await userService.deleteUser(
       deleteUserDialog.value.targetUid,
       authStore.currentUser?.uid ?? '',
     );
-    $q.notify({ type: 'positive', message: 'Utente eliminato con successo.' });
     deleteUserDialog.value.show = false;
     await loadUsers();
+    if (authDeleted) {
+      $q.notify({ type: 'positive', message: 'Utente eliminato con successo.' });
+    } else {
+      // Firestore OK ma account Auth non rimosso (API non raggiungibile o non deployata)
+      $q.notify({
+        type: 'warning',
+        message:
+          'Profilo eliminato da Firestore. Account di autenticazione non rimosso — elimina manualmente da Firebase Console (Authentication → utenti).',
+        timeout: 10000,
+      });
+    }
   } catch (err) {
-    logger.error('executeDeleteUser failed', { err });
-    $q.notify({ type: 'negative', message: "Errore durante l'eliminazione." });
+    // Qui arriviamo solo se il batch Firestore ha fallito (nulla è stato eliminato)
+    logger.error('executeDeleteUser: batch Firestore fallito', { err });
+    $q.notify({ type: 'negative', message: "Errore durante l'eliminazione. Nessun dato modificato." });
   } finally {
     deleteUserDialog.value.loading = false;
   }
@@ -590,13 +601,20 @@ onMounted(() => {
     <q-dialog v-model="deleteUserDialog.show" persistent>
       <q-card style="min-width: 350px">
         <q-card-section class="row items-center q-pb-none">
-          <q-icon name="warning" color="negative" size="md" class="q-mr-sm" />
-          <span class="text-h6">Elimina Utente</span>
+          <q-icon name="report_problem" color="negative" size="md" class="q-mr-sm" />
+          <div class="text-h6 text-negative">CANCELLAZIONE DEFINITIVA ACCOUNT</div>
         </q-card-section>
         <q-card-section>
-          Stai per eliminare <strong>{{ deleteUserDialog.targetName }}</strong>.<br />
-          <span class="text-negative text-bold">Questa azione è irreversibile.</span><br />
-          L'operatore associato verrà sganciato e potrà essere riassegnato.
+          Stai per eliminare definitivamente l'account di <strong>{{ deleteUserDialog.targetName }}</strong>.<br /><br />
+          Questa azione è <strong class="text-negative">IRREVERSIBILE</strong> e comporterà:<br />
+          <ul class="q-pl-md q-mt-sm">
+            <li>La cancellazione immediata delle credenziali di accesso.</li>
+            <li>La rimozione del profilo utente dal database.</li>
+            <li>Lo sganciamento dell'operatore, che potrà essere riassegnato a un nuovo account.</li>
+          </ul>
+          <div class="text-caption text-grey-8 q-mt-sm">
+            Nota: I turni e la storia dell'operatore <strong>NON</strong> verranno cancellati.
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Annulla" color="grey" :disable="deleteUserDialog.loading" v-close-popup />

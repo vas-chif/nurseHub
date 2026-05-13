@@ -311,8 +311,7 @@ export const useAuthStore = defineStore('auth', () => {
               } else {
                 // Silently repair the stale link — user sees their correct data on this login
                 await userService.repairOperatorLink(uid, user.configId, recovered.id);
-                // JWT-First (Phase 30.1): force token refresh so isUserInConfig() sees
-                // the updated configId immediately — without this the calendar stays empty
+                // Phase 37: Force immediate token refresh so security rules allow the first read (§1.10)
                 await forceTokenRefresh();
                 // Refresh in-memory user to reflect new operatorId
                 currentUser.value = { ...user, operatorId: recovered.id };

@@ -216,6 +216,8 @@ onUnmounted(() => {
 });
 
 async function logout() {
+  const uiStore = useUiStore();
+  uiStore.setLastPath(''); // Phase 37: Clear stale path to prevent navigation loops
   await authStore.logout();
   await router.push('/login');
 }

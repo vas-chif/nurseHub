@@ -55,7 +55,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('layouts/MainLayout.vue'),
     meta: { requiresAuth: true, requiresVerified: true },
     children: [
-      { path: '', component: () => import('pages/DashboardPage.vue') },
+      { path: '', component: () => import('pages/DashboardPage.vue'), alias: ['dashboard', 'home'] },
       { path: 'calendar', component: () => import('pages/CalendarPage.vue') },
       {
         path: 'admin',

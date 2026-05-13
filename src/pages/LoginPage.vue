@@ -72,12 +72,14 @@ async function handleLogin() {
   try {
     await authStore.login(email.value, password.value);
 
-    // If login successful (email verified), check admin/operator verification
-    if (!authStore.isVerified) {
+    // Phase 37: Role-Aware Smart Redirect (§1.10)
+    if (!authStore.isVerified && !authStore.isAnyAdmin) {
       void router.push('/pending-verification');
     } else if (authStore.isAnyAdmin) {
-      void router.push('/admin/requests');
+      // Admins land on User Management to see rotations/approvals
+      void router.push('/admin/users');
     } else {
+      // Regular users land on personal schedule
       void router.push('/');
     }
   } catch (error: unknown) {

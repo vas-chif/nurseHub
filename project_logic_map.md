@@ -108,9 +108,17 @@ L'app funge da "Vigile Intelligente" tra Database e Google Sheets per garantire 
 - **Elite Preview (Double Future):** Il `RotationWidget` mostra tre livelli temporali per una chiarezza assoluta:
   - **Attivo:** Turnazione odierna con badge pulsanti.
   - **Prossimo (Timer):** La turnazione programmata per la data di cambio scelta (offset +1).
-  - **Successivo (Automatica):** La turnazione che seguirà automaticamente dopo l'intervallo di giorni impostato (offset +2), permettendo all'operatore di verificare la correttezza del ciclo a lungo termine.
-- **Clock Guard (Auto-Advance):** Un meccanismo di guardia nel frontend monitora il timestamp di scadenza. Al superamento dell'orario programmato, l'app avanza automaticamente l'indice e ricalcola la prossima scadenza ancorandola al timestamp originale (`baseTs + intervalDays`) per prevenire derive temporali (drift) dovute ad accessi ritardati.
-- **Democratizzazione del Timer:** Anche gli utenti con ruolo `user` possono ora programmare o riavviare il timer (previa autorizzazione specifica nelle `firestore.rules` sui campi `isActive`, `currentColumnIndex`, `nextChangeTimestamp`, `intervalDays`).
+  - **Successivo (Automatica):** La turnazione che seguirà automaticamente dopo l'intervallo di giorni impostato (offset +2), permettendo all'operatore di verificare la correttezza del ciclo.
+### Phase 37: Identity & Routing Stabilization
+- **Clock Guard & JWT Fix**: Implemented `forceTokenRefresh()` in `authStore.ts` after self-healing to ensure security rules allow immediate access to personal shifts.
+- **Smart Redirects**: 
+    - `LoginPage.vue`: Admins are automatically routed to `/admin/users`, regular users to `/`.
+    - `ErrorNotFound.vue`: "Torna alla Home" button is now role-aware, preventing dead-ends for different user types.
+- **Admin Management Prep**:
+    - Identified "undefined" error in `AdminShiftTable.vue` and fixed it (Phase 36/37 overlap).
+    - Reordered save batch logic: Firestore first, then GAS (Google Sheets) background sync.
+    - Planned for `deleteUser` (Auth + Firestore) and `transferUser` between configurations.
+` possono ora programmare o riavviare il timer (previa autorizzazione specifica nelle `firestore.rules` sui campi `isActive`, `currentColumnIndex`, `nextChangeTimestamp`, `intervalDays`).
 
 ## Note Tecniche di Manutenzione
 

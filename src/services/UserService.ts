@@ -419,7 +419,12 @@ export class UserService {
    * @param uid - UID dell'utente da eliminare
    * @param callerUid - UID del chiamante (passato all'API per il self-deletion check)
    */
-  async deleteUser(uid: string, callerUid: string): Promise<void> {
+  /**
+   * Risultato dell'eliminazione utente — authDeleted può essere false se
+   * il documento Firestore è stato rimosso ma la chiamata API ha fallito.
+   * In quel caso l'account Firebase Auth va rimosso manualmente.
+   */
+  async deleteUser(uid: string, callerUid: string): Promise<{ authDeleted: boolean }> {
     const userSnap = await getDoc(doc(this.usersCollection, uid));
     const userData = userSnap.data() as User | undefined;
 
@@ -435,25 +440,39 @@ export class UserService {
     }
 
     batch.delete(doc(this.usersCollection, uid));
+    // Lancio eccezione solo qui: se il batch fallisce nulla è stato toccato
     await batch.commit();
 
-    // Elimina l'account Firebase Auth via firebase-admin (client SDK non può farlo)
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/delete-user`;
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
-      },
-      body: JSON.stringify({ uid, callerUid }),
-    });
+    // Elimina l'account Firebase Auth via firebase-admin (client SDK non può farlo).
+    // Se l'API fallisce (es. non deployata, secret errato) restituiamo authDeleted: false
+    // invece di lanciare — il documento Firestore è già eliminato, l'operatore è libero.
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/delete-user`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
+        },
+        body: JSON.stringify({ uid, callerUid }),
+      });
 
-    if (!response.ok) {
-      const errorData = (await response.json()) as { error: string };
-      throw new Error(`Auth deletion failed: ${errorData.error}`);
+      if (!response.ok) {
+        let reason = `HTTP ${response.status}`;
+        try {
+          const body = (await response.json()) as { error?: string };
+          reason = body.error ?? reason;
+        } catch { /* risposta non-JSON (es. 404 HTML) */ }
+        logger.warn('deleteUser: Auth non eliminato via API', { uid, reason });
+        return { authDeleted: false };
+      }
+    } catch (err) {
+      logger.warn('deleteUser: chiamata API fallita (rete o endpoint non deployato)', { uid, err });
+      return { authDeleted: false };
     }
 
     logger.info('deleteUser: utente eliminato completamente', { uid });
+    return { authDeleted: true };
   } /*end deleteUser*/
 
   /**
