@@ -57,11 +57,13 @@ service cloud.firestore {
           // Allow normal updates (excluding sensitive fields)
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId', 'managerialInfo']) ||
           // Allow self-healing: user can always repair their own stale/broken operatorId link.
-          // Security is guaranteed by: (1) uid check above, (2) hasOnly restricts to safe fields only.
-          // The previous '^op-.*' pattern check was too narrow — it blocked repair of arbitrary broken IDs.
+          // Security: (1) uid check above, (2) hasOnly restricts to safe fields only.
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt'])
         ))
       );
+      // Phase 37: SuperAdmin or admin with manageAdmins can hard-delete user documents
+      allow delete: if isSuperAdmin() ||
+        (isAdmin() && request.auth.token.get('permissions', {}).get('manageAdmins', false) == true);
     }
 
     // Shift Requests
