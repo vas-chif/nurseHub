@@ -476,6 +476,70 @@ export class UserService {
   } /*end deleteUser*/
 
   /**
+   * Trasferisce un utente da una configurazione (reparto) a un'altra in modo atomico.
+   * Libera il vecchio operatore, aggiorna il documento utente e reclama il nuovo operatore
+   * in un singolo writeBatch. Poi aggiorna il JWT con il nuovo configId (Phase 30.1 — JWT-First).
+   * updateUserRole() legge il configId già aggiornato da Firestore dopo il commit del batch.
+   * @param uid - UID dell'utente da trasferire
+   * @param newConfigId - ID della nuova configurazione (reparto destinazione)
+   * @param newOperatorId - ID dell'operatore nel nuovo reparto da associare
+   * @param newProfession - Professione dell'operatore di destinazione
+   */
+  async transferUserToConfig(
+    uid: string,
+    newConfigId: string,
+    newOperatorId: string,
+    newProfession: string,
+  ): Promise<void> {
+    const userSnap = await getDoc(doc(this.usersCollection, uid));
+    const userData = userSnap.data() as User | undefined;
+    if (!userData) throw new Error('User not found');
+
+    const batch = writeBatch(db);
+
+    // Step 1 — Libera il vecchio operatore (rimuove il claim userId)
+    if (userData.configId && userData.operatorId) {
+      batch.update(
+        doc(db, 'systemConfigurations', userData.configId, 'operators', userData.operatorId),
+        { userId: deleteField() },
+      );
+    }
+
+    // Step 2 — Aggiorna il documento utente con la nuova configurazione
+    batch.update(doc(this.usersCollection, uid), {
+      configId: newConfigId,
+      operatorId: newOperatorId,
+      profession: newProfession,
+      updatedAt: Date.now(),
+    });
+
+    // Step 3 — Reclama il nuovo operatore
+    batch.update(
+      doc(db, 'systemConfigurations', newConfigId, 'operators', newOperatorId),
+      { userId: uid },
+    );
+
+    // Atomicità garantita: o tutti e 3 i documenti vengono aggiornati, o nessuno
+    await batch.commit();
+
+    // Step 4 — Aggiorna il JWT con il nuovo configId (Phase 30.1 — JWT-First).
+    // updateUserRole() legge il configId aggiornato da Firestore (già committato sopra).
+    // Preserva ruolo, managedConfigIds e permissions esistenti.
+    await this.updateUserRole(
+      uid,
+      userData.role ?? 'user',
+      userData.managerialInfo?.managedConfigIds ?? [],
+      userData.managerialInfo?.permissions ?? {
+        manageAdmins: false,
+        manageSystem: false,
+        viewAuditLogs: false,
+      },
+    );
+
+    logger.info('transferUserToConfig: utente trasferito', { uid, newConfigId, newOperatorId });
+  } /*end transferUserToConfig*/
+
+  /**
    * Repairs a stale user-to-operator link detected during self-healing login.
    * Atomically updates the user's operatorId and claims the operator document with the user's UID.
    * Called automatically by authStore.loadUserProfile() when a stale ID is detected.

@@ -13,8 +13,8 @@
 | 0 | Slug IDs + Sync fix + Self-heal | GoogleSheetsService, SyncService, UserService, authStore | 🔴 CRITICA | ✅ FATTO |
 | 1 | JWT Refresh dopo Self-Healing | `authStore.ts` | 🔴 CRITICA | ✅ FATTO |
 | 2 | Endpoint `api/delete-user.js` | `api/delete-user.js` (nuovo) | 🟠 ALTA | ✅ FATTO |
-| 3 | `UserService.deleteUser()` | `UserService.ts` | 🟠 ALTA | ⬜ pending |
-| 4 | UI "Elimina Utente" | `AdminUsersPage.vue` | 🟠 ALTA | ⬜ pending |
+| 3 | `UserService.deleteUser()` | `UserService.ts` | 🟠 ALTA | ✅ FATTO |
+| 4 | UI "Elimina Utente" | `AdminUsersPage.vue` | 🟠 ALTA | ✅ FATTO |
 | 5 | `UserService.transferUserToConfig()` | `UserService.ts` | 🟡 MEDIA | ⬜ pending |
 | 6 | Componente `TransferUserDialog.vue` | nuovo componente | 🟡 MEDIA | ⬜ pending |
 | 7 | UI "Trasferisci Reparto" | `AdminUsersPage.vue` | 🟡 MEDIA | ⬜ pending |
