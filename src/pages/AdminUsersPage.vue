@@ -4,7 +4,7 @@
  * @description Admin page for managing user accounts, approvals, and role assignments.
  * @author Nurse Hub Team
  * @created 2026-03-05
- * @modified 2026-04-25
+ * @modified 2026-05-13
  */
 import { ref, onMounted, computed } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
@@ -301,6 +301,41 @@ async function toggleBlockUser(user: User) {
   }
 }
 
+// Delete User Dialog State
+const deleteUserDialog = ref<{
+  show: boolean;
+  targetUid: string;
+  targetName: string;
+  loading: boolean;
+}>({ show: false, targetUid: '', targetName: '', loading: false });
+
+function confirmDeleteUser(user: User) {
+  deleteUserDialog.value = {
+    show: true,
+    targetUid: user.uid,
+    targetName: `${user.firstName} ${user.lastName}`,
+    loading: false,
+  };
+}
+
+async function executeDeleteUser() {
+  deleteUserDialog.value.loading = true;
+  try {
+    await userService.deleteUser(
+      deleteUserDialog.value.targetUid,
+      authStore.currentUser?.uid ?? '',
+    );
+    $q.notify({ type: 'positive', message: 'Utente eliminato con successo.' });
+    deleteUserDialog.value.show = false;
+    await loadUsers();
+  } catch (err) {
+    logger.error('executeDeleteUser failed', { err });
+    $q.notify({ type: 'negative', message: "Errore durante l'eliminazione." });
+  } finally {
+    deleteUserDialog.value.loading = false;
+  }
+}
+
 onMounted(() => {
   void loadUsers();
 });
@@ -435,6 +470,22 @@ onMounted(() => {
                       }}</q-item-label>
                     </q-item-section>
                   </q-item>
+                  <q-separator v-if="authStore.isSuperAdmin" />
+                  <q-item
+                    v-if="authStore.isSuperAdmin"
+                    clickable
+                    v-close-popup
+                    :disable="props.row.uid === authStore.currentUser?.uid"
+                    @click="confirmDeleteUser(props.row)"
+                  >
+                    <q-item-section avatar>
+                      <q-icon name="delete_forever" color="negative" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-negative">Elimina Utente</q-item-label>
+                      <q-item-label caption>Azione irreversibile</q-item-label>
+                    </q-item-section>
+                  </q-item>
                 </q-list>
               </q-btn-dropdown>
             </q-td>
@@ -531,6 +582,31 @@ onMounted(() => {
           <q-btn flat label="Annulla" color="grey" v-close-popup />
           <q-btn flat label="Salva Modifiche" color="primary" :loading="processingId === selectedUser?.uid"
             @click="confirmRoleUpdate" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Delete User Confirm Dialog -->
+    <q-dialog v-model="deleteUserDialog.show" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="row items-center q-pb-none">
+          <q-icon name="warning" color="negative" size="md" class="q-mr-sm" />
+          <span class="text-h6">Elimina Utente</span>
+        </q-card-section>
+        <q-card-section>
+          Stai per eliminare <strong>{{ deleteUserDialog.targetName }}</strong>.<br />
+          <span class="text-negative text-bold">Questa azione è irreversibile.</span><br />
+          L'operatore associato verrà sganciato e potrà essere riassegnato.
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Annulla" color="grey" :disable="deleteUserDialog.loading" v-close-popup />
+          <q-btn
+            label="Elimina"
+            color="negative"
+            icon="delete_forever"
+            :loading="deleteUserDialog.loading"
+            @click="executeDeleteUser"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
