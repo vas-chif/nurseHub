@@ -3,7 +3,7 @@
  * @description Service for managing user identities, profile data, and administrative role hierarchies.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-05-07
+ * @modified 2026-05-13
  * @notes
  * - Handles complex operator matching during user synchronization.
  * - Manages administrative promotions and JWT Custom Claims via Vercel integration.
@@ -22,6 +22,7 @@ import {
   writeBatch,
   query,
   where,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { getAuth } from 'firebase/auth';
@@ -409,6 +410,51 @@ export class UserService {
       updatedAt: Date.now(),
     });
   }
+
+  /**
+   * Elimina un utente completamente: libera l'operatore associato (userId → deleteField)
+   * per renderlo riassegnabile, rimuove il documento Firestore, e cancella l'account
+   * Firebase Auth via Vercel API (il client SDK non ha questo privilegio).
+   * Batch atomico garantisce che Firestore sia sempre consistente.
+   * @param uid - UID dell'utente da eliminare
+   * @param callerUid - UID del chiamante (passato all'API per il self-deletion check)
+   */
+  async deleteUser(uid: string, callerUid: string): Promise<void> {
+    const userSnap = await getDoc(doc(this.usersCollection, uid));
+    const userData = userSnap.data() as User | undefined;
+
+    const batch = writeBatch(db);
+
+    // Libera il campo userId sull'operatore associato — senza questo l'operatore
+    // rimane "claimed" da un account inesistente e blocca futuri self-healing
+    if (userData?.configId && userData?.operatorId) {
+      batch.update(
+        doc(db, 'systemConfigurations', userData.configId, 'operators', userData.operatorId),
+        { userId: deleteField() },
+      );
+    }
+
+    batch.delete(doc(this.usersCollection, uid));
+    await batch.commit();
+
+    // Elimina l'account Firebase Auth via firebase-admin (client SDK non può farlo)
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://nursehub-psi.vercel.app'}/api/delete-user`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_VERCEL_API_SECRET ?? ''}`,
+      },
+      body: JSON.stringify({ uid, callerUid }),
+    });
+
+    if (!response.ok) {
+      const errorData = (await response.json()) as { error: string };
+      throw new Error(`Auth deletion failed: ${errorData.error}`);
+    }
+
+    logger.info('deleteUser: utente eliminato completamente', { uid });
+  } /*end deleteUser*/
 
   /**
    * Repairs a stale user-to-operator link detected during self-healing login.
