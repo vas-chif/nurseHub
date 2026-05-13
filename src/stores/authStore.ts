@@ -3,7 +3,7 @@
  * @description Centralized Pinia store for authentication, session management, and role-based access control (RBAC).
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-05-07
+ * @modified 2026-05-13
  * @notes
  * - Implements JWT-First Authorization (§1.10): roles and permissions are read from Custom Claims.
  * - Manages the lifecycle of the authenticated user (Firebase Auth + Firestore Profile).
@@ -57,7 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
   const permissions = ref<IUserPermissions>({
     manageAdmins: false,
     manageSystem: false,
-    viewAuditLogs: false
+    viewAuditLogs: false,
   });
 
   // --- Computed ---
@@ -89,8 +89,12 @@ export const useAuthStore = defineStore('auth', () => {
     return managedConfigIds.value.includes(configId);
   });
 
-  const canManageAdmins = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageAdmins));
-  const canManageSystem = computed(() => isSuperAdmin.value || (isAdmin.value && permissions.value.manageSystem));
+  const canManageAdmins = computed(
+    () => isSuperAdmin.value || (isAdmin.value && permissions.value.manageAdmins),
+  );
+  const canManageSystem = computed(
+    () => isSuperAdmin.value || (isAdmin.value && permissions.value.manageSystem),
+  );
 
   /**
    * Phase 34: Dual-View Management.
@@ -114,7 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const tokenResult = await firebaseUser.getIdTokenResult();
       const claims = tokenResult.claims;
-      
+
       const roleClaim = claims['role'] as UserRole;
       if (roleClaim === 'superAdmin' || roleClaim === 'admin' || roleClaim === 'user') {
         claimRole.value = roleClaim;
@@ -124,22 +128,22 @@ export const useAuthStore = defineStore('auth', () => {
 
       managedConfigIds.value = (claims['managedConfigIds'] as string[]) || [];
       claimConfigId.value = (claims['configId'] as string | undefined) ?? null;
-      
+
       const permsClaim = claims['permissions'] as IUserPermissions | undefined;
       if (permsClaim) {
         permissions.value = {
           manageAdmins: !!permsClaim.manageAdmins,
           manageSystem: !!permsClaim.manageSystem,
-          viewAuditLogs: !!permsClaim.viewAuditLogs
+          viewAuditLogs: !!permsClaim.viewAuditLogs,
         };
       } else {
         permissions.value = { manageAdmins: false, manageSystem: false, viewAuditLogs: false };
       }
 
-      logger.info('JWT claims loaded', { 
-        role: claimRole.value ?? 'fallback', 
+      logger.info('JWT claims loaded', {
+        role: claimRole.value ?? 'fallback',
         configs: managedConfigIds.value.length,
-        canManageAdmins: permissions.value.manageAdmins
+        canManageAdmins: permissions.value.manageAdmins,
       });
     } catch (err) {
       logger.warn('Failed to read JWT claims', err);
@@ -251,7 +255,7 @@ export const useAuthStore = defineStore('auth', () => {
       authUser.value = null;
       currentUser.value = null;
       claimRole.value = null;
-      
+
       // Clear other caches
       const { useScheduleStore } = await import('./scheduleStore');
       useScheduleStore().clearCache();
@@ -276,9 +280,12 @@ export const useAuthStore = defineStore('auth', () => {
             // Identity Guard: if the operator document is already claimed by a different UID,
             // do NOT set currentOperator. Fall through to self-healing below.
             if (operator.userId && operator.userId !== uid) {
-              logger.error('IDENTITY_MISMATCH: operator.userId does not match auth.uid — self-heal will attempt recovery', {
-                operatorId: user.operatorId,
-              });
+              logger.error(
+                'IDENTITY_MISMATCH: operator.userId does not match auth.uid — self-heal will attempt recovery',
+                {
+                  operatorId: user.operatorId,
+                },
+              );
               // currentOperator remains null — self-healing block below will try to fix it
             } else {
               currentOperator.value = operator;
@@ -295,12 +302,18 @@ export const useAuthStore = defineStore('auth', () => {
             if (recovered) {
               if (recovered.userId && recovered.userId !== uid) {
                 // Another user has already claimed this operator — do not steal it
-                logger.error('SELF_HEAL_BLOCKED: recovered operator already belongs to another user', {
-                  operatorId: recovered.id,
-                });
+                logger.error(
+                  'SELF_HEAL_BLOCKED: recovered operator already belongs to another user',
+                  {
+                    operatorId: recovered.id,
+                  },
+                );
               } else {
                 // Silently repair the stale link — user sees their correct data on this login
                 await userService.repairOperatorLink(uid, user.configId, recovered.id);
+                // JWT-First (Phase 30.1): force token refresh so isUserInConfig() sees
+                // the updated configId immediately — without this the calendar stays empty
+                await forceTokenRefresh();
                 // Refresh in-memory user to reflect new operatorId
                 currentUser.value = { ...user, operatorId: recovered.id };
                 currentOperator.value = recovered;
