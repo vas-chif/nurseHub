@@ -14,6 +14,7 @@ import { operatorsService } from '../services/OperatorsService';
 import type { User, SystemConfiguration, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
 import RotationManager from '../components/admin/RotationManager.vue';
+import TransferUserDialog from '../components/admin/TransferUserDialog.vue';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { useRoute } from 'vue-router';
@@ -301,6 +302,19 @@ async function toggleBlockUser(user: User) {
   }
 }
 
+// Transfer User Dialog State (Fase 7)
+const transferDialogOpen = ref(false);
+const transferTargetUser = ref<User | null>(null);
+
+function openTransferDialog(user: User) {
+  transferTargetUser.value = user;
+  transferDialogOpen.value = true;
+}
+
+async function onUserTransferred() {
+  await loadUsers();
+}
+
 // Delete User Dialog State
 const deleteUserDialog = ref<{
   show: boolean;
@@ -482,6 +496,23 @@ onMounted(() => {
                     </q-item-section>
                   </q-item>
                   <q-separator v-if="authStore.isSuperAdmin" />
+                  <!-- Trasferisci Reparto (SuperAdmin) -->
+                  <q-item
+                    v-if="authStore.isSuperAdmin"
+                    clickable
+                    v-close-popup
+                    :disable="props.row.uid === authStore.currentUser?.uid"
+                    @click="openTransferDialog(props.row)"
+                  >
+                    <q-item-section avatar>
+                      <q-icon name="swap_horiz" color="primary" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>Trasferisci Reparto</q-item-label>
+                      <q-item-label caption>Sposta in un altro reparto</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-separator v-if="authStore.isSuperAdmin" />
                   <q-item
                     v-if="authStore.isSuperAdmin"
                     clickable
@@ -628,5 +659,11 @@ onMounted(() => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+    <!-- Transfer User Dialog (Fase 6+7) -->
+    <TransferUserDialog
+      v-model="transferDialogOpen"
+      :user="transferTargetUser"
+      @transferred="onUserTransferred"
+    />
   </q-page>
 </template>
