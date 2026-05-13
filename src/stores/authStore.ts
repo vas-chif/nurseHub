@@ -196,6 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
     firstName: string,
     lastName: string,
     dateOfBirth: string,
+    configId?: string | null,
   ): Promise<{ needsApproval: boolean }> {
     loading.value = true;
     error.value = null;
@@ -230,6 +231,7 @@ export const useAuthStore = defineStore('auth', () => {
         firstName,
         lastName,
         dateOfBirth,
+        configId,
       );
 
       logger.info('User document created', {

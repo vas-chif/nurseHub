@@ -53,6 +53,7 @@ export class UserService {
     firstName: string,
     lastName: string,
     dateOfBirth: string,
+    configId?: string | null,
   ): Promise<{ operatorId: string | null; needsApproval: boolean }> {
     // Create basic user document - NO operator search during registration
     // User will manually sync later via "Sincronizza" button
@@ -67,7 +68,7 @@ export class UserService {
       role: 'user', // Default system role
       // profession is undefined initially
       operatorId: null, // No operator assigned yet
-      configId: null, // No configuration assigned yet
+      configId: configId ?? null, // Pre-selected reparto at registration (Fase 8)
       isVerified: false, // Must verify email first
       pendingApproval: true, // Needs manual sync or admin approval
       createdAt: Date.now(),

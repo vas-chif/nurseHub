@@ -3,16 +3,20 @@
  * @description Page for new user registration. Handles personal data collection and account creation.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-05-03
+ * @modified 2026-05-13
  * @notes
  * - Standardized using AppDateInput and centralized dateUtils.
  * - Forces acceptance of Terms and Conditions.
+ * - Fase 8: optional reparto selection at registration (configId pre-populated).
  */
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 import AppDateInput from '../components/common/AppDateInput.vue';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../boot/firebase';
+import type { SystemConfiguration } from '../types/models';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -26,12 +30,28 @@ const formData = ref({
   confirmPassword: '',
 });
 
+const selectedConfigId = ref<string | null>(null);
+const configs = ref<SystemConfiguration[]>([]);
+const loadingConfigs = ref(false);
+
 const loading = ref(false);
 const errorMessage = ref('');
 const isPwd = ref(true);
 const isPwdConfirm = ref(true);
 const showVerificationDialog = ref(false);
 const acceptTerms = ref(false);
+
+onMounted(async () => {
+  loadingConfigs.value = true;
+  try {
+    const snapshot = await getDocs(collection(db, 'systemConfigurations'));
+    configs.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as SystemConfiguration));
+  } catch {
+    // Silently ignore — la selezione reparto è opzionale; l'admin può assegnarlo in seguito
+  } finally {
+    loadingConfigs.value = false;
+  }
+});
 
 async function handleRegister() {
   loading.value = true;
@@ -44,6 +64,7 @@ async function handleRegister() {
       formData.value.firstName,
       formData.value.lastName,
       formData.value.dateOfBirth,
+      selectedConfigId.value,
     );
 
     showVerificationDialog.value = true;
@@ -91,6 +112,34 @@ function handleVerificationDismiss() {
             label="Data di Nascita"
             required
           />
+
+          <!-- Reparto (opzionale) — configId pre-selezionato (Fase 8) -->
+          <div v-if="loadingConfigs">
+            <q-skeleton type="QInput" height="40px" />
+          </div>
+          <q-select
+            v-else
+            v-model="selectedConfigId"
+            :options="configs"
+            option-value="id"
+            option-label="name"
+            emit-value
+            map-options
+            clearable
+            filled
+            dense
+            label="Reparto (opzionale)"
+            hint="Se non conosci il reparto, puoi lasciarlo vuoto — l'admin lo assegnerà."
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.name }}</q-item-label>
+                  <q-item-label caption>{{ scope.opt.profession }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
 
           <q-input v-model="formData.password" filled dense :type="isPwd ? 'password' : 'text'" label="Password"
             autocomplete="new-password" :rules="[

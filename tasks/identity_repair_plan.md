@@ -15,10 +15,10 @@
 | 2 | Endpoint `api/delete-user.js` | `api/delete-user.js` (nuovo) | 🟠 ALTA | ✅ FATTO |
 | 3 | `UserService.deleteUser()` | `UserService.ts` | 🟠 ALTA | ✅ FATTO |
 | 4 | UI "Elimina Utente" | `AdminUsersPage.vue` | 🟠 ALTA | ✅ FATTO |
-| 5 | `UserService.transferUserToConfig()` | `UserService.ts` | 🟡 MEDIA | ⬜ pending |
-| 6 | Componente `TransferUserDialog.vue` | nuovo componente | 🟡 MEDIA | ⬜ pending |
-| 7 | UI "Trasferisci Reparto" | `AdminUsersPage.vue` | 🟡 MEDIA | ⬜ pending |
-| 8 | Campo `department` + dropdown Registrazione | `models.ts`, `RegisterPage.vue`, `firestore.rules` | 🟡 MEDIA | ⬜ pending |
+| 5 | `UserService.transferUserToConfig()` | `UserService.ts` | 🟡 MEDIA | ✅ FATTO |
+| 6 | Componente `TransferUserDialog.vue` | nuovo componente | 🟡 MEDIA | ✅ FATTO |
+| 7 | UI "Trasferisci Reparto" | `AdminUsersPage.vue` | 🟡 MEDIA | ✅ FATTO |
+| 8 | Campo `department` + dropdown Registrazione | `models.ts`, `RegisterPage.vue`, `firestore.rules` | 🟡 MEDIA | ✅ FATTO |
 | 9 | `syncUserToOperator()` bimodale | `UserService.ts` | 🟡 MEDIA | ⬜ pending |
 
 > **Nota utente**: Fase 1 e Fase 8 possono essere implementate insieme nello stesso commit
