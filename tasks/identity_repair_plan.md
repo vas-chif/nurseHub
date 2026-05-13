@@ -14,12 +14,14 @@
 | 1 | JWT Refresh dopo Self-Healing | `authStore.ts` | 🔴 CRITICA | ✅ FATTO |
 | 2 | Endpoint `api/delete-user.js` | `api/delete-user.js` (nuovo) | 🟠 ALTA | ✅ FATTO |
 | 3 | `UserService.deleteUser()` | `UserService.ts` | 🟠 ALTA | ✅ FATTO |
-| 4 | UI "Elimina Utente" | `AdminUsersPage.vue` | 🟠 ALTA | ✅ FATTO |
+| 4 | UI "Elimina Utente" (Expert wording) | `AdminUsersPage.vue` | 🟠 ALTA | ✅ FATTO |
 | 5 | `UserService.transferUserToConfig()` | `UserService.ts` | 🟡 MEDIA | ✅ FATTO |
 | 6 | Componente `TransferUserDialog.vue` | nuovo componente | 🟡 MEDIA | ✅ FATTO |
 | 7 | UI "Trasferisci Reparto" | `AdminUsersPage.vue` | 🟡 MEDIA | ✅ FATTO |
 | 8 | Campo `department` + dropdown Registrazione | `models.ts`, `RegisterPage.vue`, `firestore.rules` | 🟡 MEDIA | ✅ FATTO |
-| 9 | `syncUserToOperator()` bimodale | `UserService.ts` | 🟡 MEDIA | ⬜ pending |
+| 37a | Security Rule "Super-Blindata" | `firestore.rules` | 🟠 ALTA | ✅ FATTO |
+| 37b | Strict Matching (No Cinz match Cinzia) | `UserService.ts` | 🟠 ALTA | ✅ FATTO |
+| 9 | `syncUserToOperator()` bimodale | `UserService.ts` | 🟡 MEDIA | ✅ FATTO |
 
 > **Nota utente**: Fase 1 e Fase 8 possono essere implementate insieme nello stesso commit
 > (Bug JWT stale + selezione reparto alla registrazione si completano reciprocamente: la Fase 8

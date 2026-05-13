@@ -24,6 +24,7 @@ import {
   where,
   deleteField,
 } from 'firebase/firestore';
+import type { DocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../boot/firebase';
 import { getAuth } from 'firebase/auth';
 import type { User } from '../types/models';
@@ -133,13 +134,22 @@ export class UserService {
       const userLast = userDoc.lastName.toUpperCase().trim();
       const userDOB = userDoc.dateOfBirth;
 
-      // Search all configurations for matching operator
-      const configsSnapshot = await getDocs(collection(db, 'systemConfigurations'));
-      logger.info(`Checking ${configsSnapshot.size} configurations...`);
+      // Fase 9 — Bimodale: fast path se configId già noto, legacy altrimenti
+      let configDocs: DocumentSnapshot<DocumentData>[];
+      if (userDoc.configId) {
+        logger.info('syncUserToOperator: fast path (1 config)', { uid, configId: userDoc.configId });
+        const snap = await getDoc(doc(db, 'systemConfigurations', userDoc.configId));
+        configDocs = snap.exists() ? [snap] : [];
+      } else {
+        const allSnap = await getDocs(collection(db, 'systemConfigurations'));
+        logger.info(`syncUserToOperator: legacy full-scan (${allSnap.size} configs)`, { uid });
+        configDocs = allSnap.docs;
+      }
 
-      for (const configDoc of configsSnapshot.docs) {
+      for (const configDoc of configDocs) {
         const configId = configDoc.id;
         const configData = configDoc.data();
+        if (!configData) continue; // guard for DocumentSnapshot (fast path)
         const configName = configData.name || 'Senza Nome';
         const profession = configData.profession || configData.role || 'Infermiere';
 
