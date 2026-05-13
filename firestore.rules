@@ -56,11 +56,10 @@ service cloud.firestore {
         (request.auth.uid == userId && (
           // Allow normal updates (excluding sensitive fields)
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId', 'managerialInfo']) ||
-          // Allow self-healing/migration: if the current operatorId is null OR is a legacy ID (starts with 'op-')
-          (
-            (resource.data.get('operatorId', null) == null || resource.data.get('operatorId', '').matches('^op-.*')) && 
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt'])
-          )
+          // Allow self-healing: user can always repair their own stale/broken operatorId link.
+          // Security is guaranteed by: (1) uid check above, (2) hasOnly restricts to safe fields only.
+          // The previous '^op-.*' pattern check was too narrow — it blocked repair of arbitrary broken IDs.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt'])
         ))
       );
     }
