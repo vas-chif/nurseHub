@@ -429,6 +429,7 @@ async function savePendingChanges() {
 
     const batch = writeBatch(db);
     const configId = configStore.activeConfigId;
+    const syncTasks: Array<{ name: string; date: string; shift: string; note: string }> = [];
 
     for (const [opId, dates] of Object.entries(pendingChanges.value)) {
       const op = operatorOptions.value.find(o => o.id === opId);
@@ -442,8 +443,8 @@ async function savePendingChanges() {
         const oldShift = op.schedule[date] || '-';
         const finalNote = `Modificato dall'app\n🛠️ Modifica: ${change.note || 'Manuale'} (Admin: ${adminName}) | 🔄 Da: ${oldShift} ➔ a: ${change.shift}`;
 
-        // 1. Update Google Sheets
-        await sheetsService.updateShiftOnSheets(op.name, date, change.shift, finalNote, 'blue');
+        // 1. Queue for Google Sheets
+        syncTasks.push({ name: op.name, date, shift: change.shift, note: finalNote });
 
         // 2. Prepare Firestore update
         updatedSchedule[date] = change.shift;
@@ -455,7 +456,7 @@ async function savePendingChanges() {
           to: change.shift,
           by: adminName,
           at: Date.now(),
-          note: change.note || undefined
+          note: change.note || '' // Phase 36: Fixed undefined error by using empty string
         });
         
         totalSaved++;
@@ -467,8 +468,20 @@ async function savePendingChanges() {
       });
     }
 
-    // 3. Commit Firestore updates
+    // 2. Commit Firestore updates FIRST (Single Source of Truth)
     await batch.commit();
+
+    // 3. Sync to Google Sheets in parallel/background to avoid blocking UI too long
+    void (async () => {
+      try {
+        for (const task of syncTasks) {
+          await sheetsService.updateShiftOnSheets(task.name, task.date, task.shift, task.note, 'blue');
+        }
+        logger.info('Background Google Sheets sync completed', { count: syncTasks.length });
+      } catch (err) {
+        logger.error('Background Google Sheets sync failed', err);
+      }
+    })();
 
     $q.notify({
       type: 'positive',
