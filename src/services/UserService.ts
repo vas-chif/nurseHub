@@ -159,8 +159,9 @@ export class UserService {
           // 1. Check Email Match
           const emailMatches = userEmail !== '' && opEmail === userEmail;
 
-          // 2. Check Name Match (Case-insensitive, checks if both first and last name appear in opName)
-          const namesMatch = opName.includes(userFirst) && opName.includes(userLast);
+          // 2. Strict Name Match (Phase 37): must match exact words to prevent partial hits (e.g. "Cinz" vs "Cinzia")
+          const opWords = opName.split(/\s+/);
+          const namesMatch = opWords.includes(userFirst) && opWords.includes(userLast);
 
           // If either matches, we have a candidate
           if (emailMatches || namesMatch) {

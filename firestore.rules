@@ -56,16 +56,14 @@ service cloud.firestore {
         (request.auth.uid == userId && (
           // Allow normal updates (excluding sensitive fields)
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isApproved', 'operatorId', 'configId', 'managerialInfo']) ||
-          // Narrow self-healing: repair stale operatorId only (no status change)
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'updatedAt']) ||
-          // Broader sync (syncUserToOperator): all fields allowed ONLY when actually
-          // claiming a real operator (non-empty operatorId). Prevents self-approval
-          // without a legitimate operator claim (isVerified/pendingApproval cannot be
-          // flipped without providing a concrete operatorId).
+          // Phase 37: Super-Blindata Self-Healing (§1.10)
+          // Allows repair/sync ONLY if: 
+          // 1. Current ID is missing (null) or Legacy (starts with 'op-').
+          // 2. The NEW ID being provided is valid and non-empty (Sanity Check).
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['operatorId', 'configId', 'profession', 'isVerified', 'pendingApproval', 'updatedAt']) &&
-            request.resource.data.operatorId is string &&
-            request.resource.data.operatorId.size() > 0
+            request.resource.data.operatorId is string && request.resource.data.operatorId.size() > 0 &&
+            (resource.data.get('operatorId', null) == null || resource.data.get('operatorId', '').matches('^op-.*'))
           )
         ))
       );
