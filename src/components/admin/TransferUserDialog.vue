@@ -6,6 +6,7 @@
  *   SuperAdmin only — consumato da AdminUsersPage.vue (Fase 6).
  * @author Nurse Hub Team
  * @created 2026-05-13
+ * @modified 2026-05-14
  */
 import { ref, watch, computed } from 'vue';
 import { useQuasar } from 'quasar';
@@ -36,6 +37,24 @@ const selectedOperatorId = ref<string | null>(null);
 const loadingOperators = ref(false);
 const saving = ref(false);
 
+// Cartelle (Phase 37): 2-step group selection
+const selectedGroup = ref<string | null>(null);
+const groupOptions = computed<string[]>(() => {
+  const groups = new Set<string>();
+  availableConfigs.value.forEach((c) => { if (c.group) groups.add(c.group); });
+  return Array.from(groups).sort();
+});
+const configsInGroup = computed<SystemConfiguration[]>(() => {
+  if (!selectedGroup.value) return [];
+  return availableConfigs.value.filter((c) => c.group === selectedGroup.value);
+});
+const hasGroupedConfigs = computed<boolean>(() => groupOptions.value.length > 0);
+watch(selectedGroup, () => {
+  selectedConfigId.value = null;
+  operators.value = [];
+  selectedOperatorId.value = null;
+});
+
 /** Tutti i reparti disponibili tranne quello corrente dell'utente */
 const availableConfigs = computed<SystemConfiguration[]>(() =>
   configStore.allConfigs.filter((c) => c.id !== props.user?.configId),
@@ -63,6 +82,7 @@ watch(
   () => [props.modelValue, props.user?.uid] as const,
   ([isOpen]) => {
     if (isOpen) {
+      selectedGroup.value = null;
       selectedConfigId.value = null;
       selectedOperatorId.value = null;
       operators.value = [];
@@ -153,20 +173,35 @@ async function onConfirm() {
 
         <q-icon name="arrow_downward" color="grey-5" size="20px" class="q-mb-md block" />
 
-        <!-- Selezione reparto destinazione (A) -->
+        <!-- Selezione reparto destinazione (A) — Cartelle 2-step (Phase 37) -->
         <div class="text-subtitle2 q-mb-xs text-grey-7">Reparto destinazione</div>
+        <!-- Step 1: Gruppo/Cartella (solo se i gruppi sono configurati) -->
+        <q-select
+          v-if="hasGroupedConfigs"
+          v-model="selectedGroup"
+          :options="groupOptions"
+          outlined
+          dense
+          label="Seleziona gruppo/reparto"
+          class="q-mb-sm"
+          clearable
+          :disable="saving"
+        >
+          <template #prepend><q-icon name="folder" color="primary" /></template>
+        </q-select>
+        <!-- Step 2 (o unico step): Configurazione specifica -->
         <q-select
           v-model="selectedConfigId"
-          :options="availableConfigs"
+          :options="hasGroupedConfigs ? configsInGroup : availableConfigs"
           option-value="id"
           option-label="name"
           emit-value
           map-options
           outlined
           dense
-          label="Seleziona reparto"
+          :label="hasGroupedConfigs ? 'Seleziona configurazione' : 'Seleziona reparto'"
           class="q-mb-md"
-          :disable="saving"
+          :disable="saving || (hasGroupedConfigs && !selectedGroup)"
         >
           <template #option="scope">
             <q-item v-bind="scope.itemProps">

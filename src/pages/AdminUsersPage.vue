@@ -4,7 +4,7 @@
  * @description Admin page for managing user accounts, approvals, and role assignments.
  * @author Nurse Hub Team
  * @created 2026-03-05
- * @modified 2026-05-13
+ * @modified 2026-05-14
  */
 import { ref, onMounted, computed } from 'vue';
 import { useQuasar, date as dateUtil } from 'quasar';
@@ -54,6 +54,24 @@ const editPermissions = reactive<IUserPermissions>({
 });
 const availableOperators = ref<Operator[]>([]);
 const loadingOperators = ref(false);
+
+// Cartelle (Phase 37): 2-step group selection for approval dialog
+const selectedApprovalGroup = ref<string | null>(null);
+const approvalGroupOptions = computed<string[]>(() => {
+  const groups = new Set<string>();
+  configStore.availableConfigs.forEach((c) => { if (c.group) groups.add(c.group); });
+  return Array.from(groups).sort();
+});
+const approvalConfigsInGroup = computed<SystemConfiguration[]>(() => {
+  if (!selectedApprovalGroup.value) return [];
+  return configStore.availableConfigs.filter((c) => c.group === selectedApprovalGroup.value);
+});
+const approvalHasGroups = computed<boolean>(() => approvalGroupOptions.value.length > 0);
+watch(selectedApprovalGroup, () => {
+  selectedConfig.value = null;
+  selectedOperator.value = null;
+  availableOperators.value = [];
+});
 
 // Role Options Hierarchical Logic
 const roleOptions = computed(() => {
@@ -195,13 +213,10 @@ function openApprovalDialog(user: User) {
   selectedConfig.value = null;
   selectedOperator.value = null;
   availableOperators.value = [];
+  // Pre-select group from user's current configId (Cartelle, Phase 37)
+  const userConfig = user.configId ? configStore.allConfigs.find((c) => c.id === user.configId) : null;
+  selectedApprovalGroup.value = userConfig?.group ?? null;
   approvalDialog.value = true;
-
-  // Create a minimal config object matching SystemConfiguration interface
-  // or rely on v-model to handle the selection properly.
-  // We need to typecase or handle the selection event correctly.
-
-  // Ensure configs are loaded
   if (configStore.allConfigs.length === 0) {
     void configStore.loadConfigurations();
   }
@@ -551,9 +566,38 @@ onMounted(() => {
         </q-card-section>
 
         <q-card-section class="q-gutter-y-md">
-          <q-select v-model="selectedConfig" :options="configStore.availableConfigs" option-label="name"
-            label="Configurazione / Reparto" outlined emit-value map-options
-            @update:model-value="loadOperatorsForConfig" />
+          <!-- Step 1: Reparto/Cartella (Phase 37) — solo se i gruppi sono configurati -->
+          <q-select
+            v-if="approvalHasGroups"
+            v-model="selectedApprovalGroup"
+            :options="approvalGroupOptions"
+            label="Reparto"
+            outlined
+            clearable
+          >
+            <template #prepend><q-icon name="folder" color="primary" /></template>
+          </q-select>
+          <!-- Step 2 (o unico step se no groups): Configurazione / Turni -->
+          <q-select
+            v-model="selectedConfig"
+            :options="approvalHasGroups ? approvalConfigsInGroup : configStore.availableConfigs"
+            option-label="name"
+            label="Configurazione / Turni"
+            outlined
+            emit-value
+            map-options
+            :disable="approvalHasGroups && !selectedApprovalGroup"
+            @update:model-value="loadOperatorsForConfig"
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.name }}</q-item-label>
+                  <q-item-label caption>{{ scope.opt.profession }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
 
           <q-select v-model="selectedOperator" :options="availableOperators" option-label="name" option-value="id"
             label="Profilo Operatore" outlined emit-value map-options :disable="!selectedConfig"

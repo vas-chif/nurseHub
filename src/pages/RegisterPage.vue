@@ -3,14 +3,14 @@
  * @description Page for new user registration. Handles personal data collection and account creation.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-05-13
+ * @modified 2026-05-14
  * @notes
  * - Standardized using AppDateInput and centralized dateUtils.
  * - Forces acceptance of Terms and Conditions.
  * - Fase 8: optional reparto selection at registration (configId pre-populated).
  */
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 import AppDateInput from '../components/common/AppDateInput.vue';
@@ -30,9 +30,30 @@ const formData = ref({
   confirmPassword: '',
 });
 
-const selectedConfigId = ref<string | null>(null);
+const selectedGroup = ref<string | null>(null);
+const selectedProfession = ref<string | null>(null);
 const configs = ref<SystemConfiguration[]>([]);
 const loadingConfigs = ref(false);
+
+// Folder Logic (Fase 37): Compute unique groups and roles
+const groupOptions = computed(() => {
+  const groups = new Set<string>();
+  configs.value.forEach(c => { if (c.group) groups.add(c.group); });
+  return Array.from(groups).sort();
+});
+
+const professionOptions = computed(() => {
+  if (!selectedGroup.value) return [];
+  const roles = configs.value
+    .filter(c => c.group === selectedGroup.value)
+    .map(c => c.profession);
+  return Array.from(new Set(roles)).sort();
+});
+
+// Phase 37: fallback for legacy configs without group
+const hasGroupedConfigs = computed<boolean>(() => groupOptions.value.length > 0);
+const selectedConfigId = ref<string | null>(null); // flat fallback when no groups exist
+watch(selectedGroup, () => { selectedProfession.value = null; }); // reset profession cascade
 
 const loading = ref(false);
 const errorMessage = ref('');
@@ -47,7 +68,7 @@ onMounted(async () => {
     const snapshot = await getDocs(collection(db, 'systemConfigurations'));
     configs.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as SystemConfiguration));
   } catch {
-    // Silently ignore — la selezione reparto è opzionale; l'admin può assegnarlo in seguito
+    // Fallback: the admin will assign the config later
   } finally {
     loadingConfigs.value = false;
   }
@@ -58,13 +79,24 @@ async function handleRegister() {
   errorMessage.value = '';
 
   try {
+    // Phase 37: resolve configId — 2-step (grouped) or flat fallback (legacy no-group configs)
+    let configId: string | null = null;
+    if (hasGroupedConfigs.value) {
+      const match = configs.value.find(
+        (c) => c.group === selectedGroup.value && c.profession === selectedProfession.value,
+      );
+      configId = match?.id ?? null;
+    } else {
+      configId = selectedConfigId.value;
+    }
+
     await authStore.register(
       formData.value.email,
       formData.value.password,
       formData.value.firstName,
       formData.value.lastName,
       formData.value.dateOfBirth,
-      selectedConfigId.value,
+      configId,
     );
 
     showVerificationDialog.value = true;
@@ -113,33 +145,68 @@ function handleVerificationDismiss() {
             required
           />
 
-          <!-- Reparto (opzionale) — configId pre-selezionato (Fase 8) -->
-          <div v-if="loadingConfigs">
+          <!-- Folder Logic (Fase 37): Reparto + Ruolo -->
+          <div v-if="loadingConfigs" class="q-gutter-y-sm">
+            <q-skeleton type="QInput" height="40px" />
             <q-skeleton type="QInput" height="40px" />
           </div>
-          <q-select
-            v-else
-            v-model="selectedConfigId"
-            :options="configs"
-            option-value="id"
-            option-label="name"
-            emit-value
-            map-options
-            clearable
-            filled
-            dense
-            label="Reparto (opzionale)"
-            hint="Se non conosci il reparto, puoi lasciarlo vuoto — l'admin lo assegnerà."
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.name }}</q-item-label>
-                  <q-item-label caption>{{ scope.opt.profession }}</q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+          <!-- Cartelle (Phase 37): 2-step when groups configured -->
+          <div v-else-if="hasGroupedConfigs" class="q-gutter-y-sm">
+            <!-- 1. Selezione del Reparto (Il Gruppo/Cartella) -->
+            <q-select
+              v-model="selectedGroup"
+              :options="groupOptions"
+              clearable
+              filled
+              dense
+              label="Seleziona Reparto"
+              hint="Esempio: Terapia Intensiva, Area Medica..."
+              :rules="[(val) => !!val || 'Seleziona un reparto']"
+            >
+              <template #prepend>
+                <q-icon name="folder" color="primary" />
+              </template>
+            </q-select>
+
+            <!-- 2. Selezione del Ruolo (La Professione) -->
+            <q-select
+              v-model="selectedProfession"
+              :options="professionOptions"
+              :disable="!selectedGroup"
+              filled
+              dense
+              label="Il tuo Ruolo"
+              hint="Infermieri, Medico, OSS..."
+              :rules="[(val) => !!val || 'Seleziona il tuo ruolo']"
+            >
+              <template #prepend>
+                <q-icon
+                  :name="selectedProfession === 'Medico' ? 'medical_services' : (selectedProfession === 'OSS' ? 'volunteer_activism' : 'local_hospital')"
+                  color="primary"
+                />
+              </template>
+            </q-select>
+          </div>
+          <!-- Fallback: flat list when no groups are configured (legacy configs) -->
+          <div v-else class="q-gutter-y-sm">
+            <q-select
+              v-model="selectedConfigId"
+              :options="configs"
+              option-value="id"
+              option-label="name"
+              emit-value
+              map-options
+              filled
+              dense
+              label="Seleziona Reparto (opzionale)"
+              clearable
+              hint="L'amministratore può assegnarlo in un secondo momento"
+            >
+              <template #prepend>
+                <q-icon name="apartment" color="grey-6" />
+              </template>
+            </q-select>
+          </div>
 
           <q-input v-model="formData.password" filled dense :type="isPwd ? 'password' : 'text'" label="Password"
             autocomplete="new-password" :rules="[
