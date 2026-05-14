@@ -274,7 +274,7 @@ function goBack() {
         <q-toolbar-title>
           <!-- Active Department Indicator (Admin Mode) -->
           <div
-            v-if="uiStore.viewMode === 'admin' && configStore.activeConfig"
+            v-if="uiStore.viewMode === 'admin' && authStore.isAnyAdmin && configStore.activeConfig"
             class="row no-wrap q-gutter-md justify-center"
           >
             <q-chip
@@ -294,9 +294,9 @@ function goBack() {
             </q-chip>
           </div>
 
-          <!-- Department Label (User Mode) - Phase 37/34 -->
+          <!-- Department Label (User Mode / Standard User) -->
           <div
-            v-else-if="uiStore.viewMode === 'user' && configStore.activeConfig"
+            v-else-if="configStore.activeConfig"
             class="row no-wrap justify-center"
           >
             <div
@@ -314,7 +314,7 @@ function goBack() {
         <!-- Selectors visible ONLY in Admin Mode -->
         <template v-if="uiStore.viewMode === 'admin'">
           <GroupSelector class="q-mr-sm" />
-          <ConfigSelector v-if="configStore.availableConfigs.length > 1" class="q-mr-md" />
+          <ConfigSelector class="q-mr-md" />
         </template>
 
         <!-- In-App Notifications Badge -->

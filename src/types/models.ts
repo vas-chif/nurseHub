@@ -281,6 +281,7 @@ export interface SystemConfiguration {
   profession: 'Infermiere' | 'Medico' | 'OSS'; // Target profession
   spreadsheetUrl: string; // Google Sheets URL for this config
   gasWebUrl?: string; // Google Apps Script URL for this config
+  group?: string | null; // Phase 37: Logical grouping of configurations (e.g., "Area Medica", "Area Chirurgica")
   shiftStyles?: Record<string, { color: string; icon: string; bg?: string }>; // Phase 31: Unified shift styling
   createdAt: number;
   createdBy: string; // Admin UID

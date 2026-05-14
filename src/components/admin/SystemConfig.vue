@@ -214,6 +214,36 @@ async function saveConfig(config: SystemConfiguration) {
   }
 }
 
+/**
+ * Phase 38: Handle group transfer with explicit confirmation to prevent data loss on refresh.
+ * Reverts the change if cancelled.
+ */
+function handleGroupTransfer(config: SystemConfiguration, newGroup: string | null) {
+  // 1. Get original group from the store (unmodified)
+  const originalConfig = configStore.allConfigs.find(c => c.id === config.id);
+  const oldGroup = originalConfig?.group || '';
+  const displayNewGroup = newGroup || 'Altre Configurazioni';
+
+  if (newGroup === oldGroup) return;
+
+  $q.dialog({
+    title: 'Sposta Configurazione',
+    message: `Vuoi spostare "${config.name}" nel reparto "${displayNewGroup}"?`,
+    cancel: { label: 'Annulla', flat: true, color: 'grey' },
+    ok: { label: 'Sposta e Salva', color: 'primary', unelevated: true },
+    persistent: true
+  }).onOk(() => {
+    void (async () => {
+      // 2. Perform the update and save
+      config.group = newGroup;
+      await saveConfig(config);
+    })();
+  }).onCancel(() => {
+    // 3. Revert local state
+    config.group = oldGroup;
+  });
+}
+
 function activateConfig(configId: string) {
   configStore.setActiveConfig(configId);
   $q.notify({ type: 'positive', message: 'Configurazione attivata!' });
@@ -512,7 +542,7 @@ function deleteScenario(configId: string, scenarioId: string) {
                   </div>
                   <div class="col-12 col-sm-6 col-md-3">
                     <q-select
-                      v-model="config.group"
+                      :model-value="config.group"
                       :options="uniqueGroups"
                       label="Gruppo / Area"
                       outlined
@@ -521,7 +551,11 @@ function deleteScenario(configId: string, scenarioId: string) {
                       fill-input
                       hide-selected
                       input-debounce="0"
-                      @new-value="(val, done) => done(val, 'add-unique')"
+                      @update:model-value="val => handleGroupTransfer(config, val)"
+                      @new-value="(val, done) => {
+                        done(val, 'add-unique');
+                        handleGroupTransfer(config, val);
+                      }"
                       hint="Es: Area Medica"
                     >
                       <template v-slot:no-option>
@@ -820,6 +854,7 @@ function deleteScenario(configId: string, scenarioId: string) {
           fill-input
           hide-selected
           input-debounce="0"
+          @input-value="val => newConfigGroup = val"
           @new-value="(val, done) => done(val, 'add-unique')"
           hint="Es: Area Medica"
         >

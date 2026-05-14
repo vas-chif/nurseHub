@@ -48,16 +48,29 @@ export const useConfigStore = defineStore('config', () => {
    */
   const configsInActiveGroup = computed<SystemConfiguration[]>(() => {
     if (!activeGroupName.value) return availableConfigs.value;
-    return availableConfigs.value.filter((c) => c.group === activeGroupName.value);
+    return availableConfigs.value.filter((c) => {
+      if (activeGroupName.value === 'Altre Configurazioni') return !c.group;
+      return c.group === activeGroupName.value;
+    });
   });
 
   /**
-   * Unique group names from allConfigs — used for Cartelle comboboxes (Phase 37)
+   * Unique group names from availableConfigs — used for Cartelle comboboxes (Phase 37).
+   * Includes "Altre Configurazioni" if there are configs without a group.
    */
   const groupOptions = computed<string[]>(() => {
     const groups = new Set<string>();
-    allConfigs.value.forEach((c) => { if (c.group) groups.add(c.group); });
-    return Array.from(groups).sort();
+    let hasNullGroup = false;
+    availableConfigs.value.forEach((c) => {
+      if (c.group) {
+        groups.add(c.group);
+      } else {
+        hasNullGroup = true;
+      }
+    });
+    const result = Array.from(groups).sort();
+    if (hasNullGroup) result.push('Altre Configurazioni');
+    return result;
   });
 
   /**

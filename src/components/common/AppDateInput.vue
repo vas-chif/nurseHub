@@ -44,10 +44,30 @@ const internalDate = computed({
   }
 });
 
-// Display value for the input field (DD/MM/YYYY)
-const displayValue = computed(() => {
-  if (!props.modelValue) return '';
-  return quasarDate.formatDate(props.modelValue, 'DD/MM/YYYY');
+// Display value for the input field (DD/MM/YYYY) with manual editing support
+const displayValue = computed({
+  get: () => {
+    if (!props.modelValue) return '';
+    return quasarDate.formatDate(props.modelValue, 'DD/MM/YYYY');
+  },
+  set: (val: string) => {
+    // Phase 38: Handle manual input filtering and conversion
+    if (val && val.length === 10) {
+      const parts = val.split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        const dbFormat = `${year}-${month}-${day}`;
+        // Validate if it's a real date before emitting
+        if (quasarDate.isValid(dbFormat)) {
+          emit('update:modelValue', dbFormat);
+        }
+      }
+    } else if (!val) {
+      emit('update:modelValue', '');
+    }
+  }
 });
 
 function openPicker() {
@@ -58,9 +78,10 @@ function openPicker() {
 </script>
 
 <template>
-  <q-input :model-value="displayValue" :label="label" :readonly="true" :disable="disable" :dense="dense"
-    :filled="filled" :rules="required ? [val => !!val || 'Campo obbligatorio'] : []"
-    class="app-date-input cursor-pointer" @click="openPicker">
+  <q-input v-model="displayValue" :label="label" :readonly="readonly" :disable="disable" :dense="dense"
+    :filled="filled" mask="##/##/####" fill-mask
+    :rules="required ? [val => !!val || 'Campo obbligatorio'] : []"
+    class="app-date-input" @click="openPicker">
     <template v-slot:append>
       <q-icon :name="icon" class="cursor-pointer">
         <q-popup-proxy ref="dateProxy" cover transition-show="scale" transition-hide="scale">

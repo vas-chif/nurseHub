@@ -13,7 +13,7 @@
  * - Clearable: deselecting a group restores the full config list in ConfigSelector.
  * - JWT is never altered — activeGroupName is a presentation-layer filter only (same as viewMode Phase 34).
  */
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useSecureLogger } from '../../utils/secureLogger';
@@ -29,10 +29,20 @@ const props = defineProps({
   style: { type: Object, default: () => ({ minWidth: '160px' }) },
 });
 
-/** Only render when the user manages configs across at least 2 different groups */
-const visible = computed<boolean>(
-  () => authStore.isAnyAdmin && configStore.groupOptions.length > 1,
-);
+/** Only render when the user manages at least one group or set of configurations */
+const visible = computed<boolean>(() => authStore.isAnyAdmin && configStore.groupOptions.length >= 1);
+
+const filterText = ref('');
+const filterFn = (val: string, update: (callback: () => void) => void) => {
+  update(() => {
+    filterText.value = val.toLowerCase();
+  });
+};
+
+const displayedGroups = computed(() => {
+  if (!filterText.value) return configStore.groupOptions;
+  return configStore.groupOptions.filter((g) => g.toLowerCase().includes(filterText.value));
+});
 
 function handleGroupChange(group: string | null) {
   logger.info('Group filter changed', { group });
@@ -44,8 +54,12 @@ function handleGroupChange(group: string | null) {
   <q-select
     v-if="visible"
     :model-value="configStore.activeGroupName"
-    :options="configStore.groupOptions"
+    :options="displayedGroups"
     clearable
+    use-input
+    hide-selected
+    fill-input
+    @filter="filterFn"
     :dense="props.dense"
     :outlined="props.outlined"
     :bg-color="props.bgColor"
@@ -70,7 +84,11 @@ function handleGroupChange(group: string | null) {
         <q-item-section>
           <q-item-label>{{ scope.opt }}</q-item-label>
           <q-item-label caption>
-            {{ configStore.availableConfigs.filter((c) => c.group === scope.opt).length }} config
+          {{
+            scope.opt === 'Altre Configurazioni'
+              ? configStore.availableConfigs.filter((c) => !c.group).length
+              : configStore.availableConfigs.filter((c) => c.group === scope.opt).length
+          }} config
           </q-item-label>
         </q-item-section>
         <q-item-section v-if="scope.opt === configStore.activeGroupName" side>

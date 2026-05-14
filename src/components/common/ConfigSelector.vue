@@ -20,7 +20,7 @@ const authStore = useAuthStore();
 const props = defineProps({
   dense: { type: Boolean, default: true },
   outlined: { type: Boolean, default: true },
-  label: { type: String, default: 'Reparto' },
+  label: { type: String, default: 'Turno' },
   bgColor: { type: String, default: 'white' },
   style: { type: Object, default: () => ({ minWidth: '180px' }) },
 });
@@ -77,58 +77,25 @@ function handleConfigChange(configId: string) {
 </script>
 
 <template>
-  <q-select
-    v-if="authStore.isAnyAdmin && configStore.configsInActiveGroup.length > 0"
-    :model-value="configStore.activeConfigId"
-    :options="flatGroupedOptions"
-    option-value="id"
+  <q-select v-if="authStore.isAnyAdmin && configStore.configsInActiveGroup.length > 0"
+    :model-value="configStore.activeConfigId" :options="flatGroupedOptions" option-value="id"
     :option-label="(opt: SelectOption) => opt.type === 'item' ? opt.name! : opt.label"
-    :option-disable="(opt: SelectOption) => opt.type === 'header'"
-    emit-value
-    map-options
-    :dense="props.dense"
-    :outlined="props.outlined"
-    :label="props.label"
-    :bg-color="props.bgColor"
-    :style="props.style"
-    class="config-selector"
-    @update:model-value="handleConfigChange"
-  >
+    :option-disable="(opt: SelectOption) => opt.type === 'header'" emit-value map-options :dense="props.dense"
+    :outlined="props.outlined" :label="props.label" :bg-color="props.bgColor" :style="props.style"
+    class="config-selector" @update:model-value="handleConfigChange">
     <template #prepend>
-      <q-chip
-        v-if="configStore.activeConfig?.group && hasGroups"
-        dense
-        square
-        color="primary"
-        text-color="white"
-        size="xs"
-        class="q-mr-xs q-ml-none"
-      >
-        {{ configStore.activeConfig.group }}
-      </q-chip>
-      <q-icon v-else name="swap_horiz" color="primary" size="xs" />
+      <q-icon name="swap_horiz" color="primary" size="xs" />
     </template>
     <template #option="scope">
       <!-- Group header (non-selectable) -->
-      <q-item-label
-        v-if="scope.opt.type === 'header'"
-        header
-        class="bg-blue-1 text-primary text-weight-bold q-py-xs"
-      >
+      <q-item-label v-if="scope.opt.type === 'header'" header class="bg-blue-1 text-primary text-weight-bold q-py-xs">
         <q-icon name="folder" size="xs" class="q-mr-xs" />{{ scope.opt.label }}
       </q-item-label>
       <!-- Selectable config item -->
-      <q-item
-        v-else
-        v-bind="scope.itemProps"
-        :class="hasGroups ? 'q-pl-lg' : ''"
-      >
+      <q-item v-else v-bind="scope.itemProps">
         <q-item-section avatar>
-          <q-icon
-            :name="getRoleIcon(scope.opt.profession)"
-            :color="scope.opt.id === configStore.activeConfigId ? 'primary' : 'grey-6'"
-            size="xs"
-          />
+          <q-icon :name="getRoleIcon(scope.opt.profession)"
+            :color="scope.opt.id === configStore.activeConfigId ? 'primary' : 'grey-6'" size="xs" />
         </q-item-section>
         <q-item-section>
           <q-item-label>{{ scope.opt.name }}</q-item-label>

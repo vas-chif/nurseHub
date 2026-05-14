@@ -34,14 +34,49 @@ const logger = useSecureLogger();
 const selectedConfigId = ref<string | null>(null);
 const operators = ref<Operator[]>([]);
 const selectedOperatorId = ref<string | null>(null);
-const loadingOperators = ref(false);
-const saving = ref(false);
+// Filter for searchable select
+const filterTextGroup = ref('');
+const filterFnGroup = (val: string, update: (callback: () => void) => void) => {
+  update(() => {
+    filterTextGroup.value = val.toLowerCase();
+  });
+};
+const displayedGroups = computed(() => {
+  if (!filterTextGroup.value) return groupOptions.value;
+  return groupOptions.value.filter((g) => g.toLowerCase().includes(filterTextGroup.value));
+});
+
+const filterTextConfig = ref('');
+const filterFnConfig = (val: string, update: (callback: () => void) => void) => {
+  update(() => {
+    filterTextConfig.value = val.toLowerCase();
+  });
+};
+const displayedConfigs = computed(() => {
+  const source = hasGroupedConfigs.value ? configsInGroup.value : availableConfigs.value;
+  if (!filterTextConfig.value) return source;
+  return source.filter((c) => c.name.toLowerCase().includes(filterTextConfig.value));
+});
+
+const filterText = ref('');
+const filterFn = (val: string, update: (callback: () => void) => void) => {
+  update(() => {
+    filterText.value = val.toLowerCase();
+  });
+};
+
+const displayedOperators = computed(() => {
+  if (!filterText.value) return freeOperators.value;
+  return freeOperators.value.filter((op) => op.name.toLowerCase().includes(filterText.value));
+});
 
 // Cartelle (Phase 37): 2-step group selection
 const selectedGroup = ref<string | null>(null);
 const groupOptions = computed<string[]>(() => {
   const groups = new Set<string>();
-  availableConfigs.value.forEach((c) => { if (c.group) groups.add(c.group); });
+  availableConfigs.value.forEach((c) => {
+    if (c.group) groups.add(c.group);
+  });
   return Array.from(groups).sort();
 });
 const configsInGroup = computed<SystemConfiguration[]>(() => {
@@ -54,6 +89,9 @@ watch(selectedGroup, () => {
   operators.value = [];
   selectedOperatorId.value = null;
 });
+
+const loadingOperators = ref(false);
+const saving = ref(false);
 
 /** Tutti i reparti disponibili tranne quello corrente dell'utente */
 const availableConfigs = computed<SystemConfiguration[]>(() =>
@@ -179,9 +217,13 @@ async function onConfirm() {
         <q-select
           v-if="hasGroupedConfigs"
           v-model="selectedGroup"
-          :options="groupOptions"
+          :options="displayedGroups"
           outlined
           dense
+          use-input
+          hide-selected
+          fill-input
+          @filter="filterFnGroup"
           label="Seleziona gruppo/reparto"
           class="q-mb-sm"
           clearable
@@ -192,13 +234,17 @@ async function onConfirm() {
         <!-- Step 2 (o unico step): Configurazione specifica -->
         <q-select
           v-model="selectedConfigId"
-          :options="hasGroupedConfigs ? configsInGroup : availableConfigs"
+          :options="displayedConfigs"
           option-value="id"
           option-label="name"
           emit-value
           map-options
           outlined
           dense
+          use-input
+          hide-selected
+          fill-input
+          @filter="filterFnConfig"
           :label="hasGroupedConfigs ? 'Seleziona configurazione' : 'Seleziona reparto'"
           class="q-mb-md"
           :disable="saving || (hasGroupedConfigs && !selectedGroup)"
@@ -238,13 +284,17 @@ async function onConfirm() {
           <q-select
             v-else
             v-model="selectedOperatorId"
-            :options="freeOperators"
+            :options="displayedOperators"
             option-value="id"
             option-label="name"
             emit-value
             map-options
             outlined
             dense
+            use-input
+            hide-selected
+            fill-input
+            @filter="filterFn"
             label="Seleziona operatore libero"
             :disable="saving"
             :no-options-label="'Nessun operatore libero in questo reparto'"
