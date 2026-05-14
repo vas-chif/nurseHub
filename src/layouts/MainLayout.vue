@@ -15,6 +15,7 @@ import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useQuasar } from 'quasar';
 import ConfigSelector from '../components/common/ConfigSelector.vue';
+import GroupSelector from '../components/common/GroupSelector.vue';
 import { requestNotificationPermission } from '../services/NotificationService';
 import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
@@ -265,23 +266,15 @@ function goBack() {
   <q-layout view="lHh Lpr lFf">
     <q-header elevated class="bg-primary text-white">
       <q-toolbar class="q-pa-xs">
-        <q-btn
-          v-if="canGoBack"
-          flat
-          round
-          dense
-          icon="arrow_back"
-          @click="goBack"
-          class="q-mr-xs"
-        />
+        <q-btn v-if="canGoBack" flat round dense icon="arrow_back" @click="goBack" class="q-mr-xs" />
         <q-avatar v-else :size="isMobile ? 'sm' : '60px'" color="primary" text-color="white">
           <q-img src="../assets/icon.png" />
         </q-avatar>
 
         <q-toolbar-title>
-          <!-- Active Department Indicator (Admin Only) -->
+          <!-- Active Department Indicator (Admin Mode) -->
           <div
-            v-if="authStore.isAnyAdmin && configStore.activeConfig"
+            v-if="uiStore.viewMode === 'admin' && configStore.activeConfig"
             class="row no-wrap q-gutter-md justify-center"
           >
             <q-chip
@@ -293,13 +286,36 @@ function goBack() {
               icon="home_work"
               class="q-px-md"
             >
-              {{ configStore.activeConfig.group ? configStore.activeConfig.group + ' › ' + configStore.activeConfig.name : configStore.activeConfig.name }}
+              {{
+                configStore.activeConfig.group
+                  ? configStore.activeConfig.group + ' › ' + configStore.activeConfig.name
+                  : configStore.activeConfig.name
+              }}
             </q-chip>
+          </div>
+
+          <!-- Department Label (User Mode) - Phase 37/34 -->
+          <div
+            v-else-if="uiStore.viewMode === 'user' && configStore.activeConfig"
+            class="row no-wrap justify-center"
+          >
+            <div
+              class="row items-center q-px-md q-py-xs rounded-borders"
+              style="border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 8px"
+            >
+              <q-icon name="apartment" :size="isMobile ? 'xs' : 'sm'" class="q-mr-sm" />
+              <span :class="isMobile ? 'text-caption' : 'text-subtitle1'" class="text-weight-bold">
+                {{ configStore.activeConfig.name }}
+              </span>
+            </div>
           </div>
         </q-toolbar-title>
 
-        <!-- Global Config Selector (all admins with multiple configs) -->
-        <ConfigSelector v-if="authStore.isAnyAdmin && configStore.availableConfigs.length > 1" class="q-mr-md" />
+        <!-- Selectors visible ONLY in Admin Mode -->
+        <template v-if="uiStore.viewMode === 'admin'">
+          <GroupSelector class="q-mr-sm" />
+          <ConfigSelector v-if="configStore.availableConfigs.length > 1" class="q-mr-md" />
+        </template>
 
         <!-- In-App Notifications Badge -->
         <q-btn flat round dense icon="notifications" class="q-mr-sm">
@@ -310,31 +326,22 @@ function goBack() {
             <q-list style="min-width: 380px; max-width: 95vw">
               <div class="row items-center justify-between q-pa-sm">
                 <div class="text-subtitle2">Notifiche</div>
-                <q-btn
-                  v-if="notificationStore.unreadCount > 0"
-                  flat
-                  dense
-                  color="primary"
-                  label="Segna tutte come lette"
-                  size="md"
-                  @click="notificationStore.resetUnread()"
-                />
+                <q-btn v-if="notificationStore.unreadCount > 0" flat dense color="primary"
+                  label="Segna tutte come lette" size="md" @click="notificationStore.resetUnread()" />
               </div>
               <q-separator />
 
               <template v-if="notificationStore.notifications.length > 0">
                 <q-item v-for="n in notificationStore.notifications" :key="n.id">
                   <q-item-section avatar>
-                    <q-icon
-                      :name="n.type === 'NEW_OPPORTUNITY' ? 'campaign' : 'notifications'"
-                      :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'"
-                    />
+                    <q-icon :name="n.type === 'NEW_OPPORTUNITY' ? 'campaign' : 'notifications'"
+                      :color="n.type === 'NEW_OPPORTUNITY' ? 'secondary' : 'primary'" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label lines="3">{{ n.message }}</q-item-label>
                     <q-item-label caption>{{
                       new Date(n.createdAt).toLocaleTimeString()
-                    }}</q-item-label>
+                      }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </template>
@@ -348,15 +355,8 @@ function goBack() {
           </q-menu>
         </q-btn>
 
-        <q-btn-dropdown
-          class="q-mr-md"
-          flat
-          rounded
-          dense
-          icon="account_circle"
-          :label="authStore.currentUser?.firstName"
-          no-caps
-        >
+        <q-btn-dropdown class="q-mr-md" flat rounded dense icon="account_circle"
+          :label="authStore.currentUser?.firstName" no-caps>
           <q-list>
             <q-item clickable v-close-popup @click="router.push('/profile')">
               <q-item-section avatar><q-icon name="person" /></q-item-section>
@@ -373,29 +373,20 @@ function goBack() {
               <q-separator />
               <q-item>
                 <q-item-section avatar>
-                  <q-icon
-                    :name="uiStore.viewMode === 'admin' ? 'admin_panel_settings' : 'person'"
-                    :color="uiStore.viewMode === 'admin' ? 'primary' : 'grey-6'"
-                  />
+                  <q-icon :name="uiStore.viewMode === 'admin' ? 'admin_panel_settings' : 'person'"
+                    :color="uiStore.viewMode === 'admin' ? 'primary' : 'grey-6'" />
                 </q-item-section>
                 <q-item-section>
                   <q-item-label class="text-weight-bold">Vista Corrente</q-item-label>
-                  <q-item-label
-                    caption
-                    :class="uiStore.viewMode === 'admin' ? 'text-primary' : 'text-grey-7'"
-                  >
+                  <q-item-label caption :class="uiStore.viewMode === 'admin' ? 'text-primary' : 'text-grey-7'">
                     {{
                       uiStore.viewMode === 'admin' ? '🛡️ Modalità Admin' : '👤 Modalità Operatore'
                     }}
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-toggle
-                    :model-value="uiStore.viewMode === 'admin'"
-                    @update:model-value="uiStore.setViewMode($event ? 'admin' : 'user')"
-                    color="primary"
-                    keep-color
-                  />
+                  <q-toggle :model-value="uiStore.viewMode === 'admin'"
+                    @update:model-value="uiStore.setViewMode($event ? 'admin' : 'user')" color="primary" keep-color />
                 </q-item-section>
               </q-item>
             </template>
@@ -412,120 +403,62 @@ function goBack() {
 
     <q-page-container v-touch-swipe.horizontal.100="handleSwipe">
       <router-view v-slot="{ Component }">
-        <transition
-          appear
-          enter-active-class="animated fadeIn"
-          leave-active-class="animated fadeOut"
-          mode="out-in"
-        >
+        <transition appear enter-active-class="animated fadeIn" leave-active-class="animated fadeOut" mode="out-in">
           <component :is="Component" />
         </transition>
       </router-view>
     </q-page-container>
 
     <q-footer bordered class="bg-white text-primary">
-      <q-tabs
-        no-caps
-        active-color="primary"
-        indicator-color="transparent"
-        class="text-grey"
-        align="justify"
-      >
+      <q-tabs no-caps active-color="primary" indicator-color="transparent" class="text-grey" align="justify">
         <!-- Home: always visible for regular users; for admins only in admin-mode or if explicitly enabled -->
-        <q-route-tab
-          v-if="authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('home')"
-          to="/"
-          icon="dashboard"
-          label="Home"
-        />
-        <q-route-tab
-          v-if="
-            authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('calendar')
-          "
-          to="/calendar"
-          icon="calendar_month"
-          label="Turni"
-        />
+        <q-route-tab v-if="authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('home')" to="/"
+          icon="dashboard" label="Home" />
+        <q-route-tab v-if="
+          authStore.effectiveIsUser || !authStore.isAnyAdmin || uiStore.isTabVisible('calendar')
+        " to="/calendar" icon="calendar_month" label="Turni" />
 
         <!-- User-mode tabs: visible for regular users OR admins in user-mode -->
-        <q-route-tab
-          v-if="authStore.effectiveIsUser"
-          to="/requests"
-          icon="event_note"
-          label="Richieste"
-        />
+        <q-route-tab v-if="authStore.effectiveIsUser" to="/requests" icon="event_note" label="Richieste" />
 
         <!-- Admin-only tabs: visible ONLY in Admin Mode -->
-        <q-route-tab
-          v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('new_request')"
-          to="/requests"
-          icon="add_circle"
-          label="Nuova Richiesta"
-        />
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('new_request')" to="/requests"
+          icon="add_circle" label="Nuova Richiesta" />
 
-        <q-route-tab
-          v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_requests')"
-          to="/admin/requests"
-          icon="event_note"
-          label="Richieste"
-        >
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_requests')" to="/admin/requests"
+          icon="event_note" label="Richieste">
           <q-badge v-if="notificationStore.pendingRequestsCount > 0" color="red" floating>
             {{ notificationStore.pendingRequestsCount }}
           </q-badge>
         </q-route-tab>
 
-        <q-route-tab
-          v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_users')"
-          to="/admin/users"
-          icon="people"
-          label="Utenti"
-        />
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_users')" to="/admin/users"
+          icon="people" label="Utenti" />
 
-        <q-route-tab
-          v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_analytics')"
-          to="/admin/analytics"
-          icon="analytics"
-          label="Stats"
-        />
+        <q-route-tab v-if="authStore.effectiveIsAdmin && uiStore.isTabVisible('admin_analytics')" to="/admin/analytics"
+          icon="analytics" label="Stats" />
 
-        <q-route-tab
-          v-if="
-            authStore.isSuperAdmin &&
-            authStore.effectiveIsAdmin &&
-            uiStore.isTabVisible('admin_system')
-          "
-          to="/admin"
-          icon="admin_panel_settings"
-          label="Admin"
-        />
+        <q-route-tab v-if="
+          authStore.isSuperAdmin &&
+          authStore.effectiveIsAdmin &&
+          uiStore.isTabVisible('admin_system')
+        " to="/admin" icon="admin_panel_settings" label="Admin" />
       </q-tabs>
       <div class="row justify-center q-mx-md">
         <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>
         <div class="text-center text-caption text-primary row justify-between items-center">
           <div>
-            <router-link
-              to="/terms"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/terms" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Termini e Condizioni
             </router-link>
           </div>
           <div>
-            <router-link
-              to="/privacy"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/privacy" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Privacy Policy
             </router-link>
           </div>
           <div>
-            <router-link
-              to="/license"
-              class="text-primary text-caption q-px-md"
-              style="text-decoration: none"
-            >
+            <router-link to="/license" class="text-primary text-caption q-px-md" style="text-decoration: none">
               Licenze
             </router-link>
           </div>

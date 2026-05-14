@@ -6,6 +6,9 @@
  * @author Nurse Hub Team
  * @created 2026-03-15
  * @modified 2026-05-14
+ * @notes
+ * - Source switches from availableConfigs to configsInActiveGroup (Phase 38) for cascading
+ *   Group→Config navigation when GroupSelector is active.
  */
 import { computed } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
@@ -26,13 +29,14 @@ type GroupHeader = { type: 'header'; label: string; id?: undefined; name?: undef
 type ConfigItem = { type: 'item'; id: string; name: string; profession: string; group: string | null };
 type SelectOption = GroupHeader | ConfigItem;
 
+/** Whether any config in the current group-filtered list has a group set */
 const hasGroups = computed<boolean>(() =>
-  configStore.availableConfigs.some((c) => c.group),
+  configStore.configsInActiveGroup.some((c) => c.group),
 );
 
 const flatGroupedOptions = computed<SelectOption[]>(() => {
   if (!hasGroups.value) {
-    return configStore.availableConfigs.map((c) => ({
+    return configStore.configsInActiveGroup.map((c) => ({
       type: 'item' as const,
       id: c.id,
       name: c.name,
@@ -40,8 +44,8 @@ const flatGroupedOptions = computed<SelectOption[]>(() => {
       group: c.group ?? null,
     }));
   }
-  const grouped = new Map<string, typeof configStore.availableConfigs>();
-  configStore.availableConfigs.forEach((c) => {
+  const grouped = new Map<string, typeof configStore.configsInActiveGroup>();
+  configStore.configsInActiveGroup.forEach((c) => {
     const key = c.group || '';
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(c);
@@ -74,7 +78,7 @@ function handleConfigChange(configId: string) {
 
 <template>
   <q-select
-    v-if="authStore.isAnyAdmin && configStore.availableConfigs.length > 0"
+    v-if="authStore.isAnyAdmin && configStore.configsInActiveGroup.length > 0"
     :model-value="configStore.activeConfigId"
     :options="flatGroupedOptions"
     option-value="id"
