@@ -3,7 +3,7 @@
  * @description Pinia store for managing system-wide configurations, department settings, and environment isolation.
  * @author Nurse Hub Team
  * @created 2026-03-05
- * @modified 2026-04-27
+ * @modified 2026-05-14
  * @notes
  * - Handles the activation/deactivation of hierarchical system configurations.
  * - Implements config-fencing: filters available configurations based on Admin/SuperAdmin managed claims.
@@ -40,6 +40,15 @@ export const useConfigStore = defineStore('config', () => {
   });
 
   /**
+   * Unique group names from allConfigs — used for Cartelle comboboxes (Phase 37)
+   */
+  const groupOptions = computed<string[]>(() => {
+    const groups = new Set<string>();
+    allConfigs.value.forEach((c) => { if (c.group) groups.add(c.group); });
+    return Array.from(groups).sort();
+  });
+
+  /**
    * Load all configurations and identify the active one
    */
   async function loadConfigurations() {
@@ -64,7 +73,7 @@ export const useConfigStore = defineStore('config', () => {
         const savedId = localStorage.getItem(LAST_CONFIG_KEY);
         if (savedId) {
           // Verify if the savedId is still valid for this user
-          const isAvailable = availableConfigs.value.some(c => c.id === savedId);
+          const isAvailable = availableConfigs.value.some((c) => c.id === savedId);
           if (isAvailable) {
             targetId = savedId;
             logger.info('Restored last active configuration from storage', { targetId });
@@ -120,6 +129,7 @@ export const useConfigStore = defineStore('config', () => {
     activeConfigId,
     allConfigs,
     availableConfigs,
+    groupOptions,
     loading,
     loadConfigurations,
     setActiveConfig,
