@@ -9,6 +9,12 @@ export default defineConfig((ctx) => {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,
 
+    // Bypass opening Android Studio during dev to keep the dev server alive
+    // /usr/bin/true is a Unix no-op binary: exits 0 without launching anything
+    bin: {
+      linuxAndroidStudio: '/usr/bin/true'
+    },
+
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
