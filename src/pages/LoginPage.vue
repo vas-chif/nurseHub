@@ -161,23 +161,32 @@ async function handleLogin() {
       </q-card-section>
     </q-card>
 
-    <!-- Phase 38 P6: Biometric opt-in dialog (shown once after first successful login on Android) -->
-    <q-dialog v-model="showBiometricOptIn" persistent>
-      <q-card style="min-width: 320px; max-width: 90vw">
-        <q-card-section>
-          <div class="text-h6">Accesso biometrico</div>
+    <!-- Phase 40: Redesigned Premium Biometric Opt-in Dialog -->
+    <q-dialog v-model="showBiometricOptIn" persistent backdrop-filter="blur(10px)">
+      <q-card class="glass-card q-pa-sm" style="min-width: 340px; max-width: 90vw; border-radius: 20px;">
+        <q-card-section class="text-center q-pb-none">
+          <q-avatar size="72px" font-size="42px" color="primary" text-color="white" icon="fingerprint" class="q-mb-md shadow-2" />
+          <div class="text-h6 text-weight-bold text-primary">Accesso Biometrico</div>
         </q-card-section>
-        <q-card-section class="q-pt-none">
-          <p class="text-body2">
-            Vuoi usare l'impronta digitale o il PIN del dispositivo per accedere a NurseHub in futuro?
+
+        <q-card-section class="text-center">
+          <p class="text-body1 text-grey-9 q-mb-xs">
+            Vuoi accedere più velocemente?
           </p>
-          <p class="text-caption text-grey-6">
-            Le tue credenziali non vengono mai salvate sul dispositivo.
+          <p class="text-body2 text-grey-7">
+            Abilita l'impronta digitale o il PIN per sbloccare NurseHub in un tocco.
           </p>
+          <div class="q-mt-md q-pa-sm bg-blue-1 rounded-borders row items-center no-wrap">
+            <q-icon name="info" color="primary" size="xs" class="q-mr-sm" />
+            <div class="text-caption text-primary text-left">
+              GDPR: Le tue credenziali rimangono sicure nel chip del telefono.
+            </div>
+          </div>
         </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="No grazie" @click="handleBiometricOptIn(false)" />
-          <q-btn flat label="Sì, abilita" color="primary" @click="handleBiometricOptIn(true)" />
+
+        <q-card-actions align="center" class="q-pb-md q-gutter-x-sm">
+          <q-btn flat label="Più tardi" color="grey-7" no-caps class="q-px-md" @click="handleBiometricOptIn(false)" />
+          <q-btn unelevated label="Sì, abilita ora" color="primary" no-caps class="q-px-lg" style="border-radius: 12px;" @click="handleBiometricOptIn(true)" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -206,3 +215,13 @@ async function handleLogin() {
     </q-dialog>
   </div>
 </template>
+
+<style scoped>
+.glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+}
+</style>
