@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "nursHub.com"
+    namespace "com.nursehub.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "nursHub.com"
+        applicationId "com.nursehub.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

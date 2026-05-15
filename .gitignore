@@ -47,3 +47,7 @@ test-duplicates.js
 
 # Backend credentials
 api/service-account.json
+
+# Firebase native credentials (contains API keys — never commit)
+src-capacitor/android/app/google-services.json
+tempfolder/nursehub-cbb32-firebase-adminsdk-*.json
