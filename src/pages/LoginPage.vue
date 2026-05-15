@@ -1,19 +1,22 @@
 /**
  * @file LoginPage.vue
- * @description Entry point for user authentication. Handles login and password recovery.
+ * @description Entry point for user authentication. Handles login, password recovery and biometric opt-in.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-04-27
+ * @modified 2026-05-15
  * @notes
  * - Integrates with Firebase Auth for secure credentials management.
  * - Handles email verification and role-based initial redirection.
  * - Includes a dialog for password reset via email.
+ * - Phase 38 P6: shows biometric opt-in dialog after first successful login (native Android only).
  */
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import { Capacitor } from '@capacitor/core';
 import { useAuthStore } from '../stores/authStore';
+import { useBiometricAuth } from '../composables/useBiometricAuth';
 
 const $q = useQuasar();
 const router = useRouter();
@@ -24,6 +27,10 @@ const password = ref('');
 const loading = ref(false);
 const errorMessage = ref('');
 const isPwd = ref(true);
+
+// Phase 38 P6: Biometric opt-in
+const biometric = useBiometricAuth();
+const showBiometricOptIn = ref(false);
 
 // Password Reset refs
 const showResetDialog = ref(false);
@@ -65,6 +72,24 @@ async function handleResetPassword() {
   }
 }
 
+/** Phase 37: Role-Aware Smart Redirect (§1.10) */
+function navigateAfterLogin(): void {
+  if (!authStore.isVerified && !authStore.isAnyAdmin) {
+    void router.push('/pending-verification');
+  } else if (authStore.isAnyAdmin) {
+    void router.push('/admin/users');
+  } else {
+    void router.push('/');
+  }
+}
+
+/** Phase 38 P6: Called from opt-in dialog — navigates after user answers the dialog. */
+function handleBiometricOptIn(accepted: boolean): void {
+  biometric.setOptIn(accepted);
+  showBiometricOptIn.value = false;
+  navigateAfterLogin();
+}
+
 async function handleLogin() {
   loading.value = true;
   errorMessage.value = '';
@@ -72,16 +97,16 @@ async function handleLogin() {
   try {
     await authStore.login(email.value, password.value);
 
-    // Phase 37: Role-Aware Smart Redirect (§1.10)
-    if (!authStore.isVerified && !authStore.isAnyAdmin) {
-      void router.push('/pending-verification');
-    } else if (authStore.isAnyAdmin) {
-      // Admins land on User Management to see rotations/approvals
-      void router.push('/admin/users');
-    } else {
-      // Regular users land on personal schedule
-      void router.push('/');
+    // Phase 38 P6: Show biometric opt-in once (native Android only; never asked before)
+    if (Capacitor.isNativePlatform() && !biometric.hasBeenAsked()) {
+      const available = await biometric.isBiometricAvailable();
+      if (available) {
+        showBiometricOptIn.value = true;
+        return; // navigation delegated to handleBiometricOptIn()
+      }
     }
+
+    navigateAfterLogin();
   } catch (error: unknown) {
     const err = error as { message?: string; code?: string };
     if (err.message === 'EMAIL_NOT_VERIFIED') {
@@ -135,6 +160,27 @@ async function handleLogin() {
         </q-form>
       </q-card-section>
     </q-card>
+
+    <!-- Phase 38 P6: Biometric opt-in dialog (shown once after first successful login on Android) -->
+    <q-dialog v-model="showBiometricOptIn" persistent>
+      <q-card style="min-width: 320px; max-width: 90vw">
+        <q-card-section>
+          <div class="text-h6">Accesso biometrico</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p class="text-body2">
+            Vuoi usare l'impronta digitale o il PIN del dispositivo per accedere a NurseHub in futuro?
+          </p>
+          <p class="text-caption text-grey-6">
+            Le tue credenziali non vengono mai salvate sul dispositivo.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="No grazie" @click="handleBiometricOptIn(false)" />
+          <q-btn flat label="Sì, abilita" color="primary" @click="handleBiometricOptIn(true)" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Dialog for Password Reset -->
     <q-dialog v-model="showResetDialog" persistent>

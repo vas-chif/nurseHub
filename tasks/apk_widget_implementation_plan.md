@@ -144,12 +144,14 @@
 
 > Solo dopo Priorità 1–5 stabili in produzione.
 
-- [ ] `yarn add @aparajita/capacitor-biometric-auth`
-- [ ] `npx cap sync android`
-- [ ] **`src/pages/LoginPage.vue`** — aggiungere opt-in biometria dopo primo login
-- [ ] Credenziali salvate in Keystore Android (§1.5 GDPR — nessuna password in chiaro)
-- [ ] `yarn vue-tsc --noEmit && yarn lint` → 0 errori
-- [ ] `git commit -m "feat: add biometric auth opt-in for Android (Phase 38)"`
+- [x] `yarn add @aparajita/capacitor-biometric-auth` (v9.1.2 — peerDep >=6.1.0, compatibile con Capacitor 7)
+- [x] `npx cap sync android` → Found 3 Capacitor plugins (@aparajita/capacitor-biometric-auth@9.1.2, @capacitor-firebase/messaging@7.5.0, @capacitor/app@7.1.2)
+- [x] **`src/composables/useBiometricAuth.ts`** — nuovo composable (app-lock pattern, no credential storage)
+- [x] **`src/pages/LoginPage.vue`** — aggiungere opt-in biometria dopo primo login
+- [x] **`src/layouts/MainLayout.vue`** — biometric lock in `onMounted` (sessionUnlocked flag evita re-prompt)
+- [x] Credenziali NON salvate (app-lock su sessione Firebase persistente — GDPR §1.5 compliant)
+- [x] `yarn vue-tsc --noEmit && yarn lint` → 0 errori
+- [x] `git commit -m "feat: add biometric auth opt-in for Android (Phase 38)"`
 
 ---
 

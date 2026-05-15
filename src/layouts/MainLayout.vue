@@ -14,9 +14,11 @@ import { useUiStore } from '../stores/uiStore';
 import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useQuasar } from 'quasar';
+import { Capacitor } from '@capacitor/core';
 import ConfigSelector from '../components/common/ConfigSelector.vue';
 import GroupSelector from '../components/common/GroupSelector.vue';
 import { requestNotificationPermission } from '../services/NotificationService';
+import { useBiometricAuth } from '../composables/useBiometricAuth';
 import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
 const router = useRouter();
@@ -28,6 +30,7 @@ const syncStore = useSyncStore();
 const uiStore = useUiStore();
 const $q = useQuasar();
 const isMobile = computed(() => $q.platform.is.mobile);
+const biometricAuth = useBiometricAuth();
 
 let unsubs: (() => void)[] = [];
 
@@ -85,6 +88,20 @@ function activateListeners() {
 
 // Load configurations on mount
 onMounted(async () => {
+  // Phase 38 P6: Biometric app-lock (native Android only — §1.5 GDPR, no credentials stored)
+  if (Capacitor.isNativePlatform() && biometricAuth.isOptedIn() && !biometricAuth.isSessionUnlocked()) {
+    $q.loading.show({ message: 'Verifica biometrica...' });
+    const unlocked = await biometricAuth.authenticate();
+    $q.loading.hide();
+    if (unlocked) {
+      biometricAuth.setSessionUnlocked();
+    } else {
+      await authStore.logout();
+      void router.push('/login');
+      return;
+    }
+  }
+
   scheduleStore.init();
 
   // 0. Redirect to last path if on home

@@ -2,6 +2,16 @@
 # yarn lockfile v1
 
 
+"@aparajita/capacitor-biometric-auth@^9.0.0":
+  version "9.1.2"
+  resolved "https://registry.yarnpkg.com/@aparajita/capacitor-biometric-auth/-/capacitor-biometric-auth-9.1.2.tgz#65f3b9b06d171c0df7dc580ec2a800a5a477bfba"
+  integrity sha512-cDcTFOQW4iI1+/AwkA0hRfiP53BuCSWvoxxkyp2NC7Hf0tNSg5fZ4zmXI/PcpLKUR7cd91TxnAxWYAAGJKOBig==
+  dependencies:
+    "@capacitor/android" "^7.4.4"
+    "@capacitor/app" "^7.1.0"
+    "@capacitor/core" "^7.4.4"
+    "@capacitor/ios" "^7.4.4"
+
 "@apideck/better-ajv-errors@^0.3.1":
   version "0.3.6"
   resolved "https://registry.yarnpkg.com/@apideck/better-ajv-errors/-/better-ajv-errors-0.3.6.tgz#957d4c28e886a64a8141f7522783be65733ff097"
@@ -813,10 +823,20 @@
   resolved "https://registry.yarnpkg.com/@capacitor-firebase/messaging/-/messaging-8.2.0.tgz#d6f99632fb8d93ca0a0443c593a02d53f0c946af"
   integrity sha512-zjgvBuJSFfaLVL1sU2zwg68J1nCl+wLvjCNUo5tQJyO8XilUXA0z99BKJx6S6/iSB3+zznxNeoX1Kx54bVpCtg==
 
+"@capacitor/android@^7.4.4":
+  version "7.6.5"
+  resolved "https://registry.yarnpkg.com/@capacitor/android/-/android-7.6.5.tgz#6b43f00dcbdccad9602d4ba84ffd4eacd8611bc9"
+  integrity sha512-FCNSo5bWkqCIuNt2OgG6IUsJJaYlghzbzlFf4IiHkFtir18FCyqHVGHszvtXB+npT7HQ9JQOZ4MQRDsgczKEGQ==
+
 "@capacitor/android@^8.3.4":
   version "8.3.4"
   resolved "https://registry.yarnpkg.com/@capacitor/android/-/android-8.3.4.tgz#9719f46d16eeea1c8e00ba57dff55d8cd2a09140"
   integrity sha512-7gJjrG3X32Am1QMLqgMztWTYMLMVNE+VZwhekNxhvYizH4mOV05vH+rC9B+f17bCkYZfyu/qXQX6hoY7kLeVZw==
+
+"@capacitor/app@^7.1.0":
+  version "7.1.2"
+  resolved "https://registry.yarnpkg.com/@capacitor/app/-/app-7.1.2.tgz#6b97ac3c36fc21a905142bb7b99f27b9bcbee48b"
+  integrity sha512-d4I/oF/PRu4megL7/IGKYfe5j7yzSON1FRFgq6kH+m5kH6g7V+wyjHRLauCzGNjdRx4S+nWOumINds0qcRBtKg==
 
 "@capacitor/app@^8.1.0":
   version "8.1.0"
@@ -846,12 +866,24 @@
     tslib "^2.8.1"
     xml2js "^0.6.2"
 
+"@capacitor/core@^7.4.4":
+  version "7.6.5"
+  resolved "https://registry.yarnpkg.com/@capacitor/core/-/core-7.6.5.tgz#6a33094bfcd2dc2e6c09cf86e2ab844eac2e4c39"
+  integrity sha512-JWyxD9LaK1oY588B/khJIG3Ec4NHI/Ki4v1b4XzqPNt2a27au0F2AhLTwYexV4Bp3Ruxf+8oYqxFAC8/7sGBWA==
+  dependencies:
+    tslib "^2.1.0"
+
 "@capacitor/core@^8.3.4":
   version "8.3.4"
   resolved "https://registry.yarnpkg.com/@capacitor/core/-/core-8.3.4.tgz#2ffc806b039bbf85c19eda54090089289b48bfc5"
   integrity sha512-CqRQCkb6HXxcx/N7s+hHTN6ef2CmamFiRMITwm4qB840ph56mS42bzUgn6tKCP+RZjdDweiRHj9ytDDeN6jFag==
   dependencies:
     tslib "^2.1.0"
+
+"@capacitor/ios@^7.4.4":
+  version "7.6.5"
+  resolved "https://registry.yarnpkg.com/@capacitor/ios/-/ios-7.6.5.tgz#4049e78d67821d666441af696d41ff70175655f0"
+  integrity sha512-jJK3wW65GAsmzgaswoePWDQ7mADIwQNWqWGcOeZyrPP7+lzW5/8gGqu9ASFGbG+GplFfgwRWzd4oH/7xb+lYFw==
 
 "@dataconnect/generated@link:src/dataconnect-generated":
   version "0.0.0"
