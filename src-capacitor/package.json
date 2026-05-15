@@ -1,0 +1,14 @@
+{
+  "name": "nursehub",
+  "version": "0.0.1",
+  "description": "It is a web and mobile app for manger work in hopitale",
+  "author": "Your Name <you@example.com>",
+  "private": true,
+  "dependencies": {
+    "@capacitor-firebase/messaging": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  }
+}

@@ -9,7 +9,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useScheduleStore } from '../../stores/scheduleStore';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { date as quasarDate } from 'quasar';
-import type { ShiftStyle } from '../../types/components';
+import { getShiftStyleForCode } from '../../composables/useShiftLogic';
 
 const authStore = useAuthStore();
 const configStore = useConfigStore();
@@ -61,7 +61,7 @@ const currentOperator = computed(() => {
   return ops.find((op) => op.id === targetId) || authStore.currentOperator;
 });
 
-const shiftStyles = computed(() => configStore.activeConfig?.shiftStyles || {});
+
 
 // Grid Generation
 const dayNames = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
@@ -116,30 +116,7 @@ function getNoteForDate(d: Date) {
   return currentOperator.value.notes?.[key] || null;
 }
 
-function getShiftStyles(code: string | null): ShiftStyle {
-  const map: Record<string, ShiftStyle> = {
-    M: { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
-    P: { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
-    N: { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
-    R: { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
-    S: { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
-    A: { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
-    '': { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' },
-  };
 
-  if (!code) return map['']!;
-  const custom = shiftStyles.value[code];
-  if (custom)
-    return {
-      color: custom.color,
-      icon: custom.icon,
-      label: code,
-      bg: custom.bg || 'rgba(0,0,0,0.05)',
-    };
-
-  const char = code.charAt(0).toUpperCase();
-  return (map[char] || map[''])!;
-}
 </script>
 
 <template>
@@ -175,8 +152,8 @@ function getShiftStyles(code: string | null): ShiftStyle {
         <div
           class="elite-shift-card full-height relative-position shadow-1"
           :style="{
-            '--shift-color': getShiftStyles(getShiftForDate(day.date)).color,
-            '--shift-bg': getShiftStyles(getShiftForDate(day.date)).bg,
+            '--shift-color': getShiftStyleForCode(getShiftForDate(day.date)).color,
+            '--shift-bg': getShiftStyleForCode(getShiftForDate(day.date)).bg,
           }"
         >
           <!-- Day Number -->
@@ -189,14 +166,14 @@ function getShiftStyles(code: string | null): ShiftStyle {
           >
             <div
               class="shift-letter text-weight-bolder"
-              :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
+              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }"
             >
               {{ getShiftForDate(day.date) }}
             </div>
             <q-icon
-              :name="getShiftStyles(getShiftForDate(day.date)).icon"
+              :name="getShiftStyleForCode(getShiftForDate(day.date)).icon"
               size="12px"
-              :style="{ color: getShiftStyles(getShiftForDate(day.date)).color }"
+              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }"
               class="q-mt-xs"
             />
             

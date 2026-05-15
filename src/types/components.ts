@@ -21,6 +21,7 @@ export interface AppDateInputProps {
   hideLabel?: boolean;
   flat?: boolean;
   borderless?: boolean;
+  hideInput?: boolean;
 }
 
 /**

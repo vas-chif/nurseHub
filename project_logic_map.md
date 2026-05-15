@@ -219,3 +219,13 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
   - In Modalità Admin: nessuna auto-selezione → il selettore multi-operatore è disponibile per la gestione globale.
 
 - **Componenti Aggiornati**: `uiStore.ts`, `authStore.ts`, `MainLayout.vue`, `ShiftCalendar.vue`.
+
+### 10. Gestione Gerarchica Multi-Reparto (Phase 38)
+- **Modello "Cartella" (Reparto)**: Le configurazioni sono raggruppate per `group`.
+- **Cascading Filter**: L'header implementa una ricerca gerarchica. Selezionando un Reparto (es. "Terapia Intensiva"), il selettore dei turni mostra solo i ruoli di quell'area.
+- **Dual-View Adaptation**: Gli utenti standard vedono solo un'etichetta statica del proprio ruolo, mentre gli Admin hanno i selettori di ricerca attivi.
+
+### 11. Mobile UX & Data Entry (Phase 39)
+- **AppDateInput Editable**: Supporto alla digitazione manuale (`mask`) oltre al picker grafico.
+- **Icon-Only Mode**: Proprietà `hideInput` per inserire il selettore data in spazi angusti (es. header delle card) senza sfondo grigio.
+- **Safety Transfers**: Spostamento di configurazioni tra reparti protetto da conferma e salvataggio atomico automatico.

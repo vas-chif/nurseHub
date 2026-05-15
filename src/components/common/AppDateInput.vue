@@ -23,7 +23,11 @@ const props = withDefaults(defineProps<AppDateInputProps>(), {
   required: false,
   dense: true,
   filled: true,
-  icon: 'event'
+  icon: 'event',
+  hideLabel: false,
+  flat: false,
+  borderless: false,
+  hideInput: false
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -78,10 +82,10 @@ function openPicker() {
 </script>
 
 <template>
-  <q-input v-model="displayValue" :label="label" :readonly="readonly" :disable="disable" :dense="dense"
-    :filled="filled" mask="##/##/####" fill-mask
+  <q-input v-model="displayValue" :label="hideLabel ? undefined : label" :readonly="readonly" :disable="disable" :dense="dense"
+    :filled="filled && !flat" :flat="flat" :borderless="borderless" mask="##/##/####" fill-mask
     :rules="required ? [val => !!val || 'Campo obbligatorio'] : []"
-    class="app-date-input" @click="openPicker">
+    :class="['app-date-input', { 'hide-input': hideInput }]" @click="openPicker">
     <template v-slot:append>
       <q-icon :name="icon" class="cursor-pointer">
         <q-popup-proxy ref="dateProxy" cover transition-show="scale" transition-hide="scale">
@@ -104,5 +108,20 @@ function openPicker() {
 
 .app-date-input :deep(.q-field__native) {
   cursor: pointer;
+}
+
+.app-date-input.hide-input :deep(.q-field__native) {
+  display: none;
+}
+
+.app-date-input.hide-input :deep(.q-field__append) {
+  padding: 0;
+  justify-content: center;
+  width: 100%;
+}
+
+.app-date-input.hide-input :deep(.q-field__control) {
+  padding: 0;
+  min-height: unset;
 }
 </style>

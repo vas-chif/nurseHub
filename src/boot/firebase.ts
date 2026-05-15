@@ -3,12 +3,13 @@
  * @description Quasar boot file for Firebase initialization (Auth, Firestore, Messaging).
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-04-27
+ * @modified 2026-05-15
  * @notes
  * - Implements persistent multi-tab local cache for Firestore.
  * - Configures IndexedDB-first auth persistence for reliable PWA sessions.
  * - Initializes Web Push (FCM) messaging with foreground notification handlers.
  * - Uses smartEnvironment for validated configuration retrieval.
+ * - Phase 38: adds Capacitor deep link listener (appUrlOpen) for native Android.
  */
 import { boot } from 'quasar/wrappers';
 import { initializeApp } from 'firebase/app';
@@ -26,7 +27,10 @@ import {
   type Auth,
 } from 'firebase/auth';
 import { getMessaging, type Messaging, isSupported, onMessage } from 'firebase/messaging';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import type { App } from 'vue';
+import type { Router } from 'vue-router';
 import { smartEnv } from 'src/config/smartEnvironment';
 import { useSecureLogger } from 'src/utils/secureLogger';
 import { Notify } from 'quasar';
@@ -78,7 +82,7 @@ if (typeof window !== 'undefined') {
             icon: 'notifications_active',
             position: 'top',
             timeout: 10000,
-            actions: [{ label: 'OK', color: 'white' }]
+            actions: [{ label: 'OK', color: 'white' }],
           });
         });
       } else {
@@ -92,12 +96,29 @@ if (typeof window !== 'undefined') {
 
 logger.info('Firebase initialized successfully');
 
-export default boot(({ app }: { app: App }) => {
-  // Provide globally for Options API components
-  app.config.globalProperties.$db = db;
-  app.config.globalProperties.$auth = auth;
+export default boot(
+  ({
+    app,
+    router,
+  }: {
+    app: App;
+    router: Router;
+  }) => {
+    // Provide globally for Options API components
+    app.config.globalProperties.$db = db;
+    app.config.globalProperties.$auth = auth;
 
-  logger.debug('Firebase instances added to global properties');
-});
+    // Phase 38: Deep Linking — native Android only (Phase 30.1: no configStore changes)
+    // nursehub://open/requests/abc123  →  router.push('/requests/abc123')
+    if (Capacitor.isNativePlatform()) {
+      void CapApp.addListener('appUrlOpen', ({ url }) => {
+        const path = url.replace('nursehub://open', '');
+        if (path) void router.push(path);
+      });
+    } /*end deep link listener*/
+
+    logger.debug('Firebase instances added to global properties');
+  },
+);
 
 export { db, auth, messaging };

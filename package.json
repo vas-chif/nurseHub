@@ -12,9 +12,15 @@
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev -m pwa",
     "build": "quasar build -m pwa",
+    "dev:android": "quasar dev -m capacitor -T android",
+    "build:android": "quasar build -m capacitor -T android",
     "postinstall": "quasar prepare"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8.2.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.3.4",
     "@dataconnect/generated": "link:src/dataconnect-generated",
     "@quasar/extras": "^1.16.4",
     "apexcharts": "^5.5.0",
@@ -32,9 +38,11 @@
     "vue3-apexcharts": "^1.10.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
     "@eslint/js": "^9.14.0",
     "@intlify/unplugin-vue-i18n": "^4.0.0",
     "@quasar/app-vite": "^2.1.0",
+    "@quasar/icongenie": "^4.0.0",
     "@types/node": "^20.5.9",
     "@vue/eslint-config-prettier": "^10.1.0",
     "@vue/eslint-config-typescript": "^14.4.0",

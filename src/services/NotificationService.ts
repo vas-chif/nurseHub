@@ -3,12 +3,13 @@
  * @description Comprehensive service for in-app and Web Push (FCM) notifications.
  * @author Nurse Hub Team
  * @created 2026-02-18
- * @modified 2026-04-27
+ * @modified 2026-05-15
  * @notes
  * - Manages FCM token registration and storage in Firestore.
  * - Integrates with a Vercel-hosted API for triggering actual Web Push notifications.
  * - Implements targeted notification logic for eligible operators (shift compatibility) and admins.
  * - Handles service worker readiness checks for robust token retrieval.
+ * - Phase 38: platform-aware FCM — native Android via @capacitor-firebase/messaging, Web via firebase/messaging.
  */
 
 import {
@@ -23,6 +24,8 @@ import {
 } from 'firebase/firestore';
 import { db, messaging } from '../boot/firebase';
 import { getToken } from 'firebase/messaging';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseMessaging } from '@capacitor-firebase/messaging';
 import type { Notification, NotificationType, ShiftRequest, ShiftSwap, Operator } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
 
@@ -32,6 +35,24 @@ const logger = useSecureLogger();
  * Request permission for notifications and register FCM token
  */
 export async function requestNotificationPermission(userId: string): Promise<void> {
+  // Phase 38: platform-aware FCM — native Android path vs. Web PWA path
+  if (Capacitor.isNativePlatform()) {
+    // --- NATIVE ANDROID: @capacitor-firebase/messaging ---
+    // Prerequisites: google-services.json must be present in src-capacitor/android/app/
+    try {
+      await FirebaseMessaging.requestPermissions();
+      const { token } = await FirebaseMessaging.getToken();
+      if (token) {
+        await registerFCMToken(userId, token);
+        logger.info('Native FCM token registered successfully');
+      }
+    } catch (error) {
+      logger.error('Error registering native FCM token', error);
+    }
+    return;
+  } /*end native branch*/
+
+  // --- WEB PWA: firebase/messaging (unchanged) ---
   if (!messaging) {
     logger.warn('Messaging not supported, skipping permission request');
     return;
@@ -72,7 +93,7 @@ export async function requestNotificationPermission(userId: string): Promise<voi
       logger.error('Error requesting notification permission', error);
     }
   }
-}
+} /*end requestNotificationPermission*/
 
 /**
  * Save FCM token to user document

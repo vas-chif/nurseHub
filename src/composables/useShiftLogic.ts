@@ -3,11 +3,12 @@
  * @description Composable containing the core business logic for shift compliance, replacement compatibility, and request expiration.
  * @author Nurse Hub Team
  * @created 2026-02-15
- * @modified 2026-04-27
+ * @modified 2026-05-15
  * @notes
  * - Evaluates legal constraints (e.g., Night shift cannot precede Morning shift).
  * - Maps shift shortages to valid replacement scenarios based on complex hierarchical roles.
  * - Handles shift-specific expiration timestamps (M/P/N).
+ * - Phase 39: Added standalone getShiftStyleForCode() — Single Source of Truth for shift visuals (§1.12).
  */
 import { useScenarioStore } from '../stores/scenarioStore';
 import type {
@@ -18,6 +19,29 @@ import type {
   ReplacementRole,
   Operator,
 } from '../types/models';
+import type { ShiftStyle } from '../types/components';
+
+// --- Phase 39: Single Source of Truth for shift visual styles (§1.12 DRY) ---
+const SHIFT_STYLE_MAP: Record<string, ShiftStyle> = {
+  M:  { color: '#f59e0b', icon: 'light_mode',   label: 'Mattina',    bg: 'rgba(245, 158, 11, 0.1)' },
+  P:  { color: '#ea580c', icon: 'wb_twilight',  label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)'  },
+  N:  { color: '#1e3a8a', icon: 'dark_mode',    label: 'Notte',      bg: 'rgba(30, 58, 138, 0.1)'  },
+  R:  { color: '#64748b', icon: 'hotel',        label: 'Riposo',     bg: 'rgba(100, 116, 139, 0.05)'},
+  S:  { color: '#16a34a', icon: 'logout',       label: 'Smonto',     bg: 'rgba(22, 163, 74, 0.1)'  },
+  A:  { color: '#dc2626', icon: 'event_busy',   label: 'Assenza',    bg: 'rgba(220, 38, 38, 0.1)'  },
+  '': { color: '#94a3b8', icon: 'help_outline', label: 'N/D',        bg: 'transparent'             },
+};
+
+/**
+ * Returns the visual style (color, icon, label, bg) for a shift code.
+ * This is the SINGLE SOURCE OF TRUTH for shift visual representation across the app.
+ * @param code - A ShiftCode or null/empty string.
+ */
+export function getShiftStyleForCode(code: string | null | undefined): ShiftStyle {
+  if (!code) return SHIFT_STYLE_MAP['']!;
+  const char = code.charAt(0).toUpperCase();
+  return (SHIFT_STYLE_MAP[code.toUpperCase()] || SHIFT_STYLE_MAP[char] || SHIFT_STYLE_MAP[''])!;
+}
 
 export function useShiftLogic() {
   /**

@@ -41,7 +41,7 @@
 - [x] Aggiungere `server.androidScheme: 'https'`
 
 ### 2D — Icone
-- [ ] `yarn quasar icongenie generate -i public/icons/icon-512x512.png`
+- [x] `yarn quasar icongenie generate -i public/icons/icon-512x512.png` (78 files generati via `npx @quasar/icongenie`)
 
 ### 2E — `google-services.json` ⚠️ CRITICO (senza questo FCM nativo non funziona)
 - [ ] Firebase Console → Impostazioni Progetto → App Android → aggiungere `com.nursehub.app`
@@ -96,10 +96,10 @@
 
 > Non riscrive il Web Push esistente — aggiunge solo un branch `isNativePlatform()`.
 
-- [ ] `yarn add @capacitor-firebase/messaging`
-- [ ] **`src/services/NotificationService.ts`** — aggiungere import `Capacitor` e `FirebaseMessaging`
-- [ ] Avvolgere il codice esistente in `if (!Capacitor.isNativePlatform()) { ... }`
-- [ ] Aggiungere branch nativo:
+- [x] `yarn add @capacitor-firebase/messaging`
+- [x] **`src/services/NotificationService.ts`** — aggiungere import `Capacitor` e `FirebaseMessaging`
+- [x] Avvolgere il codice esistente in `if (!Capacitor.isNativePlatform()) { ... }`
+- [x] Aggiungere branch nativo:
   ```typescript
   if (Capacitor.isNativePlatform()) {
     await FirebaseMessaging.requestPermissions();
@@ -107,10 +107,10 @@
     await registerFCMToken(userId, token);
   }
   ```
-- [ ] Verificare `google-services.json` presente (Priorità 2E)
-- [ ] Aggiornare `@modified` in `NotificationService.ts`
-- [ ] `yarn vue-tsc --noEmit && yarn lint` → 0 errori
-- [ ] `git commit -m "feat: add platform-aware FCM layer for native Android"`
+- [ ] Verificare `google-services.json` presente (Priorità 2E) — azione manuale utente
+- [x] Aggiornare `@modified` in `NotificationService.ts`
+- [x] `yarn vue-tsc --noEmit && yarn lint` → 0 errori
+- [x] `git commit -m "feat: add platform-aware FCM layer for native Android"`
 
 ---
 
@@ -118,7 +118,7 @@
 
 > Permette di aprire l'app direttamente su una richiesta ricevuta via notifica.
 
-- [ ] **`src-capacitor/android/app/src/main/AndroidManifest.xml`** — aggiungere `<intent-filter>`:
+- [x] **`src-capacitor/android/app/src/main/AndroidManifest.xml`** — aggiungere `<intent-filter>`:
   ```xml
   <intent-filter android:autoVerify="true">
     <action android:name="android.intent.action.VIEW" />
@@ -127,16 +127,16 @@
     <data android:scheme="nursehub" android:host="open" />
   </intent-filter>
   ```
-- [ ] **`src/boot/firebase.ts`** — aggiungere listener `appUrlOpen` (solo se `Capacitor.isNativePlatform()`):
+- [x] **`src/boot/firebase.ts`** — aggiungere listener `appUrlOpen` (solo se `Capacitor.isNativePlatform()`):
   ```typescript
   CapApp.addListener('appUrlOpen', ({ url }) => {
     const path = url.replace('nursehub://open', '');
     if (path) void router.push(path);
   });
   ```
-- [ ] `npx cap sync android`
-- [ ] Test: notifica push → tap → app si apre sulla pagina corretta
-- [ ] `git commit -m "feat: add deep linking intent filter for Android"`
+- [x] `npx cap sync android` → 2 plugin found (@capacitor-firebase/messaging@7.5.0, @capacitor/app@7.1.2)
+- [ ] Test: notifica push → tap → app si apre sulla pagina corretta (richiede dispositivo fisico)
+- [x] `git commit -m "feat: add deep linking intent filter for Android"`
 
 ---
 

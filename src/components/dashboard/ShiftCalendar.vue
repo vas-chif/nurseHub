@@ -3,9 +3,10 @@
  * @description Monthly calendar view with premium, compact design.
  * @author Nurse Hub Team
  * @created 2026-03-12
- * @modified 2026-05-03
+ * @modified 2026-05-15
  * @notes
  * - Complies with §1.4 by using centralized types.
+ * - Phase 39: getShiftStyleForCode imported from useShiftLogic (§1.12 DRY).
  */
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, watchEffect } from 'vue';
@@ -14,7 +15,8 @@ import { useConfigStore } from '../../stores/configStore';
 import { useSecureLogger } from '../../utils/secureLogger';
 import { useScheduleStore } from '../../stores/scheduleStore';
 import type { Operator, ShiftCode } from '../../types/models';
-import type { DayShift, OperatorCalendar, ShiftStyle } from '../../types/components';
+import type { DayShift, OperatorCalendar } from '../../types/components';
+import { getShiftStyleForCode } from '../../composables/useShiftLogic';
 
 import { date as dateUtil } from 'quasar';
 const authStore = useAuthStore();
@@ -95,19 +97,7 @@ const calendars = computed<OperatorCalendar[]>(() => {
   });
 });
 
-function getShiftStyles(code: ShiftCode): ShiftStyle {
-  const map: Record<string, ShiftStyle> = {
-    'M': { color: '#f59e0b', icon: 'light_mode', label: 'Mattina', bg: 'rgba(245, 158, 11, 0.1)' },
-    'P': { color: '#ea580c', icon: 'wb_twilight', label: 'Pomeriggio', bg: 'rgba(234, 88, 12, 0.1)' },
-    'N': { color: '#1e3a8a', icon: 'dark_mode', label: 'Notte', bg: 'rgba(30, 58, 138, 0.1)' },
-    'R': { color: '#64748b', icon: 'hotel', label: 'Riposo', bg: 'rgba(100, 116, 139, 0.05)' },
-    'S': { color: '#16a34a', icon: 'logout', label: 'Smonto', bg: 'rgba(22, 163, 74, 0.1)' },
-    'A': { color: '#dc2626', icon: 'event_busy', label: 'Assenza', bg: 'rgba(220, 38, 38, 0.1)' },
-    '':  { color: '#94a3b8', icon: 'help_outline', label: 'N/D', bg: 'transparent' }
-  };
-  const char = code.charAt(0);
-  return (map[char] || map['']) as ShiftStyle;
-}
+
 
 function onSwipe() {}
 </script>
@@ -146,8 +136,8 @@ function onSwipe() {}
             <div v-for="(day, index) in calendar.days" :key="index"
               class="shift-card column items-center justify-between q-pa-xs"
               :style="{ 
-                '--shift-color': getShiftStyles(day.shift as ShiftCode).color, 
-                '--shift-bg': getShiftStyles(day.shift as ShiftCode).bg 
+                '--shift-color': getShiftStyleForCode(day.shift as ShiftCode).color, 
+                '--shift-bg': getShiftStyleForCode(day.shift as ShiftCode).bg 
               }">
               
               <div class="column items-center">
@@ -159,12 +149,12 @@ function onSwipe() {}
                 <div class="shift-letter text-weight-bold" :class="day.shift ? 'active' : ''">
                   {{ day.shift || '-' }}
                 </div>
-                <q-icon :name="getShiftStyles(day.shift as ShiftCode).icon" 
-                  :style="{ color: getShiftStyles(day.shift as ShiftCode).color }" size="12px" />
+                <q-icon :name="getShiftStyleForCode(day.shift as ShiftCode).icon" 
+                  :style="{ color: getShiftStyleForCode(day.shift as ShiftCode).color }" size="12px" />
               </div>
 
               <q-tooltip anchor="bottom middle" self="top middle" :offset="[0, 8]">
-                {{ getShiftStyles(day.shift as ShiftCode).label }}
+                {{ getShiftStyleForCode(day.shift as ShiftCode).label }}
               </q-tooltip>
             </div>
           </div>

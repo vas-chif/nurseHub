@@ -3,12 +3,13 @@
  * @description Vue Router route definitions for Nurse Hub.
  * @author Nurse Hub Team
  * @created 2026-02-11
- * @modified 2026-05-05
+ * @modified 2026-05-15
  * @notes
  * - requiresAuth: route needs a logged-in user (enforced by authGuard).
  * - requiresVerified: route needs the user to be linked to an operator.
  * - requiresAdmin: route needs isAnyAdmin (admin or superAdmin).
  * - requiresSuperAdmin: route needs isSuperAdmin only (enforced by roleGuard).
+ * - Phase 39: Added /widget/shifts route for mobile shift preview widget.
  */
 import type { RouteRecordRaw } from 'vue-router';
 
@@ -77,7 +78,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/AdminRequestsPage.vue'),
         meta: { requiresAdmin: true },
       },
-      { path: 'profile', component: () => import('pages/ProfilePage.vue') }, // Changed from '/profile' to 'profile'
+      { path: 'profile', component: () => import('pages/ProfilePage.vue') },
+      // Phase 39: Mobile shift preview widget (no-chrome minimal page)
+      { path: 'widget/shifts', component: () => import('pages/WidgetShiftsPage.vue') },
     ],
   },
 
