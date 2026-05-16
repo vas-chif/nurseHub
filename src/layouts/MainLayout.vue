@@ -1,6 +1,6 @@
 /** * @file MainLayout.vue * @description Primary application layout. Orchestrates global
 navigation, notification listeners, and PWA interactions. * @author Nurse Hub Team * @created
-2026-02-11 * @modified 2026-05-14 * @notes * - Manages real-time Firebase listeners for in-app and
+2026-02-11 * @modified 2026-05-15 * @notes * - Manages real-time Firebase listeners for in-app and
 administrative notifications. * - Implements gesture-based (swipe) navigation with dynamic route
 discovery. * - Handles role-based visibility for navigation tabs (Tab-Fencing). * - Centralizes the
 "Department Switcher" (ConfigSelector) for SuperAdmins. */
@@ -281,28 +281,19 @@ function goBack() {
 
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated class="bg-primary text-white">
-      <q-toolbar class="q-pa-xs">
+    <q-header elevated class="bg-primary text-white ">
+      <q-toolbar class="q-pa-xs q-pt-md">
         <q-btn v-if="canGoBack" flat round dense icon="arrow_back" @click="goBack" class="q-mr-xs" />
-        <q-avatar v-else :size="isMobile ? 'sm' : '60px'" color="primary" text-color="white">
+        <q-avatar v-else :size="isMobile ? 'md' : '60px'" color="primary" text-color="white">
           <q-img src="../assets/icon.png" />
         </q-avatar>
 
         <q-toolbar-title>
           <!-- Active Department Indicator (Admin Mode) -->
-          <div
-            v-if="uiStore.viewMode === 'admin' && authStore.isAnyAdmin && configStore.activeConfig"
-            class="row no-wrap q-gutter-md justify-center"
-          >
-            <q-chip
-              outline
-              square
-              :size="isMobile ? 'sm' : 'lg'"
-              color="white"
-              text-color="white"
-              icon="home_work"
-              class="q-px-md"
-            >
+          <div v-if="uiStore.viewMode === 'admin' && authStore.isAnyAdmin && configStore.activeConfig"
+            class="row no-wrap q-gutter-md justify-center">
+            <q-chip outline square :size="isMobile ? 'sm' : 'lg'" color="white" text-color="white" icon="home_work"
+              class="q-px-md">
               {{
                 configStore.activeConfig.group
                   ? configStore.activeConfig.group + ' › ' + configStore.activeConfig.name
@@ -312,14 +303,9 @@ function goBack() {
           </div>
 
           <!-- Department Label (User Mode / Standard User) -->
-          <div
-            v-else-if="configStore.activeConfig"
-            class="row no-wrap justify-center"
-          >
-            <div
-              class="row items-center q-px-md q-py-xs rounded-borders"
-              style="border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 8px"
-            >
+          <div v-else-if="configStore.activeConfig" class="row no-wrap justify-center">
+            <div class="row items-center q-px-md q-py-xs rounded-borders"
+              style="border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 8px">
               <q-icon name="apartment" :size="isMobile ? 'xs' : 'sm'" class="q-mr-sm" />
               <span :class="isMobile ? 'text-caption' : 'text-subtitle1'" class="text-weight-bold">
                 {{ configStore.activeConfig.name }}
@@ -358,7 +344,7 @@ function goBack() {
                     <q-item-label lines="3">{{ n.message }}</q-item-label>
                     <q-item-label caption>{{
                       new Date(n.createdAt).toLocaleTimeString()
-                      }}</q-item-label>
+                    }}</q-item-label>
                   </q-item-section>
                 </q-item>
               </template>
@@ -486,5 +472,15 @@ function goBack() {
 </template>
 
 <style scoped>
-/* No additional styles needed */
+.q-header {
+  /* Phase 40: Respect mobile status bar/notch (Safe Area) */
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Ensure toolbar title doesn't wrap awkwardly on small headers */
+.q-toolbar-title {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
 </style>

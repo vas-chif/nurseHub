@@ -1,18 +1,17 @@
 /**
- * @file DashboardPage.vue
- * @description Main landing page for authenticated users. Provides a snapshot of the schedule and active requests.
- * @author Nurse Hub Team
- * @created 2026-02-11
- * @modified 2026-05-15
- * @notes
- * - Integrates ShiftCalendar, ActiveRequestsCard, and SwapOpportunitiesCard.
- * - Handles background synchronization checks on app visibility changes.
- */
+* @file DashboardPage.vue
+* @description Main landing page for authenticated users. Provides a snapshot of the schedule and active requests.
+* @author Nurse Hub Team
+* @created 2026-02-11
+* @modified 2026-05-15
+* @notes
+* - Integrates ShiftCalendar, ActiveRequestsCard, and SwapOpportunitiesCard.
+* - Handles background synchronization checks on app visibility changes.
+*/
 
 <script setup lang="ts">
 import { onMounted, watch, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { AppVisibility, useQuasar } from 'quasar';
+import { AppVisibility } from 'quasar';
 import ShiftCalendar from '../components/dashboard/ShiftCalendar.vue';
 import ActiveRequestsCard from '../components/dashboard/ActiveRequestsCard.vue';
 import SwapOpportunitiesCard from '../components/dashboard/SwapOpportunitiesCard.vue';
@@ -23,8 +22,6 @@ import { useSyncStore } from '../stores/syncStore';
 import { useSecureLogger } from '../utils/secureLogger';
 
 const logger = useSecureLogger();
-const $q = useQuasar();
-const router = useRouter();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const syncStore = useSyncStore();
@@ -101,16 +98,6 @@ watch(
       <!-- Quick Actions -->
       <div class="q-mt-lg text-center">
         <q-btn outline color="primary" label="Vedi tutto il calendario" to="/calendar" class="full-width" />
-        <!-- Widget shortcut: visible only on mobile (§ Phase 38) -->
-        <q-btn
-          v-if="$q.screen.lt.md"
-          flat
-          color="secondary"
-          icon="widgets"
-          label="Vista Widget Turni"
-          class="full-width q-mt-sm"
-          @click="void router.push('/widget/shifts')"
-        />
       </div>
     </template>
   </q-page>

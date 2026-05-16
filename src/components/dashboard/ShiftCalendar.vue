@@ -171,28 +171,31 @@ function onSwipe() {}
 
 <style scoped>
 .shift-calendar-card {
-  border-radius: 12px;
+  border-radius: 16px;
   background: #ffffff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
 .scroll-container {
   display: flex;
   overflow-x: auto;
-  gap: 8px;
-  padding: 4px 2px 8px 2px;
+  gap: 10px;
+  padding: 8px 4px 12px 4px;
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 
 .shift-card {
-  min-width: 64px;
-  height: 95px;
+  flex: 0 0 62px; /* Fixed width to prevent squashing */
+  height: 100px;
   background: white;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid #f1f5f9;
-  scroll-snap-align: start;
-  transition: all 0.2s ease;
+  scroll-snap-align: center;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .shift-card::before {
@@ -201,31 +204,32 @@ function onSwipe() {}
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 4px;
   background: var(--shift-color);
-  opacity: 0.8;
+  opacity: 1;
 }
 
 .shift-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px var(--shift-bg);
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px var(--shift-bg);
 }
 
 .day-num {
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: #1e293b;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .day-name {
   color: #64748b;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .shift-letter {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   line-height: 1;
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 
 .shift-letter.active {
@@ -237,13 +241,13 @@ function onSwipe() {}
 }
 
 .scroll-container::-webkit-scrollbar {
-  height: 4px;
+  height: 6px;
 }
 .scroll-container::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 .scroll-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #e2e8f0;
   border-radius: 10px;
 }
 

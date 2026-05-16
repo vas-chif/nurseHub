@@ -72,6 +72,9 @@ function subscribeToGroups(configId: string): void {
         (opId && o.operatorId === opId)
       ));
     loading.value = false;
+    
+    // Phase 38: Check immediately when data arrives to trigger rotation if due
+    void checkAndAdvance();
   }, (err) => {
     logger.error('Failed to subscribe to rotation groups', err);
     loading.value = false;
@@ -85,6 +88,8 @@ function subscribeToGroups(configId: string): void {
  */
 async function checkAndAdvance(): Promise<void> {
   const ts = Date.now();
+  if (userGroups.value.length === 0) return;
+
   for (const group of userGroups.value) {
     if (
       group.isActive &&
@@ -109,6 +114,10 @@ async function checkAndAdvance(): Promise<void> {
 onMounted(() => {
   const configId = authStore.currentUser?.configId || configStore.activeConfigId;
   if (configId) subscribeToGroups(configId);
+
+  // Phase 38: Initial check to catch any expired timers immediately
+  now.value = Date.now();
+  void checkAndAdvance();
 
   timerInterval.value = setInterval(() => {
     now.value = Date.now();

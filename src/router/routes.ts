@@ -9,7 +9,6 @@
  * - requiresVerified: route needs the user to be linked to an operator.
  * - requiresAdmin: route needs isAnyAdmin (admin or superAdmin).
  * - requiresSuperAdmin: route needs isSuperAdmin only (enforced by roleGuard).
- * - Phase 39: Added /widget/shifts route for mobile shift preview widget.
  */
 import type { RouteRecordRaw } from 'vue-router';
 
@@ -79,8 +78,6 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAdmin: true },
       },
       { path: 'profile', component: () => import('pages/ProfilePage.vue') },
-      // Phase 39: Mobile shift preview widget (no-chrome minimal page)
-      { path: 'widget/shifts', component: () => import('pages/WidgetShiftsPage.vue') },
     ],
   },
 
