@@ -3,57 +3,125 @@
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="12dp"
-    android:gravity="center_vertical">
+    android:padding="8dp">
 
-    <!-- Icon -->
-    <ImageView
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@mipmap/ic_launcher_foreground"
-        android:scaleType="centerInside"
-        android:layout_marginEnd="10dp" />
-
-    <!-- Text column -->
+    <!-- ── Header: logo + user name + month label ── -->
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:layout_width="match_parent"
+        android:layout_height="26dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="3dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@mipmap/ic_launcher_foreground"
+            android:scaleType="centerInside" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/widget_user_name"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="NurseHub"
+            android:layout_weight="1"
             android:textColor="#FFFFFF"
-            android:textSize="13sp"
+            android:textSize="11sp"
             android:textStyle="bold"
-            android:letterSpacing="0.03" />
+            android:layout_marginStart="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="NurseHub" />
 
         <TextView
-            android:id="@+id/widget_shift_text"
+            android:id="@+id/widget_month_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Apri per vedere i turni"
             android:textColor="#CCE8F5FF"
-            android:textSize="11sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
+            android:textSize="10sp"
+            android:text="" />
     </LinearLayout>
 
-    <!-- Shift badge -->
-    <TextView
-        android:id="@+id/widget_shift_badge"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:gravity="center"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:visibility="gone"
-        android:background="@drawable/widget_badge_bg" />
+    <!-- ── Day-of-week header row: L M M G V S D ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:orientation="horizontal"
+        android:layout_marginBottom="2dp">
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="L" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="M" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="M" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="G" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="V" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="S" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+        <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="D" android:textColor="#99FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- ── Week row 0 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r0c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r0c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
+
+    <!-- ── Week row 1 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r1c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r1c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
+
+    <!-- ── Week row 2 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r2c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r2c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
+
+    <!-- ── Week row 3 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r3c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r3c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
+
+    <!-- ── Week row 4 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r4c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r4c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
+
+    <!-- ── Week row 5 ── -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <TextView android:id="@+id/cell_r5c0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+        <TextView android:id="@+id/cell_r5c6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:textColor="#CCFFFFFF" android:textSize="9sp" android:lineSpacingMultiplier="1.0" />
+    </LinearLayout>
 
 </LinearLayout>

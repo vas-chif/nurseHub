@@ -17,18 +17,31 @@ import { isSupported, getToken, deleteToken } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
+import { useScheduleStore } from '../stores/scheduleStore';
 import { useSecureLogger } from '../utils/secureLogger';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseMessaging } from '@capacitor-firebase/messaging';
+import {
+  syncWidgetData,
+  clearWidgetData,
+  acceptWidgetPrivacy,
+  isWidgetPrivacyAccepted,
+} from '../services/WidgetBridgeService';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
+const scheduleStore = useScheduleStore();
 const logger = useSecureLogger();
 
 const notificationsEnabled = ref(false);
 const currentLanguage = ref('Italiano');
 const loading = ref(false);
+
+// Phase 42: Widget home screen state
+const widgetEnabled = ref(false);
+const widgetPrivacyDialog = ref(false);
+const widgetLoading = ref(false);
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
@@ -175,11 +188,74 @@ const toggleNotifications = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   if ('Notification' in window && Notification.permission === 'granted') {
     notificationsEnabled.value = true;
   }
+  // Phase 42: restore widget toggle state from stored consent
+  widgetEnabled.value = await isWidgetPrivacyAccepted();
 });
+
+/**
+ * Called when the user toggles the widget switch.
+ * Shows GDPR disclaimer on first activation; clears data on deactivation.
+ */
+const onWidgetToggle = async (enabled: boolean) => {
+  if (enabled) {
+    const alreadyAccepted = await isWidgetPrivacyAccepted();
+    if (alreadyAccepted) {
+      // Re-sync schedule data immediately
+      const myOperator = scheduleStore.operators.find(
+        (op) => op.userId === authStore.currentUser?.uid,
+      );
+      if (myOperator) {
+        widgetLoading.value = true;
+        await syncWidgetData(myOperator, authStore.currentUser?.firstName ?? '');
+        widgetLoading.value = false;
+      }
+    } else {
+      // Must accept disclaimer before activating
+      widgetEnabled.value = false;
+      widgetPrivacyDialog.value = true;
+    }
+  } else {
+    widgetLoading.value = true;
+    await clearWidgetData();
+    widgetLoading.value = false;
+    $q.notify({ type: 'info', message: 'Dati widget rimossi dalla home screen.' });
+  }
+}; /*end onWidgetToggle*/
+
+/** User accepted the GDPR disclaimer — persist consent and sync data. */
+const onWidgetPrivacyAccept = async () => {
+  widgetPrivacyDialog.value = false;
+  widgetLoading.value = true;
+  try {
+    await acceptWidgetPrivacy();
+    const myOperator = scheduleStore.operators.find(
+      (op) => op.userId === authStore.currentUser?.uid,
+    );
+    if (myOperator) {
+      await syncWidgetData(myOperator, authStore.currentUser?.firstName ?? '');
+    }
+    widgetEnabled.value = true;
+    $q.notify({
+      type: 'positive',
+      message: 'Widget attivato! Tieni premuta la home screen → Widgets → NurseHub Turni.',
+    });
+  } catch (err) {
+    logger.error('Widget privacy accept failed', err);
+    widgetEnabled.value = false;
+  } finally {
+    widgetLoading.value = false;
+  }
+}; /*end onWidgetPrivacyAccept*/
+
+/** User rejected the disclaimer — keep toggle OFF. */
+const onWidgetPrivacyReject = () => {
+  widgetPrivacyDialog.value = false;
+  widgetEnabled.value = false;
+}; /*end onWidgetPrivacyReject*/
 
 const changeLanguage = () => {
   $q.bottomSheet({
@@ -349,6 +425,39 @@ const changeLanguage = () => {
         </q-item>
       </template>
 
+      <!-- Phase 42: Widget Home Screen section -->
+      <q-separator />
+      <q-item-label header>Widget Home Screen</q-item-label>
+
+      <q-item v-if="Capacitor.isNativePlatform()" tag="label" v-ripple>
+        <q-item-section>
+          <q-item-label>Mostra turni nel widget</q-item-label>
+          <q-item-label caption>
+            La griglia turni mensile sarà visibile nella home screen
+          </q-item-label>
+        </q-item-section>
+        <q-item-section side>
+          <q-toggle
+            v-model="widgetEnabled"
+            :disable="widgetLoading"
+            color="primary"
+            @update:model-value="onWidgetToggle"
+          />
+        </q-item-section>
+      </q-item>
+
+      <q-item v-if="!Capacitor.isNativePlatform()">
+        <q-item-section>
+          <q-item-label>Widget Home Screen</q-item-label>
+          <q-item-label caption>
+            Disponibile solo nell'app nativa Android
+          </q-item-label>
+        </q-item-section>
+        <q-item-section side>
+          <q-icon name="widgets" color="grey-5" />
+        </q-item-section>
+      </q-item>
+
       <q-separator />
       <q-item-label header>Account</q-item-label>
 
@@ -366,5 +475,48 @@ const changeLanguage = () => {
         </q-item-section>
       </q-item>
     </q-list>
+
+    <!-- Phase 42: Widget GDPR Privacy Disclaimer (§1.5 GDPR Art.30) -->
+    <q-dialog v-model="widgetPrivacyDialog" persistent>
+      <q-card style="max-width: 400px; width: 90vw">
+        <q-card-section class="row items-center q-pb-none">
+          <q-icon name="widgets" color="primary" size="28px" class="q-mr-sm" />
+          <span class="text-h6">Widget Turni — Privacy</span>
+        </q-card-section>
+
+        <q-card-section class="q-pt-md">
+          <p class="text-body2 q-mb-sm">
+            Attivando il widget, i tuoi <strong>turni mensili</strong> verranno
+            salvati nella memoria locale del dispositivo e mostrati
+            <strong>nella home screen</strong>.
+          </p>
+          <p class="text-body2 q-mb-sm">
+            Chiunque abbia accesso al tuo telefono potrà vedere i tuoi turni
+            senza aprire l'app.
+          </p>
+          <p class="text-caption text-grey-7 q-mb-none">
+            I dati sono archiviati esclusivamente sul dispositivo e non
+            vengono trasmessi a terzi. Puoi rimuoverli in qualsiasi momento
+            disattivando questo toggle. (GDPR Art. 5 – principio di minimizzazione)
+          </p>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn
+            flat
+            label="Annulla"
+            color="grey-7"
+            @click="onWidgetPrivacyReject"
+          />
+          <q-btn
+            unelevated
+            label="Accetto"
+            color="primary"
+            :loading="widgetLoading"
+            @click="onWidgetPrivacyAccept"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
