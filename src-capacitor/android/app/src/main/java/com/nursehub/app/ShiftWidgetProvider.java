@@ -26,8 +26,8 @@ import android.widget.RemoteViews;
 
 public class ShiftWidgetProvider extends AppWidgetProvider {
 
-    private static final String PREFS_NAME = "CapacitorStorage";
-    private static final String KEY_TODAY_SHIFT = "widget_today_shift";
+    private static final String PREFS_NAME = WidgetPlugin.PREFS_NAME;
+    private static final String KEY_TODAY_SHIFT = WidgetPlugin.KEY_TODAY_SHIFT;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {

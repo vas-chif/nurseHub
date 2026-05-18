@@ -19,6 +19,7 @@ import ConfigSelector from '../components/common/ConfigSelector.vue';
 import GroupSelector from '../components/common/GroupSelector.vue';
 import { requestNotificationPermission } from '../services/NotificationService';
 import { useBiometricAuth } from '../composables/useBiometricAuth';
+import { syncWidgetShift } from '../utils/widgetPlugin';
 import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
 const router = useRouter();
@@ -221,6 +222,19 @@ watch(
     } else {
       syncStore.stopSyncListener();
     }
+  },
+  { immediate: true },
+);
+
+// Sync today's shift to the Android home screen widget whenever operators load
+watch(
+  () => [scheduleStore.operators, authStore.currentUser?.operatorId] as const,
+  ([operators, operatorId]) => {
+    if (!operators.length || !operatorId) return;
+    const todayStr = new Date().toISOString().split('T')[0] ?? '';
+    const myOp = operators.find((op) => op.id === operatorId);
+    const todayShift = myOp?.schedule[todayStr] ?? '';
+    void syncWidgetShift(todayShift);
   },
   { immediate: true },
 );
