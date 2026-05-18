@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">NurseHub</string>
     <string name="title_activity_main">NurseHub</string>
-    <string name="package_name">nursHub.com</string>
-    <string name="custom_url_scheme">nursHub.com</string>
+    <string name="package_name">com.nursehub.app</string>
+    <string name="custom_url_scheme">com.nursehub.app</string>
+    <string name="widget_description">Mostra i tuoi turni NurseHub sulla home screen</string>
 </resources>

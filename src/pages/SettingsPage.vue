@@ -13,11 +13,13 @@
 import { ref, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
 import { messaging, db } from '../boot/firebase';
-import { getToken, deleteToken } from 'firebase/messaging';
+import { isSupported, getToken, deleteToken } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { useSecureLogger } from '../utils/secureLogger';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseMessaging } from '@capacitor-firebase/messaging';
 
 const $q = useQuasar();
 const authStore = useAuthStore();
@@ -31,8 +33,34 @@ const loading = ref(false);
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 const enableNotifications = async () => {
-  if (!messaging) {
-    $q.notify({ type: 'warning', message: 'Notifiche non supportate su questo dispositivo.' });
+  if (Capacitor.isNativePlatform()) {
+    loading.value = true;
+    try {
+      await FirebaseMessaging.requestPermissions();
+      const { token } = await FirebaseMessaging.getToken();
+      if (token && authStore.currentUser) {
+        const userRef = doc(db, 'users', authStore.currentUser.uid);
+        await updateDoc(userRef, { fcmTokens: arrayUnion(token) });
+        $q.notify({ type: 'positive', message: 'Notifiche attivate con successo!' });
+        notificationsEnabled.value = true;
+      }
+    } catch (e) {
+      logger.error('Error enabling native notifications', e);
+      $q.notify({ type: 'negative', message: "Errore durante l'attivazione delle notifiche native." });
+      notificationsEnabled.value = false;
+    } finally {
+      loading.value = false;
+    }
+    return;
+  }
+
+  // Web PWA logic — messaging is initialized async; re-check support on demand
+  const messagingReady = messaging ?? (await isSupported().then(ok => ok ? messaging : null).catch(() => null));
+  if (!messagingReady) {
+    $q.notify({
+      type: 'warning',
+      message: 'Notifiche Web Push non disponibili in questo browser. Usa l\'app nativa per riceverle.',
+    });
     notificationsEnabled.value = false;
     return;
   }
@@ -61,7 +89,7 @@ const enableNotifications = async () => {
         tokenOptions.serviceWorkerRegistration = registration;
       }
 
-      const token = await getToken(messaging, tokenOptions);
+      const token = await getToken(messagingReady, tokenOptions);
 
       if (token && authStore.currentUser) {
         const userRef = doc(db, 'users', authStore.currentUser.uid);
@@ -89,11 +117,20 @@ const enableNotifications = async () => {
 };
 
 const disableNotifications = async () => {
-  if (!messaging || !authStore.currentUser) return;
+  if (!authStore.currentUser) return;
 
   loading.value = true;
   try {
-    if (VAPID_KEY) {
+    if (Capacitor.isNativePlatform()) {
+      const { token } = await FirebaseMessaging.getToken();
+      if (token) {
+        const userRef = doc(db, 'users', authStore.currentUser.uid);
+        await updateDoc(userRef, { fcmTokens: arrayRemove(token) });
+        await FirebaseMessaging.deleteToken();
+      }
+    } else {
+      if (!messaging) return;
+      if (VAPID_KEY) {
       try {
         const registration = await navigator.serviceWorker.getRegistration();
         const tokenOptions: {
@@ -119,6 +156,7 @@ const disableNotifications = async () => {
         logger.warn('Could not retrieve token for deletion', e);
       }
     }
+    } // End of Web PWA logic
 
     $q.notify({ type: 'info', message: 'Notifiche disattivate.' });
     notificationsEnabled.value = false;
