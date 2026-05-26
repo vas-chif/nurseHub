@@ -36,8 +36,10 @@ import java.util.Locale;
 public class ShiftWidgetProvider extends AppWidgetProvider {
 
     // Must match PreferencesConfiguration.DEFAULTS.group in @capacitor/preferences v8+
-    private static final String PREFS_FILE   = "CapacitorStorage";
-    private static final String PREF_KEY     = "widget_shifts_data";
+    private static final String PREFS_FILE        = "CapacitorStorage";
+    private static final String PREF_KEY          = "widget_shifts_data";
+    /** Written by WidgetBridgeService.ts → setWidgetClickable(). Default: "true". */
+    private static final String PREF_KEY_CLICKABLE = "widget_clickable";
 
     private static final String[] MONTH_NAMES_IT = {
         "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
@@ -56,17 +58,20 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
     private static void updateWidget(Context ctx, AppWidgetManager mgr, int widgetId) {
         RemoteViews views = new RemoteViews(ctx.getPackageName(), R.layout.widget_shifts);
 
-        // ── Tap anywhere → open app ──────────────────────────────────────────
-        Intent openIntent = new Intent(ctx, MainActivity.class);
-        openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pending = PendingIntent.getActivity(
-            ctx, 0, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-        views.setOnClickPendingIntent(R.id.widget_container, pending);
-
-        // ── Read JSON from SharedPreferences written by @capacitor/preferences ──
+        // ── Read SharedPreferences ───────────────────────────────────────────
         SharedPreferences prefs = ctx.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
+
+        // ── Tap → open app (conditional on widget_clickable, default true) ───
+        String clickableVal = prefs.getString(PREF_KEY_CLICKABLE, "true");
+        if (!"false".equals(clickableVal)) {
+            Intent openIntent = new Intent(ctx, MainActivity.class);
+            openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pending = PendingIntent.getActivity(
+                ctx, 0, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            views.setOnClickPendingIntent(R.id.widget_container, pending);
+        }
         String raw = prefs.getString(PREF_KEY, "");
 
         if (raw.isEmpty()) {
@@ -131,6 +136,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
                         if (dayNum < 1 || dayNum > daysInMonth) {
                             views.setTextViewText(resId, "");
+                            views.setInt(resId, "setBackgroundColor", Color.TRANSPARENT);
                         } else {
                             String shift = (dayMap != null)
                                 ? dayMap.optString(String.valueOf(dayNum), "")
@@ -142,7 +148,9 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                                 : dayNum + "\n" + shift;
 
                             views.setTextViewText(resId, cellText);
-                            views.setTextColor(resId, cellColor(shift, dayNum == todayDay));
+                            views.setTextColor(resId, cellTextColor(shift, dayNum == todayDay));
+                            views.setInt(resId, "setBackgroundResource",
+                                cellBgResource(shift, dayNum == todayDay));
                         }
                     }
                 }
@@ -176,35 +184,57 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
     // ─────────────────────────────────────────────────────────────────────────
     /**
      * Returns the ARGB text color for a given shift code.
-     * Today's cell gets full-white brightness; other cells use a dimmed alpha.
+     * Colors mirror the in-app §1.12 SSoT (useShiftLogic.ts → SHIFT_STYLE_MAP).
+     * Today's cell gets full opacity; other cells use 87% alpha for subtle dimming.
      *
      * @param shift   ShiftCode string (M, P, N, R, A, S, MP, N11, N12, …)
      * @param isToday Whether this day is today (for highlight)
      */
-    private static int cellColor(String shift, boolean isToday) {
-        int alpha = isToday ? 0xFF : 0xCC;
+    private static int cellTextColor(String shift, boolean isToday) {
+        int alpha = isToday ? 0xFF : 0xDD; // 100% today, 87% otherwise
 
         switch (shift) {
-            case "M":                        // Mattina — blue
-                return Color.argb(alpha, 0x64, 0xB5, 0xF6);
-            case "P":                        // Pomeriggio — green
-                return Color.argb(alpha, 0x81, 0xC7, 0x84);
-            case "N": case "N11": case "N12": // Notte — purple
-                return Color.argb(alpha, 0xBA, 0x68, 0xC8);
-            case "MP":                       // Mattina+Pomeriggio — indigo
-                return Color.argb(alpha, 0x79, 0x86, 0xCB);
-            case "R":                        // Riposo — orange
-                return Color.argb(alpha, 0xFF, 0xB7, 0x4D);
-            case "A":                        // Assenza/Ferie — red
-                return Color.argb(alpha, 0xEF, 0x53, 0x50);
-            case "S":                        // Straordinario — teal
-                return Color.argb(alpha, 0x4D, 0xB6, 0xAC);
-            default:                         // No shift / unknown — grey
+            case "M": case "MP":              // Mattina — amber #f59e0b
+                return Color.argb(alpha, 0xF5, 0x9E, 0x0B);
+            case "P":                         // Pomeriggio — orange #ea580c
+                return Color.argb(alpha, 0xEA, 0x58, 0x0C);
+            case "N": case "N11": case "N12": // Notte — navy #1e3a8a
+                return Color.argb(alpha, 0x1E, 0x3A, 0x8A);
+            case "R":                         // Riposo — slate #64748b
+                return Color.argb(alpha, 0x64, 0x74, 0x8B);
+            case "S":                         // Straordinario — green #16a34a
+                return Color.argb(alpha, 0x16, 0xA3, 0x4A);
+            case "A":                         // Assenza/Ferie — red #dc2626
+                return Color.argb(alpha, 0xDC, 0x26, 0x26);
+            default:                          // No shift — dark grey on white bg
                 return isToday
-                    ? Color.argb(0xFF, 0xFF, 0xFF, 0xFF)
-                    : Color.argb(0x77, 0xFF, 0xFF, 0xFF);
+                    ? Color.argb(0xFF, 0x33, 0x33, 0x33)
+                    : Color.argb(0xAA, 0x66, 0x66, 0x66);
         }
-    } /*end cellColor*/
+    } /*end cellTextColor*/
+
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * Returns the drawable resource ID for the cell background.
+     * Shift cells get a colored top-strip card drawable (§1.12 SSoT colors).
+     * Today's cell gets a blue-bordered outline regardless of shift type.
+     * Empty cells (no assigned shift) get a subtle neutral card.
+     *
+     * @param shift   ShiftCode string
+     * @param isToday Whether this day is today
+     */
+    private static int cellBgResource(String shift, boolean isToday) {
+        if (isToday) return R.drawable.widget_cell_bg_today;
+        switch (shift) {
+            case "M": case "MP":              return R.drawable.widget_cell_bg_m;
+            case "P":                         return R.drawable.widget_cell_bg_p;
+            case "N": case "N11": case "N12": return R.drawable.widget_cell_bg_n;
+            case "R":                         return R.drawable.widget_cell_bg_r;
+            case "S":                         return R.drawable.widget_cell_bg_s;
+            case "A":                         return R.drawable.widget_cell_bg_a;
+            default:                          return R.drawable.widget_cell_bg_empty;
+        }
+    } /*end cellBgResource*/
 
 } /*end ShiftWidgetProvider*/
 

@@ -36,6 +36,9 @@ export const WIDGET_PREF_KEY = 'widget_shifts_data';
 /** SharedPreferences key recording GDPR consent ('true' | absent). */
 export const WIDGET_PRIVACY_KEY = 'widget_privacy_accepted';
 
+/** SharedPreferences key for widget tap-to-open behaviour ('true' | 'false'). Default: true. */
+export const WIDGET_CLICKABLE_KEY = 'widget_clickable';
+
 /**
  * The JSON payload written to SharedPreferences.
  * Android ShiftWidgetProvider parses this via org.json.JSONObject.
@@ -156,3 +159,36 @@ export async function clearWidgetData(): Promise<void> {
     logger.error('WidgetBridge: failed to clear data', err);
   }
 } /*end clearWidgetData*/
+
+/**
+ * Returns whether the widget tap-to-open behaviour is enabled.
+ * Defaults to true when the preference has not been set yet.
+ *
+ * @returns true if widget is clickable (default), false if explicitly disabled.
+ */
+export async function isWidgetClickable(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return true;
+  try {
+    const { value } = await Preferences.get({ key: WIDGET_CLICKABLE_KEY });
+    return value !== 'false'; // absent or 'true' → true
+  } catch (err) {
+    logger.error('WidgetBridge: failed to read widget_clickable', err);
+    return true;
+  }
+} /*end isWidgetClickable*/
+
+/**
+ * Persists the widget tap-to-open preference and triggers an immediate widget refresh.
+ *
+ * @param value true = widget tap opens app; false = widget is non-interactive.
+ */
+export async function setWidgetClickable(value: boolean): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await Preferences.set({ key: WIDGET_CLICKABLE_KEY, value: value ? 'true' : 'false' });
+    await WidgetRefreshPlugin.refresh();
+    logger.info('WidgetBridge: widget_clickable set to', value);
+  } catch (err) {
+    logger.error('WidgetBridge: failed to set widget_clickable', err);
+  }
+} /*end setWidgetClickable*/

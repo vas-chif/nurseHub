@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layer-list: colored top strip (3dp) + semi-transparent white card background.
+     Mirrors the in-app ShiftCalendar card style (§1.12 SSoT useShiftLogic.ts). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Full card: colored top border visible via inset -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#DC2626" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <!-- White semi-transparent overlay starting 3dp from top → reveals top strip -->
+    <item android:top="3dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#E6FFFFFF" />
+            <corners
+                android:bottomLeftRadius="4dp"
+                android:bottomRightRadius="4dp" />
+        </shape>
+    </item>
+</layer-list>

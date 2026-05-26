@@ -26,6 +26,8 @@ import {
   clearWidgetData,
   acceptWidgetPrivacy,
   isWidgetPrivacyAccepted,
+  isWidgetClickable,
+  setWidgetClickable,
 } from '../services/WidgetBridgeService';
 
 const $q = useQuasar();
@@ -42,6 +44,8 @@ const loading = ref(false);
 const widgetEnabled = ref(false);
 const widgetPrivacyDialog = ref(false);
 const widgetLoading = ref(false);
+// Phase 44: Widget clickable toggle (default true → tap opens app)
+const widgetClickable = ref(true);
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
@@ -194,7 +198,17 @@ onMounted(async () => {
   }
   // Phase 42: restore widget toggle state from stored consent
   widgetEnabled.value = await isWidgetPrivacyAccepted();
+  // Phase 44: restore widget clickable preference
+  widgetClickable.value = await isWidgetClickable();
 });
+
+/**
+ * Called when the user toggles the widget clickable switch.
+ * Persists the preference and refreshes the widget immediately.
+ */
+const onWidgetClickableToggle = async (val: boolean) => {
+  await setWidgetClickable(val);
+}; /*end onWidgetClickableToggle*/
 
 /**
  * Called when the user toggles the widget switch.
@@ -442,6 +456,23 @@ const changeLanguage = () => {
             :disable="widgetLoading"
             color="primary"
             @update:model-value="onWidgetToggle"
+          />
+        </q-item-section>
+      </q-item>
+
+      <!-- Phase 44: Widget clickable toggle (show only when widget is active) -->
+      <q-item v-if="Capacitor.isNativePlatform() && widgetEnabled" tag="label" v-ripple>
+        <q-item-section>
+          <q-item-label>Widget cliccabile</q-item-label>
+          <q-item-label caption>
+            Toccare il widget apre l'app. Disattiva per visualizzazione sola.
+          </q-item-label>
+        </q-item-section>
+        <q-item-section side>
+          <q-toggle
+            v-model="widgetClickable"
+            color="primary"
+            @update:model-value="onWidgetClickableToggle"
           />
         </q-item-section>
       </q-item>
