@@ -24,7 +24,6 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.text.Html;
 import android.widget.RemoteViews;
 
@@ -124,6 +123,12 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                     todayDay = today.get(Calendar.DAY_OF_MONTH);
                 }
 
+                // Previous month's day count — needed for faded out-of-month cells
+                Calendar prevCal = Calendar.getInstance();
+                prevCal.set(year, month - 1, 1); // Calendar month is 0-based → month-1 = current
+                prevCal.add(Calendar.MONTH, -1); // roll back one month (handles January → December)
+                int prevMonthDays = prevCal.getActualMaximum(Calendar.DAY_OF_MONTH);
+
                 for (int r = 0; r < 6; r++) {
                     for (int c = 0; c < 7; c++) {
                         int cellIndex = r * 7 + c;
@@ -136,8 +141,14 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                         if (resId == 0) continue;
 
                         if (dayNum < 1 || dayNum > daysInMonth) {
-                            views.setTextViewText(resId, "");
-                            views.setInt(resId, "setBackgroundColor", Color.TRANSPARENT);
+                            // Show adjacent-month day number faded (no shift data available)
+                            int displayDay = (dayNum < 1)
+                                ? prevMonthDays + dayNum   // e.g. 30 + (-3) = April 27
+                                : dayNum - daysInMonth;    // e.g. 32 - 31 = June 1
+                            String fadedHtml = "<small><font color='#B0B4BE'>" + displayDay + "</font></small>";
+                            views.setTextViewText(resId,
+                                Html.fromHtml(fadedHtml, Html.FROM_HTML_MODE_COMPACT));
+                            views.setInt(resId, "setBackgroundResource", R.drawable.widget_cell_bg_empty);
                         } else {
                             String shift = (dayMap != null)
                                 ? dayMap.optString(String.valueOf(dayNum), "")
@@ -200,6 +211,25 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
     // ─────────────────────────────────────────────────────────────────────────
     /**
+     * Returns a Unicode symbol mirroring the §1.12 SSoT shift icon
+     * (useShiftLogic.ts: light_mode / wb_twilight / dark_mode / hotel / logout / event_busy).
+     *
+     * @param shift ShiftCode string
+     */
+    private static String getIconForShift(String shift) {
+        switch (shift) {
+            case "M": case "MP":              return "\u2600"; // ☀ sun       (light_mode)
+            case "P":                         return "\u263C"; // ☼ sun-rays  (wb_twilight)
+            case "N": case "N11": case "N12": return "\u263E"; // ☾ moon      (dark_mode)
+            case "R":                         return "\u2302"; // ⌂ house/bed (hotel)
+            case "S":                         return "\u2197"; // ↗ arrow     (logout)
+            case "A":                         return "\u2715"; // ✕ cancel    (event_busy)
+            default:                          return "";
+        }
+    } /*end getIconForShift*/
+
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
      * Builds HTML-formatted cell text:
      * - Top line: day number, small (0.8x), grey — or blue for today.
      * - Bottom line: shift letter, large (1.25x) bold, shift-specific color.
@@ -216,7 +246,13 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
             return dayPart;
         }
         String shiftColor = getHexForShift(shift);
-        return dayPart + "<br/><big><b><font color='" + shiftColor + "'>" + shift + "</font></b></big>";
+        String icon = getIconForShift(shift);
+        String iconPart = icon.isEmpty()
+            ? ""
+            : "<br/><small><font color='" + shiftColor + "'>" + icon + "</font></small>";
+        return dayPart
+            + "<br/><big><b><font color='" + shiftColor + "'>" + shift + "</font></b></big>"
+            + iconPart;
     } /*end buildCellHtml*/
 
     // ─────────────────────────────────────────────────────────────────────────
