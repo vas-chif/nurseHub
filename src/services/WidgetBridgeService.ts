@@ -26,6 +26,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import type { Operator, ShiftCode } from '../types/models';
 import { useSecureLogger } from '../utils/secureLogger';
+import { WidgetRefreshPlugin } from '../utils/widgetRefreshPlugin';
 
 const logger = useSecureLogger();
 
@@ -127,6 +128,10 @@ export async function syncWidgetData(operator: Operator, displayName: string): P
     };
 
     await Preferences.set({ key: WIDGET_PREF_KEY, value: JSON.stringify(payload) });
+
+    // Broadcast APPWIDGET_UPDATE immediately so widget re-renders without
+    // waiting for the passive 30-minute update cycle.
+    await WidgetRefreshPlugin.refresh();
 
     logger.info('WidgetBridge: schedule synced to SharedPreferences', {
       month: payload.month,

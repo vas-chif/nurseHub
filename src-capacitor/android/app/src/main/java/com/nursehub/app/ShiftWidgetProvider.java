@@ -35,7 +35,8 @@ import java.util.Locale;
 
 public class ShiftWidgetProvider extends AppWidgetProvider {
 
-    private static final String PREFS_FILE   = "_capPrefStore";
+    // Must match PreferencesConfiguration.DEFAULTS.group in @capacitor/preferences v8+
+    private static final String PREFS_FILE   = "CapacitorStorage";
     private static final String PREF_KEY     = "widget_shifts_data";
 
     private static final String[] MONTH_NAMES_IT = {
@@ -70,7 +71,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
         if (raw.isEmpty()) {
             views.setTextViewText(R.id.widget_user_name, "NurseHub");
-            views.setTextViewText(R.id.widget_month_label, "");
+            views.setTextViewText(R.id.widget_month_label, "Apri app → Impostazioni");
             fillEmptyGrid(ctx, views);
             mgr.updateAppWidget(widgetId, views);
             return;

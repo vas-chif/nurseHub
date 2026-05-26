@@ -73,8 +73,14 @@ export async function requestNotificationPermission(userId: string): Promise<voi
         }
       }
 
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      if (!vapidKey) {
+        logger.warn('NotificationService: VITE_FIREBASE_VAPID_KEY not configured — skipping FCM token request');
+        return;
+      }
+
       const token = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+        vapidKey,
         ...(registration ? { serviceWorkerRegistration: registration } : {}),
       });
 
