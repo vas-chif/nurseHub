@@ -7,10 +7,8 @@
   "eslint.validate": ["javascript", "javascriptreact", "typescript", "vue"],
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "java.configuration.updateBuildConfiguration": "automatic",
-  "java.import.exclusions": [
-    "**/node_modules/**",
-    "**/.git/**",
-    "**/build/**",
-    "**/dist/**"
-  ]
+  "java.import.exclusions": ["**/node_modules/**", "**/.git/**", "**/build/**", "**/dist/**"],
+  "files.exclude": {
+    "**/node_modules": true
+  }
 }

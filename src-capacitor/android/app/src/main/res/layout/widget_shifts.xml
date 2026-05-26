@@ -44,22 +44,68 @@
             android:shadowRadius="3"
             android:text="NurseHub" />
 
-        <TextView
-            android:id="@+id/widget_month_label"
+        <!-- ── Month navigation: prev arrow + label + next arrow ── -->
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="4"
-            android:textColor="#FFFFFF"
-            android:gravity="center_vertical|end"
-            android:autoSizeTextType="uniform"
-            android:autoSizeMinTextSize="7sp"
-            android:autoSizeMaxTextSize="16sp"
-            android:autoSizeStepGranularity="1sp"
-            android:shadowColor="#CC000000"
-            android:shadowDx="1"
-            android:shadowDy="1"
-            android:shadowRadius="3"
-            android:text="" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/widget_btn_prev"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="&#8249;"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="8sp"
+                android:autoSizeMaxTextSize="22sp"
+                android:autoSizeStepGranularity="1sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="1"
+                android:shadowDy="1"
+                android:shadowRadius="2" />
+
+            <TextView
+                android:id="@+id/widget_month_label"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="3"
+                android:textColor="#FFFFFF"
+                android:gravity="center"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="7sp"
+                android:autoSizeMaxTextSize="16sp"
+                android:autoSizeStepGranularity="1sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="1"
+                android:shadowDy="1"
+                android:shadowRadius="3"
+                android:text="" />
+
+            <TextView
+                android:id="@+id/widget_btn_next"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="&#8250;"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="8sp"
+                android:autoSizeMaxTextSize="22sp"
+                android:autoSizeStepGranularity="1sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="1"
+                android:shadowDy="1"
+                android:shadowRadius="2" />
+
+        </LinearLayout>
     </LinearLayout>
 
     <!-- ── Day-of-week header row: L M M G V S D ── -->

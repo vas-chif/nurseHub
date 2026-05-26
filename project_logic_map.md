@@ -109,16 +109,15 @@ L'app funge da "Vigile Intelligente" tra Database e Google Sheets per garantire 
   - **Attivo:** Turnazione odierna con badge pulsanti.
   - **Prossimo (Timer):** La turnazione programmata per la data di cambio scelta (offset +1).
   - **Successivo (Automatica):** La turnazione che seguirà automaticamente dopo l'intervallo di giorni impostato (offset +2), permettendo all'operatore di verificare la correttezza del ciclo.
+
 ### Phase 37: Identity & Routing Stabilization
+
 - **Clock Guard & JWT Fix**: Implemented `forceTokenRefresh()` in `authStore.ts` after self-healing to ensure security rules allow immediate access to personal shifts.
-- **Smart Redirects**: 
-    - `LoginPage.vue`: Admins are automatically routed to `/admin/users`, regular users to `/`.
-    - `ErrorNotFound.vue`: "Torna alla Home" button is now role-aware, preventing dead-ends for different user types.
-- **Admin Management Prep**:
-    - Identified "undefined" error in `AdminShiftTable.vue` and fixed it (Phase 36/37 overlap).
-    - Reordered save batch logic: Firestore first, then GAS (Google Sheets) background sync.
-    - Planned for `deleteUser` (Auth + Firestore) and `transferUser` between configurations.
-` possono ora programmare o riavviare il timer (previa autorizzazione specifica nelle `firestore.rules` sui campi `isActive`, `currentColumnIndex`, `nextChangeTimestamp`, `intervalDays`).
+- **Smart Redirects**:
+  - `LoginPage.vue`: Admins are automatically routed to `/admin/users`, regular users to `/`.
+  - `ErrorNotFound.vue`: "Torna alla Home" button is now role-aware, preventing dead-ends for different user types.
+- **Admin Management Prep**: - Identified "undefined" error in `AdminShiftTable.vue` and fixed it (Phase 36/37 overlap). - Reordered save batch logic: Firestore first, then GAS (Google Sheets) background sync. - Planned for `deleteUser` (Auth + Firestore) and `transferUser` between configurations.
+  `possono ora programmare o riavviare il timer (previa autorizzazione specifica nelle`firestore.rules`sui campi`isActive`, `currentColumnIndex`, `nextChangeTimestamp`, `intervalDays`).
 
 ## Note Tecniche di Manutenzione
 
@@ -190,6 +189,7 @@ Il sistema è ora in grado di gestire sostituzioni complesse che richiedono la c
   - **File Modificati**: `useRequestsFilter.ts` (logica), `ActiveRequestsCard.vue` (UI), `project_logic_map.md`.
 
 ### 9. Dual-View Management (Phase 34)
+
 Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità Operatore** per visualizzare e usare l'app esattamente come un dipendente normale, mantenendo intatti i loro permessi reali (JWT).
 
 - **`viewMode` in `uiStore`** (§1.8 Single Source of Truth per UI State):
@@ -221,11 +221,13 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
 - **Componenti Aggiornati**: `uiStore.ts`, `authStore.ts`, `MainLayout.vue`, `ShiftCalendar.vue`.
 
 ### 10. Gestione Gerarchica Multi-Reparto (Phase 38)
+
 - **Modello "Cartella" (Reparto)**: Le configurazioni sono raggruppate per `group`.
 - **Cascading Filter**: L'header implementa una ricerca gerarchica. Selezionando un Reparto (es. "Terapia Intensiva"), il selettore dei turni mostra solo i ruoli di quell'area.
 - **Dual-View Adaptation**: Gli utenti standard vedono solo un'etichetta statica del proprio ruolo, mentre gli Admin hanno i selettori di ricerca attivi.
 
 ### 11. Mobile UX & Data Entry (Phase 39)
+
 - **AppDateInput Editable**: Supporto alla digitazione manuale (`mask`) oltre al picker grafico.
 - **Icon-Only Mode**: Proprietà `hideInput` per inserire il selettore data in spazi angusti (es. header delle card) senza sfondo grigio.
 - **Safety Transfers**: Spostamento di configurazioni tra reparti protetto da conferma e salvataggio atomico automatico.
@@ -233,6 +235,7 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
 ### 12. Widget Home Screen Android (Phase 42-44)
 
 #### Architettura Bridge (Phase 42-43)
+
 - **`WidgetBridgeService.ts`** (`src/services/`): Unico punto di scrittura dati widget (§1.12 DRY). Scrive JSON `{ month, name, days }` in SharedPreferences via `@capacitor/preferences` (file `"CapacitorStorage"`).
 - **Consenso GDPR (§1.5)**: I dati vengono scritti solo dopo `acceptWidgetPrivacy()` → chiave `widget_privacy_accepted = 'true'`.
 - **`ShiftWidgetProvider.java`** (`src-capacitor/android/.../`): AppWidgetProvider nativo Android. Legge il JSON da SharedPreferences e popola `widget_shifts.xml` con `RemoteViews`.
@@ -240,6 +243,7 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
 - **`widget_shifts.xml`**: Layout 6×7 griglia giorni (42 celle `cell_r{0..5}c{0..6}`), header nome + mese. AutoSizeText abilitato su tutte le celle.
 
 #### Stile Celle Griglia (Phase 44)
+
 - **§1.12 SSoT colori**: `ShiftWidgetProvider.java → cellTextColor()` usa ESATTAMENTE gli stessi colori di `useShiftLogic.ts → SHIFT_STYLE_MAP`:
   - M/MP = amber `#F59E0B` | P = orange `#EA580C` | N/N11/N12 = navy `#1E3A8A`
   - R = slate `#64748B` | S = green `#16A34A` | A = red `#DC2626`
@@ -251,6 +255,7 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
 - **Margini celle**: `android:layout_margin="1dp"` su tutte le 42 celle → gap visivo tra card.
 
 #### Toggle "Widget cliccabile" (Phase 44)
+
 - **Chiave PreferenceStore**: `WIDGET_CLICKABLE_KEY = 'widget_clickable'` (`WidgetBridgeService.ts`).
 - **`isWidgetClickable()` / `setWidgetClickable(val)`**: Lettura/scrittura preferenza + refresh widget immediato.
 - **`ShiftWidgetProvider.java`**: Legge `widget_clickable` (default `"true"`). `PendingIntent` su `widget_container` applicato **solo se** il valore ≠ `"false"`.

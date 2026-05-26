@@ -39,21 +39,35 @@ export const WIDGET_PRIVACY_KEY = 'widget_privacy_accepted';
 /** SharedPreferences key for widget tap-to-open behaviour ('true' | 'false'). Default: true. */
 export const WIDGET_CLICKABLE_KEY = 'widget_clickable';
 
+/** SharedPreferences key for the month index currently shown in the widget (0=prev, 1=current, 2=next). */
+export const WIDGET_OFFSET_KEY = 'widget_month_idx';
+
 /**
- * The JSON payload written to SharedPreferences.
- * Android ShiftWidgetProvider parses this via org.json.JSONObject.
+ * Shift data for a single calendar month, stored in the widget payload.
  */
-export interface WidgetShiftsPayload {
-  /** Calendar month in YYYY-MM format (e.g. "2026-05"). */
+export interface MonthData {
+  /** Calendar month in YYYY-MM format. */
   month: string;
-  /** User first name shown in the widget header. */
-  name: string;
-  /** Day-of-month (as string key) → ShiftCode mapping for the current month. */
+  /** Day-of-month (as string key) → ShiftCode mapping for this month. */
   days: Record<string, ShiftCode>;
   /** Shifts for the tail days of the previous month shown in the first grid row. */
   prevDays?: Record<string, ShiftCode>;
   /** Shifts for the head days of the next month shown in the last grid row. */
   nextDays?: Record<string, ShiftCode>;
+}
+
+/**
+ * The JSON payload written to SharedPreferences.
+ * Android ShiftWidgetProvider parses this via org.json.JSONObject.
+ */
+export interface WidgetShiftsPayload {
+  /** User first name shown in the widget header. */
+  name: string;
+  /**
+   * Three-month window: [0] = previous month, [1] = current month, [2] = next month.
+   * The widget uses widget_month_idx (0|1|2) to pick which one to display.
+   */
+  months: MonthData[];
 }
 
 /**
@@ -115,61 +129,61 @@ export async function syncWidgetData(operator: Operator, displayName: string): P
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
-    const monthPrefix = `${year}-${String(month).padStart(2, '0')}-`;
 
-    const days: Record<string, ShiftCode> = {};
-    for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
-      if (dateKey.startsWith(monthPrefix)) {
-        const dayPart = dateKey.split('-')[2];
-        const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
-        if (!isNaN(dayNum) && dayNum > 0) {
-          days[String(dayNum)] = shiftCode;
+    /** Extracts all days for the given YYYY-MM from operator.schedule. */
+    function extractDays(y: number, m: number): Record<string, ShiftCode> {
+      const prefix = `${y}-${String(m).padStart(2, '0')}-`;
+      const result: Record<string, ShiftCode> = {};
+      for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
+        if (dateKey.startsWith(prefix)) {
+          const dayPart = dateKey.split('-')[2];
+          const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
+          if (!isNaN(dayNum) && dayNum > 0) result[String(dayNum)] = shiftCode;
         }
       }
+      return result;
     }
 
-    // Adjacent-month days visible in the 6-week grid (last N days of prev month + first M of next)
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevYear  = month === 1 ? year - 1 : year;
-    const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}-`;
-    const prevDays: Record<string, ShiftCode> = {};
-    for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
-      if (dateKey.startsWith(prevMonthPrefix)) {
-        const dayPart = dateKey.split('-')[2];
-        const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
-        if (!isNaN(dayNum) && dayNum > 0) prevDays[String(dayNum)] = shiftCode;
-      }
+    /** Builds a MonthData object including boundary days for the 6-week grid. */
+    function buildMonthData(y: number, m: number): MonthData {
+      const prevM = m === 1 ? 12 : m - 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const nextM = m === 12 ? 1 : m + 1;
+      const nextY = m === 12 ? y + 1 : y;
+      const days = extractDays(y, m);
+      const prevDays = extractDays(prevY, prevM);
+      const nextDays = extractDays(nextY, nextM);
+      return {
+        month: `${y}-${String(m).padStart(2, '0')}`,
+        days,
+        ...(Object.keys(prevDays).length > 0 && { prevDays }),
+        ...(Object.keys(nextDays).length > 0 && { nextDays }),
+      };
     }
 
-    const nextMonth = month === 12 ? 1 : month + 1;
-    const nextYear  = month === 12 ? year + 1 : year;
-    const nextMonthPrefix = `${nextYear}-${String(nextMonth).padStart(2, '0')}-`;
-    const nextDays: Record<string, ShiftCode> = {};
-    for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
-      if (dateKey.startsWith(nextMonthPrefix)) {
-        const dayPart = dateKey.split('-')[2];
-        const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
-        if (!isNaN(dayNum) && dayNum > 0) nextDays[String(dayNum)] = shiftCode;
-      }
-    }
+    const prevM = month === 1 ? 12 : month - 1;
+    const prevY = month === 1 ? year - 1 : year;
+    const nextM = month === 12 ? 1 : month + 1;
+    const nextY = month === 12 ? year + 1 : year;
 
     const payload: WidgetShiftsPayload = {
-      month: `${year}-${String(month).padStart(2, '0')}`,
       name: displayName,
-      days,
-      ...(Object.keys(prevDays).length > 0 && { prevDays }),
-      ...(Object.keys(nextDays).length > 0 && { nextDays }),
+      months: [
+        buildMonthData(prevY, prevM),
+        buildMonthData(year, month),
+        buildMonthData(nextY, nextM),
+      ],
     };
 
     await Preferences.set({ key: WIDGET_PREF_KEY, value: JSON.stringify(payload) });
+    // Reset view to current month (index 1) whenever fresh data is synced.
+    await Preferences.set({ key: WIDGET_OFFSET_KEY, value: '1' });
 
-    // Broadcast APPWIDGET_UPDATE immediately so widget re-renders without
-    // waiting for the passive 30-minute update cycle.
     await WidgetRefreshPlugin.refresh();
 
     logger.info('WidgetBridge: schedule synced to SharedPreferences', {
-      month: payload.month,
-      daysWithShift: Object.keys(days).length,
+      month: payload.months[1]?.month,
+      daysWithShift: Object.keys(payload.months[1]?.days ?? {}).length,
     });
   } catch (err) {
     logger.error('WidgetBridge: failed to sync schedule', err);

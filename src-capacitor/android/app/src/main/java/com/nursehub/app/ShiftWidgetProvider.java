@@ -21,12 +21,14 @@ package com.nursehub.app;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.text.Html;
 import android.widget.RemoteViews;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -39,7 +41,13 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
     private static final String PREFS_FILE        = "CapacitorStorage";
     private static final String PREF_KEY          = "widget_shifts_data";
     /** Written by WidgetBridgeService.ts → setWidgetClickable(). Default: "true". */
-    private static final String PREF_KEY_CLICKABLE = "widget_clickable";
+    private static final String PREF_KEY_CLICKABLE  = "widget_clickable";
+    /** Index of the currently displayed month in the months array: 0=prev, 1=current, 2=next. */
+    private static final String PREF_KEY_VIEW_INDEX = "widget_month_idx";
+    /** Broadcast action: navigate to previous month. */
+    private static final String ACTION_PREV         = "com.nursehub.app.WIDGET_PREV_MONTH";
+    /** Broadcast action: navigate to next month. */
+    private static final String ACTION_NEXT         = "com.nursehub.app.WIDGET_NEXT_MONTH";
 
     private static final String[] MONTH_NAMES_IT = {
         "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
@@ -52,6 +60,25 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
             updateWidget(ctx, mgr, id);
         }
     } /*end onUpdate*/
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        String action = intent.getAction();
+        if (ACTION_PREV.equals(action) || ACTION_NEXT.equals(action)) {
+            SharedPreferences prefs =
+                context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
+            int idx = 1;
+            try { idx = Integer.parseInt(prefs.getString(PREF_KEY_VIEW_INDEX, "1")); }
+            catch (NumberFormatException ignored) {}
+            if (ACTION_PREV.equals(action)) idx = Math.max(0, idx - 1);
+            else                             idx = Math.min(2, idx + 1);
+            prefs.edit().putString(PREF_KEY_VIEW_INDEX, String.valueOf(idx)).apply();
+            AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+            ComponentName comp = new ComponentName(context, ShiftWidgetProvider.class);
+            for (int id : mgr.getAppWidgetIds(comp)) updateWidget(context, mgr, id);
+        }
+    } /*end onReceive*/
 
     // ─────────────────────────────────────────────────────────────────────────
     /** Builds and pushes RemoteViews for one widget instance. */
@@ -71,24 +98,48 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
             views.setOnClickPendingIntent(R.id.widget_container, pending);
+        } else {
+            // Explicitly clear any previously registered PendingIntent so the
+            // widget becomes truly non-interactive when the user disables tapping.
+            views.setOnClickPendingIntent(R.id.widget_container, null);
         }
+        // ── Current view index (0=prev month, 1=current, 2=next) ────────────
+        int viewIdx = 1;
+        try { viewIdx = Integer.parseInt(prefs.getString(PREF_KEY_VIEW_INDEX, "1")); }
+        catch (NumberFormatException ignored) {}
+        viewIdx = Math.max(0, Math.min(2, viewIdx));
+
         String raw = prefs.getString(PREF_KEY, "");
 
         if (raw.isEmpty()) {
             views.setTextViewText(R.id.widget_user_name, "NurseHub");
             views.setTextViewText(R.id.widget_month_label, "Apri app → Impostazioni");
             fillEmptyGrid(ctx, views);
+            setNavButtons(ctx, views, false, false);
             mgr.updateAppWidget(widgetId, views);
             return;
         }
 
         try {
-            JSONObject data    = new JSONObject(raw);
-            String monthStr    = data.optString("month", "");   // "2026-05"
-            String userName    = data.optString("name", "");
-            JSONObject dayMap     = data.optJSONObject("days");      // "1" → "M"
-            JSONObject prevDayMap = data.optJSONObject("prevDays");   // adjacent prev-month shifts
-            JSONObject nextDayMap = data.optJSONObject("nextDays");   // adjacent next-month shifts
+            JSONObject data = new JSONObject(raw);
+            String userName = data.optString("name", "");
+
+            // ── Multi-month format (months[]) vs legacy single-month ─────────
+            JSONArray monthsArr = data.optJSONArray("months");
+            JSONObject monthData;
+            boolean hasMulti = (monthsArr != null && monthsArr.length() == 3);
+            if (hasMulti) {
+                monthData = monthsArr.optJSONObject(viewIdx);
+                if (monthData == null) { monthData = monthsArr.optJSONObject(1); viewIdx = 1; }
+            } else {
+                monthData = data; // legacy: payload itself is the month data
+                viewIdx = 1;
+            }
+
+            String monthStr    = monthData.optString("month", "");
+            JSONObject dayMap     = monthData.optJSONObject("days");
+            JSONObject prevDayMap = monthData.optJSONObject("prevDays");
+            JSONObject nextDayMap = monthData.optJSONObject("nextDays");
 
             // ── Header ───────────────────────────────────────────────────────
             views.setTextViewText(R.id.widget_user_name, userName.isEmpty() ? "NurseHub" : userName);
@@ -176,12 +227,44 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                 fillEmptyGrid(ctx, views);
             }
 
+            // ── Navigation buttons (always wired, dimmed at boundary) ────────
+            final int fi = viewIdx;
+            setNavButtons(ctx, views, hasMulti && fi > 0, hasMulti && fi < 2);
+
         } catch (JSONException | NumberFormatException e) {
             fillEmptyGrid(ctx, views);
+            setNavButtons(ctx, views, false, false);
         }
 
         mgr.updateAppWidget(widgetId, views);
     } /*end updateWidget*/
+
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * Wires prev/next month broadcast PendingIntents to the arrow buttons.
+     * Buttons are always present (even when widget_clickable=false) and are
+     * visually dimmed when navigation is not available (at month boundary).
+     */
+    private static void setNavButtons(Context ctx, RemoteViews views,
+                                      boolean canPrev, boolean canNext) {
+        Intent prevIntent = new Intent(ctx, ShiftWidgetProvider.class);
+        prevIntent.setAction(ACTION_PREV);
+        PendingIntent prevPending = PendingIntent.getBroadcast(
+            ctx, 1, prevIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_btn_prev, prevPending);
+        views.setFloat(R.id.widget_btn_prev, "setAlpha", canPrev ? 1.0f : 0.25f);
+
+        Intent nextIntent = new Intent(ctx, ShiftWidgetProvider.class);
+        nextIntent.setAction(ACTION_NEXT);
+        PendingIntent nextPending = PendingIntent.getBroadcast(
+            ctx, 2, nextIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_btn_next, nextPending);
+        views.setFloat(R.id.widget_btn_next, "setAlpha", canNext ? 1.0f : 0.25f);
+    } /*end setNavButtons*/
 
     // ─────────────────────────────────────────────────────────────────────────
     /** Clears all 42 grid cells (used when no data is available). */
