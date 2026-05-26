@@ -25,6 +25,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.text.Html;
 import android.widget.RemoteViews;
 
 import org.json.JSONException;
@@ -142,13 +143,10 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                                 ? dayMap.optString(String.valueOf(dayNum), "")
                                 : "";
 
-                            // Display: "15" or "15\nM"
-                            String cellText = shift.isEmpty()
-                                ? String.valueOf(dayNum)
-                                : dayNum + "\n" + shift;
-
-                            views.setTextViewText(resId, cellText);
-                            views.setTextColor(resId, cellTextColor(shift, dayNum == todayDay));
+                            // HTML multi-styled text: small grey day number + large bold colored shift letter
+                            views.setTextViewText(resId,
+                                Html.fromHtml(buildCellHtml(shift, dayNum, dayNum == todayDay),
+                                    Html.FROM_HTML_MODE_COMPACT));
                             views.setInt(resId, "setBackgroundResource",
                                 cellBgResource(shift, dayNum == todayDay));
                         }
@@ -183,35 +181,43 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
     // ─────────────────────────────────────────────────────────────────────────
     /**
-     * Returns the ARGB text color for a given shift code.
-     * Colors mirror the in-app §1.12 SSoT (useShiftLogic.ts → SHIFT_STYLE_MAP).
-     * Today's cell gets full opacity; other cells use 87% alpha for subtle dimming.
+     * Returns the hex color string for a shift code's text.
+     * Mirrors §1.12 SSoT (useShiftLogic.ts → SHIFT_STYLE_MAP).
      *
-     * @param shift   ShiftCode string (M, P, N, R, A, S, MP, N11, N12, …)
-     * @param isToday Whether this day is today (for highlight)
+     * @param shift ShiftCode string
      */
-    private static int cellTextColor(String shift, boolean isToday) {
-        int alpha = isToday ? 0xFF : 0xDD; // 100% today, 87% otherwise
-
+    private static String getHexForShift(String shift) {
         switch (shift) {
-            case "M": case "MP":              // Mattina — amber #f59e0b
-                return Color.argb(alpha, 0xF5, 0x9E, 0x0B);
-            case "P":                         // Pomeriggio — orange #ea580c
-                return Color.argb(alpha, 0xEA, 0x58, 0x0C);
-            case "N": case "N11": case "N12": // Notte — navy #1e3a8a
-                return Color.argb(alpha, 0x1E, 0x3A, 0x8A);
-            case "R":                         // Riposo — slate #64748b
-                return Color.argb(alpha, 0x64, 0x74, 0x8B);
-            case "S":                         // Straordinario — green #16a34a
-                return Color.argb(alpha, 0x16, 0xA3, 0x4A);
-            case "A":                         // Assenza/Ferie — red #dc2626
-                return Color.argb(alpha, 0xDC, 0x26, 0x26);
-            default:                          // No shift — dark grey on white bg
-                return isToday
-                    ? Color.argb(0xFF, 0x33, 0x33, 0x33)
-                    : Color.argb(0xAA, 0x66, 0x66, 0x66);
+            case "M": case "MP":              return "#F59E0B"; // amber
+            case "P":                         return "#EA580C"; // orange
+            case "N": case "N11": case "N12": return "#1E3A8A"; // navy
+            case "R":                         return "#64748B"; // slate
+            case "S":                         return "#16A34A"; // green
+            case "A":                         return "#DC2626"; // red
+            default:                          return "#64748B"; // grey (no shift)
         }
-    } /*end cellTextColor*/
+    } /*end getHexForShift*/
+
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * Builds HTML-formatted cell text:
+     * - Top line: day number, small (0.8x), grey — or blue for today.
+     * - Bottom line: shift letter, large (1.25x) bold, shift-specific color.
+     *   Absent when no shift is assigned (only day number shown).
+     *
+     * @param shift   ShiftCode string (may be empty)
+     * @param dayNum  Calendar day of month
+     * @param isToday Whether this cell represents today
+     */
+    private static String buildCellHtml(String shift, int dayNum, boolean isToday) {
+        String dayColor = isToday ? "#1565C0" : "#94A3B8";
+        String dayPart = "<small><font color='" + dayColor + "'>" + dayNum + "</font></small>";
+        if (shift.isEmpty()) {
+            return dayPart;
+        }
+        String shiftColor = getHexForShift(shift);
+        return dayPart + "<br/><big><b><font color='" + shiftColor + "'>" + shift + "</font></b></big>";
+    } /*end buildCellHtml*/
 
     // ─────────────────────────────────────────────────────────────────────────
     /**

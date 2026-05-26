@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Transparent container — wallpaper shows through. Rounded corners define
-     the widget clip boundary on Android 12+ adaptive layouts. -->
+<!-- Frosted-glass dark container: makes the widget feel like a unified card on any wallpaper.
+     Rounded corners clip the widget boundary on Android 12+ adaptive layouts.
+     The dark overlay also guarantees white header text stays readable. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#00000000" />
+    <solid android:color="#99000000" />
     <corners android:radius="16dp" />
 </shape>
