@@ -229,3 +229,29 @@ Gli utenti con ruolo **Admin** o **SuperAdmin** possono attivare una **Modalità
 - **AppDateInput Editable**: Supporto alla digitazione manuale (`mask`) oltre al picker grafico.
 - **Icon-Only Mode**: Proprietà `hideInput` per inserire il selettore data in spazi angusti (es. header delle card) senza sfondo grigio.
 - **Safety Transfers**: Spostamento di configurazioni tra reparti protetto da conferma e salvataggio atomico automatico.
+
+### 12. Widget Home Screen Android (Phase 42-44)
+
+#### Architettura Bridge (Phase 42-43)
+- **`WidgetBridgeService.ts`** (`src/services/`): Unico punto di scrittura dati widget (§1.12 DRY). Scrive JSON `{ month, name, days }` in SharedPreferences via `@capacitor/preferences` (file `"CapacitorStorage"`).
+- **Consenso GDPR (§1.5)**: I dati vengono scritti solo dopo `acceptWidgetPrivacy()` → chiave `widget_privacy_accepted = 'true'`.
+- **`ShiftWidgetProvider.java`** (`src-capacitor/android/.../`): AppWidgetProvider nativo Android. Legge il JSON da SharedPreferences e popola `widget_shifts.xml` con `RemoteViews`.
+- **`WidgetRefreshPlugin.java`** + `widgetRefreshPlugin.ts`: Plugin Capacitor custom che invia `APPWIDGET_UPDATE` broadcast per aggiornamento immediato senza attendere il ciclo passivo (30 min).
+- **`widget_shifts.xml`**: Layout 6×7 griglia giorni (42 celle `cell_r{0..5}c{0..6}`), header nome + mese. AutoSizeText abilitato su tutte le celle.
+
+#### Stile Celle Griglia (Phase 44)
+- **§1.12 SSoT colori**: `ShiftWidgetProvider.java → cellTextColor()` usa ESATTAMENTE gli stessi colori di `useShiftLogic.ts → SHIFT_STYLE_MAP`:
+  - M/MP = amber `#F59E0B` | P = orange `#EA580C` | N/N11/N12 = navy `#1E3A8A`
+  - R = slate `#64748B` | S = green `#16A34A` | A = red `#DC2626`
+- **Drawable sfondo celle** (`res/drawable/widget_cell_bg_{m,p,n,r,s,a,empty,today}.xml`):
+  - Turno assegnato: `layer-list` — bordo colorato 3dp in alto (shift color) + overlay bianco semi-trasparente (`#E6FFFFFF`) → effetto card con top-strip identico ai card in-app.
+  - Cella vuota: card bianca neutra `#1AFFFFFF`.
+  - Oggi: `shape` con sfondo `#F0FFFFFF` + stroke `2dp #1565C0` (bordo blu, identico all'indicatore "oggi" in-app).
+  - Celle fuori mese: `Color.TRANSPARENT` (nessun background).
+- **Margini celle**: `android:layout_margin="1dp"` su tutte le 42 celle → gap visivo tra card.
+
+#### Toggle "Widget cliccabile" (Phase 44)
+- **Chiave PreferenceStore**: `WIDGET_CLICKABLE_KEY = 'widget_clickable'` (`WidgetBridgeService.ts`).
+- **`isWidgetClickable()` / `setWidgetClickable(val)`**: Lettura/scrittura preferenza + refresh widget immediato.
+- **`ShiftWidgetProvider.java`**: Legge `widget_clickable` (default `"true"`). `PendingIntent` su `widget_container` applicato **solo se** il valore ≠ `"false"`.
+- **`SettingsPage.vue`**: Nuovo toggle "Widget cliccabile" (visibile solo se `widgetEnabled = true` e piattaforma nativa). Handler `onWidgetClickableToggle → setWidgetClickable(val)`.
