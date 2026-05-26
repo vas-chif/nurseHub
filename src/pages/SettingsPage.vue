@@ -193,7 +193,15 @@ const toggleNotifications = async () => {
 };
 
 onMounted(async () => {
-  if ('Notification' in window && Notification.permission === 'granted') {
+  // On native use FCM permission state; on web fall back to Web Notification API
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { receive } = await FirebaseMessaging.checkPermissions();
+      notificationsEnabled.value = receive === 'granted';
+    } catch {
+      notificationsEnabled.value = false;
+    }
+  } else if ('Notification' in window && Notification.permission === 'granted') {
     notificationsEnabled.value = true;
   }
   // Phase 42: restore widget toggle state from stored consent
@@ -305,14 +313,7 @@ const changeLanguage = () => {
     <q-list bordered separator>
       <q-item-label header>Generale</q-item-label>
 
-      <q-item
-        clickable
-        v-ripple
-        @click="
-          notificationsEnabled = !notificationsEnabled;
-          toggleNotifications();
-        "
-      >
+      <q-item tag="label" v-ripple>
         <q-item-section>
           <q-item-label>Notifiche</q-item-label>
           <q-item-label caption>Gestisci le preferenze di notifica</q-item-label>
@@ -460,8 +461,8 @@ const changeLanguage = () => {
         </q-item-section>
       </q-item>
 
-      <!-- Phase 44: Widget clickable toggle (show only when widget is active) -->
-      <q-item v-if="Capacitor.isNativePlatform() && widgetEnabled" tag="label" v-ripple>
+      <!-- Phase 44: Widget clickable toggle — always visible on native -->
+      <q-item v-if="Capacitor.isNativePlatform()" tag="label" v-ripple>
         <q-item-section>
           <q-item-label>Widget cliccabile</q-item-label>
           <q-item-label caption>

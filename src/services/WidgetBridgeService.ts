@@ -48,8 +48,12 @@ export interface WidgetShiftsPayload {
   month: string;
   /** User first name shown in the widget header. */
   name: string;
-  /** Day-of-month (as string key) → ShiftCode mapping for the month. */
+  /** Day-of-month (as string key) → ShiftCode mapping for the current month. */
   days: Record<string, ShiftCode>;
+  /** Shifts for the tail days of the previous month shown in the first grid row. */
+  prevDays?: Record<string, ShiftCode>;
+  /** Shifts for the head days of the next month shown in the last grid row. */
+  nextDays?: Record<string, ShiftCode>;
 }
 
 /**
@@ -124,10 +128,37 @@ export async function syncWidgetData(operator: Operator, displayName: string): P
       }
     }
 
+    // Adjacent-month days visible in the 6-week grid (last N days of prev month + first M of next)
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear  = month === 1 ? year - 1 : year;
+    const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}-`;
+    const prevDays: Record<string, ShiftCode> = {};
+    for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
+      if (dateKey.startsWith(prevMonthPrefix)) {
+        const dayPart = dateKey.split('-')[2];
+        const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
+        if (!isNaN(dayNum) && dayNum > 0) prevDays[String(dayNum)] = shiftCode;
+      }
+    }
+
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear  = month === 12 ? year + 1 : year;
+    const nextMonthPrefix = `${nextYear}-${String(nextMonth).padStart(2, '0')}-`;
+    const nextDays: Record<string, ShiftCode> = {};
+    for (const [dateKey, shiftCode] of Object.entries(operator.schedule)) {
+      if (dateKey.startsWith(nextMonthPrefix)) {
+        const dayPart = dateKey.split('-')[2];
+        const dayNum = dayPart !== undefined ? parseInt(dayPart, 10) : NaN;
+        if (!isNaN(dayNum) && dayNum > 0) nextDays[String(dayNum)] = shiftCode;
+      }
+    }
+
     const payload: WidgetShiftsPayload = {
       month: `${year}-${String(month).padStart(2, '0')}`,
       name: displayName,
       days,
+      ...(Object.keys(prevDays).length > 0 && { prevDays }),
+      ...(Object.keys(nextDays).length > 0 && { nextDays }),
     };
 
     await Preferences.set({ key: WIDGET_PREF_KEY, value: JSON.stringify(payload) });

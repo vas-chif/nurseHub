@@ -86,7 +86,9 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
             JSONObject data    = new JSONObject(raw);
             String monthStr    = data.optString("month", "");   // "2026-05"
             String userName    = data.optString("name", "");
-            JSONObject dayMap  = data.optJSONObject("days");     // "1" → "M"
+            JSONObject dayMap     = data.optJSONObject("days");      // "1" → "M"
+            JSONObject prevDayMap = data.optJSONObject("prevDays");   // adjacent prev-month shifts
+            JSONObject nextDayMap = data.optJSONObject("nextDays");   // adjacent next-month shifts
 
             // ── Header ───────────────────────────────────────────────────────
             views.setTextViewText(R.id.widget_user_name, userName.isEmpty() ? "NurseHub" : userName);
@@ -141,14 +143,20 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                         if (resId == 0) continue;
 
                         if (dayNum < 1 || dayNum > daysInMonth) {
-                            // Show adjacent-month day number faded (no shift data available)
                             int displayDay = (dayNum < 1)
                                 ? prevMonthDays + dayNum   // e.g. 30 + (-3) = April 27
                                 : dayNum - daysInMonth;    // e.g. 32 - 31 = June 1
-                            String fadedHtml = "<small><font color='#B0B4BE'>" + displayDay + "</font></small>";
+                            JSONObject adjMap = (dayNum < 1) ? prevDayMap : nextDayMap;
+                            String adjShift = (adjMap != null)
+                                ? adjMap.optString(String.valueOf(displayDay), "")
+                                : "";
+                            // Show shift if available; always faded (0.55α) to mark adjacent month
                             views.setTextViewText(resId,
-                                Html.fromHtml(fadedHtml, Html.FROM_HTML_MODE_COMPACT));
-                            views.setInt(resId, "setBackgroundResource", R.drawable.widget_cell_bg_empty);
+                                Html.fromHtml(buildCellHtml(adjShift, displayDay, false),
+                                    Html.FROM_HTML_MODE_COMPACT));
+                            views.setInt(resId, "setBackgroundResource",
+                                cellBgResource(adjShift, false));
+                            views.setFloat(resId, "setAlpha", 0.55f);
                         } else {
                             String shift = (dayMap != null)
                                 ? dayMap.optString(String.valueOf(dayNum), "")
@@ -160,6 +168,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                                     Html.FROM_HTML_MODE_COMPACT));
                             views.setInt(resId, "setBackgroundResource",
                                 cellBgResource(shift, dayNum == todayDay));
+                            views.setFloat(resId, "setAlpha", 1.0f); // reset from any adjacent-month state
                         }
                     }
                 }
