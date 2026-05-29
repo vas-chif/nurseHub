@@ -15,11 +15,14 @@ import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, watch, computed } from 'vue';
 import { useQuasar } from 'quasar';
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import ConfigSelector from '../components/common/ConfigSelector.vue';
 import GroupSelector from '../components/common/GroupSelector.vue';
 import { requestNotificationPermission } from '../services/NotificationService';
 import { syncWidgetData } from '../services/WidgetBridgeService';
 import { useBiometricAuth } from '../composables/useBiometricAuth';
+import { rotationService } from '../services/RotationService';
+import { useSecureLogger } from '../utils/secureLogger';
 import type { SystemConfiguration, Notification as AppNotification } from '../types/models';
 
 const router = useRouter();
@@ -32,8 +35,36 @@ const uiStore = useUiStore();
 const $q = useQuasar();
 const isMobile = computed(() => $q.platform.is.mobile);
 const biometricAuth = useBiometricAuth();
+const logger = useSecureLogger();
 
 let unsubs: (() => void)[] = [];
+let appStateListenerHandle: { remove: () => Promise<void> } | null = null;
+
+/**
+ * Phase 49: Rotation Guard — runs on app open and on foreground resume.
+ * Advances any rotation group whose nextChangeTimestamp has passed.
+ * This ensures auto-advance fires regardless of which page the user is on.
+ */
+async function checkOverdueRotations(): Promise<void> {
+  const configId = authStore.currentUser?.configId ?? configStore.activeConfigId;
+  if (!configId || !authStore.currentUser?.uid) return;
+  try {
+    const groups = await rotationService.getGroups(configId);
+    const now = Date.now();
+    for (const group of groups) {
+      if (group.isActive && group.nextChangeTimestamp !== null && now >= group.nextChangeTimestamp) {
+        try {
+          await rotationService.advanceGroup(group.configId, group);
+          logger.info('Rotation Guard: advanced group on app open', { groupId: group.id });
+        } catch (e) {
+          logger.error('Rotation Guard: failed to advance group', e);
+        }
+      }
+    }
+  } catch (e) {
+    logger.error('Rotation Guard: failed to fetch groups', e);
+  }
+}
 
 // Phase 34: Dual-View listener orchestration — hoisted at script-setup scope.
 // Both onMounted and watch(viewMode) call this to ensure the correct listener is always active.
@@ -138,10 +169,19 @@ onMounted(async () => {
   // Load configurations for all authenticated users to support self-healing
   if (authStore.currentUser?.uid) {
     await configStore.loadConfigurations();
+    // Phase 49: Rotation Guard — advance any overdue rotation on app open
+    void checkOverdueRotations();
   }
 
   // 3. Activate the correct listener based on current viewMode
   activateListeners();
+
+  // Phase 49: Re-run rotation guard when app returns to foreground (Capacitor)
+  if (Capacitor.isNativePlatform()) {
+    appStateListenerHandle = await CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) void checkOverdueRotations();
+    });
+  }
 });
 
 // Phase 34: React to viewMode changes — switch listener dynamically
@@ -267,6 +307,10 @@ onUnmounted(() => {
   syncStore.stopSyncListener();
   unsubs.forEach((unsub) => unsub());
   unsubs = [];
+  if (appStateListenerHandle) {
+    void appStateListenerHandle.remove();
+    appStateListenerHandle = null;
+  }
 });
 
 async function logout() {
