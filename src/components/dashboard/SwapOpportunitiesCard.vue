@@ -110,7 +110,7 @@ async function loadOpportunities() {
   );
   const allOpen = snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ShiftSwap))
-    .filter((s) => s.creatorId !== uid);
+    .filter((s) => s.creatorId !== uid && s.deletedByCreator !== true);
 
   compatibleSwaps.value = allOpen.filter((swap) => {
     if (!operatorSchedule) return false;

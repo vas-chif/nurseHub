@@ -12,7 +12,6 @@ import { useQuasar } from 'quasar';
 import {
   collection,
   addDoc,
-  updateDoc,
   query,
   where,
   onSnapshot,
@@ -20,6 +19,8 @@ import {
   doc,
   writeBatch,
   getDocs,
+  getDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 import AbsenceRequestForm from '../components/requests/AbsenceRequestForm.vue';
 import AppDateInput from '../components/common/AppDateInput.vue';
@@ -213,7 +214,19 @@ function deleteSwap(swap: ShiftSwap): void {
   }).onOk(() => {
     void (async () => {
       try {
-        await updateDoc(doc(db, 'shiftSwaps', swap.id), { deletedByCreator: true });
+        const swapRef = doc(db, 'shiftSwaps', swap.id);
+        const swapSnap = await getDoc(swapRef);
+        
+        if (swapSnap.exists()) {
+          const currentData = swapSnap.data() as ShiftSwap;
+          if (currentData.status !== 'OPEN') {
+            $q.notify({ type: 'warning', message: 'Impossibile eliminare: la proposta è già stata accettata da un collega o valutata dall\'admin.' });
+            await loadMySwaps(); // Aggiorna la lista per mostrare il nuovo stato
+            return;
+          }
+        }
+
+        await deleteDoc(swapRef);
         mySwaps.value = mySwaps.value.filter((s) => s.id !== swap.id);
         $q.notify({ type: 'positive', message: 'Proposta eliminata.' });
       } catch (e) {

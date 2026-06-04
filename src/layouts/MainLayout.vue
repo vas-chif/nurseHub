@@ -52,7 +52,11 @@ async function checkOverdueRotations(): Promise<void> {
     const groups = await rotationService.getGroups(configId);
     const now = Date.now();
     for (const group of groups) {
-      if (group.isActive && group.nextChangeTimestamp !== null && now >= group.nextChangeTimestamp) {
+      if (
+        group.isActive &&
+        group.nextChangeTimestamp !== null &&
+        now >= group.nextChangeTimestamp
+      ) {
         try {
           await rotationService.advanceGroup(group.configId, group);
           logger.info('Rotation Guard: advanced group on app open', { groupId: group.id });
@@ -525,7 +529,7 @@ function goBack() {
       </router-view>
     </q-page-container>
 
-    <q-footer bordered class="bg-white text-primary">
+    <q-footer bordered class="bg-white text-primary q-mb-lg">
       <q-tabs
         no-caps
         active-color="primary"
