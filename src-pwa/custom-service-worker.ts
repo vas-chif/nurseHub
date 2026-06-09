@@ -90,7 +90,7 @@ try {
       renotify: true,
     };
 
-    void self.registration.showNotification(notificationTitle, notificationOptions);
+    return self.registration.showNotification(notificationTitle, notificationOptions);
   });
 
   self.addEventListener(

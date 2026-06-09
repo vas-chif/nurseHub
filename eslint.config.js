@@ -80,6 +80,12 @@ export default defineConfigWithVueTs(
         ...globals.serviceworker,
       },
     },
+    rules: {
+      // Firebase's onBackgroundMessage internally calls event.waitUntil(handler(payload)),
+      // so returning a Promise from the callback IS correct at runtime.
+      // The TypeScript typings declare void return but the implementation awaits Promises.
+      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { arguments: false } }],
+    },
   },
 
   prettierSkipFormatting,
