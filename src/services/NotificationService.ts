@@ -250,9 +250,11 @@ export async function notifyEligibleOperators(
     const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
     const opsSnap = await getDocs(opsRef);
 
-    // Fetch users to map operatorId -> Firebase UID
+    // Phase 49: Config-Fencing — fetch ONLY users belonging to this configuration.
+    // Prevents cross-department UID mapping (fixes notification leakage between configs).
+    const { query: fsQuery, where: fsWhere } = await import('firebase/firestore');
     const usersRef = collection(db, 'users');
-    const usersSnap = await getDocs(usersRef);
+    const usersSnap = await getDocs(fsQuery(usersRef, fsWhere('configId', '==', activeConfigId)));
     const operatorToUserIdMap = new Map<string, string>();
     usersSnap.docs.forEach((doc) => {
       const uData = doc.data();
@@ -321,22 +323,21 @@ export async function notifyAdmins(
 
     const { collection, query, where, getDocs } = await import('firebase/firestore');
 
-    // Fetch all users who are admins and belong to this configuration
+    // Phase 49: Config-Fencing — include superAdmin (universal access) and admins
+    // whose primary configId OR managedConfigIds contains the active config.
     const usersRef = collection(db, 'users');
-    const q = query(
-      usersRef,
-      where('role', '==', 'admin'),
-      where('configId', '==', activeConfigId),
-    );
-
+    const q = query(usersRef, where('role', 'in', ['admin', 'superAdmin']));
     const adminsSnap = await getDocs(q);
     const notifiedUids = new Set<string>();
 
     for (const adminDoc of adminsSnap.docs) {
-      const adminData = adminDoc.data();
-      const adminUid = adminData.uid || adminDoc.id; // Fallback to doc.id if uid is missing
+      const d = adminDoc.data();
+      const adminUid = d.uid || adminDoc.id;
+      const isSuper = d.role === 'superAdmin';
+      const isPrimary = d.configId === activeConfigId;
+      const isManaged = Array.isArray(d.managedConfigIds) && d.managedConfigIds.includes(activeConfigId);
 
-      if (adminUid && !notifiedUids.has(adminUid)) {
+      if (adminUid && (isSuper || isPrimary || isManaged) && !notifiedUids.has(adminUid)) {
         notifiedUids.add(adminUid);
         // Chiamata fire-and-forget
         notifyUser(adminUid, 'NEW_REQUEST', messageStr, requestId).catch((e) =>
@@ -365,9 +366,10 @@ export async function notifyEligibleSwappers(
     const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
     const opsSnap = await getDocs(opsRef);
 
-    // Fetch users to map operatorId -> Firebase UID
+    // Phase 49: Config-Fencing — fetch ONLY users belonging to this configuration.
+    const { query: fsQuery, where: fsWhere } = await import('firebase/firestore');
     const usersRef = collection(db, 'users');
-    const usersSnap = await getDocs(usersRef);
+    const usersSnap = await getDocs(fsQuery(usersRef, fsWhere('configId', '==', activeConfigId)));
     const operatorToUserIdMap = new Map<string, string>();
     usersSnap.docs.forEach((doc) => {
       const uData = doc.data();
@@ -422,28 +424,29 @@ export async function notifySwapProposed(
     const { collection, query, where, getDocs } = await import('firebase/firestore');
     const recipients = new Set<string>(); // Set of Firebase UIDs
 
-    // 1. Fetch all Admins in this configuration
+    // 1. Phase 49: Fetch admins/superAdmins with hierarchy-aware filtering.
     const usersRef = collection(db, 'users');
-    const adminQuery = query(
-      usersRef,
-      where('role', '==', 'admin'),
-      where('configId', '==', activeConfigId),
-    );
+    const adminQuery = query(usersRef, where('role', 'in', ['admin', 'superAdmin']));
     const adminsSnap = await getDocs(adminQuery);
     adminsSnap.docs.forEach((doc) => {
       const d = doc.data();
       const uid = d.uid || doc.id;
-      if (uid && uid !== swapObj.creatorId) recipients.add(uid);
+      const isSuper = d.role === 'superAdmin';
+      const isPrimary = d.configId === activeConfigId;
+      const isManaged = Array.isArray(d.managedConfigIds) && d.managedConfigIds.includes(activeConfigId);
+      if (uid && uid !== swapObj.creatorId && (isSuper || isPrimary || isManaged)) {
+        recipients.add(uid);
+      }
     });
 
     // 2. Fetch all Eligible Peers (Operators with the desired shift)
     const opsRef = collection(db, 'systemConfigurations', activeConfigId, 'operators');
     const opsSnap = await getDocs(opsRef);
 
-    // Map operatorId -> UID
-    const allUsersSnap = await getDocs(usersRef);
+    // Phase 49: Config-Fencing — map operatorId -> UID filtered by configId.
     const opToUid = new Map<string, string>();
-    allUsersSnap.forEach((doc) => {
+    const configUsersSnap = await getDocs(query(usersRef, where('configId', '==', activeConfigId)));
+    configUsersSnap.forEach((doc) => {
       const d = doc.data();
       if (d.operatorId) opToUid.set(d.operatorId, doc.id);
     });
