@@ -291,6 +291,7 @@ export function useRequestsFilter() {
             : `${operator.name} si è offerto con ${offerCount} opzioni per il turno ${shiftLabel}: ${scenarioSummary}`,
           offerDialog.value.req.id,
           activeConfigId,
+          authStore.currentUser?.uid,
         ).catch((err) => logger.error('Error notifying admins', err));
       }
 

@@ -66,7 +66,9 @@ export default async function handler(req, res) {
           },
           webpush: {
             notification: {
-              icon: '/icon.png',
+              // Phase 49: Absolute URL required — relative paths cause silent crash on Android Chrome PWA
+              icon: 'https://nursehub-psi.vercel.app/icons/icon-192x192.png',
+              badge: 'https://nursehub-psi.vercel.app/icons/icon-128x128.png',
               vibrate: [200, 100, 200],
             },
             fcm_options: {

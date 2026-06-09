@@ -20,9 +20,17 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-
-  // NOTA: Non chiamiamo self.registration.showNotification qui.
-  // Il server Vercel include già l'oggetto "notification" nel payload FCM, quindi Android/Chrome
-  // mostrano la notifica automaticamente. Chiamarlo anche qui crea una notifica doppia!
+  // Phase 49: Explicit showNotification required on Android 14+ / Chrome PWA.
+  // On killed PWA, Firebase auto-display silently fails — we must call showNotification explicitly.
+  const title = payload.notification?.title || 'NurseHub';
+  const options = {
+    body: payload.notification?.body || '',
+    icon: 'https://nursehub-psi.vercel.app/icons/icon-192x192.png',
+    badge: 'https://nursehub-psi.vercel.app/icons/icon-128x128.png',
+    vibrate: [200, 100, 200],
+    data: payload.data || {},
+    tag: payload.data?.requestId || 'nursehub-notification',
+    renotify: true,
+  };
+  self.registration.showNotification(title, options);
 });

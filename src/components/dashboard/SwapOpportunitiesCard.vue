@@ -255,6 +255,7 @@ function acceptSwap(swap: ShiftSwap) {
             `Accordo raggiunto tra ${swap.creatorName} e ${counterpartName} per il ${formatDate(swap.date)}. In attesa di revisione.`,
             swap.id,
             configStore.activeConfigId,
+            authStore.currentUser?.uid,
           );
         }
 

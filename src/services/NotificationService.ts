@@ -317,6 +317,7 @@ export async function notifyAdmins(
   messageStr: string,
   requestId: string,
   activeConfigId: string,
+  excludeUid?: string,
 ): Promise<void> {
   try {
     if (!activeConfigId) return;
@@ -336,6 +337,9 @@ export async function notifyAdmins(
       const isSuper = d.role === 'superAdmin';
       const isPrimary = d.configId === activeConfigId;
       const isManaged = Array.isArray(d.managedConfigIds) && d.managedConfigIds.includes(activeConfigId);
+
+      // Phase 49: Skip the user who triggered the action (avoids self-notification)
+      if (adminUid === excludeUid) continue;
 
       if (adminUid && (isSuper || isPrimary || isManaged) && !notifiedUids.has(adminUid)) {
         notifiedUids.add(adminUid);
