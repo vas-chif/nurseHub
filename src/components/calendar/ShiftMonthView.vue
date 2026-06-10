@@ -354,7 +354,7 @@ function getNoteForDate(d: Date) {
   }
   .calendar-cell {
     aspect-ratio: 1 / 1.2;
-    min-height: 60px;
+    min-height: unset;
   }
   .day-num {
     top: 4px;

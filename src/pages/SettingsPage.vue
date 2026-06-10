@@ -18,6 +18,7 @@ import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { useScheduleStore } from '../stores/scheduleStore';
+import { useConfigStore } from '../stores/configStore';
 import { useSecureLogger } from '../utils/secureLogger';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseMessaging } from '@capacitor-firebase/messaging';
@@ -34,6 +35,7 @@ const $q = useQuasar();
 const authStore = useAuthStore();
 const uiStore = useUiStore();
 const scheduleStore = useScheduleStore();
+const configStore = useConfigStore();
 const logger = useSecureLogger();
 
 const notificationsEnabled = ref(false);
@@ -219,6 +221,30 @@ const onWidgetClickableToggle = async (val: boolean) => {
 }; /*end onWidgetClickableToggle*/
 
 /**
+ * Finds the current user's operator record.
+ * Loads operators from Firestore if the store is empty (e.g. user went to
+ * Settings without visiting CalendarPage first).
+ * Falls back to matching by op.id === operatorId when userId is not set.
+ */
+async function resolveMyOperator() {
+  const uid = authStore.currentUser?.uid;
+  const operatorId = authStore.currentUser?.operatorId;
+  const configId = authStore.currentUser?.configId ?? configStore.activeConfigId;
+
+  if (!uid || !operatorId || !configId) return undefined;
+
+  // Ensure operators are loaded for this config
+  if (!scheduleStore.operators.length) {
+    await scheduleStore.loadOperators(configId);
+  }
+
+  return (
+    scheduleStore.operators.find((op) => op.userId === uid) ??
+    scheduleStore.operators.find((op) => op.id === operatorId)
+  );
+} /*end resolveMyOperator*/
+
+/**
  * Called when the user toggles the widget switch.
  * Shows GDPR disclaimer on first activation; clears data on deactivation.
  */
@@ -226,14 +252,14 @@ const onWidgetToggle = async (enabled: boolean) => {
   if (enabled) {
     const alreadyAccepted = await isWidgetPrivacyAccepted();
     if (alreadyAccepted) {
-      // Re-sync schedule data immediately
-      const myOperator = scheduleStore.operators.find(
-        (op) => op.userId === authStore.currentUser?.uid,
-      );
+      const myOperator = await resolveMyOperator();
       if (myOperator) {
         widgetLoading.value = true;
         await syncWidgetData(myOperator, authStore.currentUser?.firstName ?? '');
         widgetLoading.value = false;
+      } else {
+        $q.notify({ type: 'warning', message: 'Nessun operatore collegato. Vai al Calendario prima.' });
+        widgetEnabled.value = false;
       }
     } else {
       // Must accept disclaimer before activating
@@ -254,9 +280,7 @@ const onWidgetPrivacyAccept = async () => {
   widgetLoading.value = true;
   try {
     await acceptWidgetPrivacy();
-    const myOperator = scheduleStore.operators.find(
-      (op) => op.userId === authStore.currentUser?.uid,
-    );
+    const myOperator = await resolveMyOperator();
     if (myOperator) {
       await syncWidgetData(myOperator, authStore.currentUser?.firstName ?? '');
     }

@@ -280,8 +280,10 @@ watch(
   () => scheduleStore.operators,
   (ops) => {
     const uid = authStore.currentUser?.uid;
+    const operatorId = authStore.currentUser?.operatorId;
     if (!uid) return;
-    const myOperator = ops.find((op) => op.userId === uid);
+    const myOperator =
+      ops.find((op) => op.userId === uid) ?? ops.find((op) => op.id === operatorId);
     if (myOperator) {
       void syncWidgetData(myOperator, authStore.currentUser?.firstName ?? '');
     }
@@ -529,7 +531,7 @@ function goBack() {
       </router-view>
     </q-page-container>
 
-    <q-footer bordered class="bg-white text-primary q-mb-lg">
+    <q-footer bordered class="bg-white text-primary q-pb-md">
       <q-tabs
         no-caps
         active-color="primary"
@@ -606,15 +608,14 @@ function goBack() {
         />
       </q-tabs>
       <div class="row justify-center q-mx-md">
-        <div class="text-caption q-px-md">&copy; {{ new Date().getFullYear() }} Nurse Hub</div>
-        <div class="text-center text-caption text-primary row justify-between items-center">
+        <div class="text-center text-caption text-primary row no-wrap justify-between items-center">
           <div>
             <router-link
               to="/terms"
               class="text-primary text-caption q-px-md"
               style="text-decoration: none"
             >
-              Termini e Condizioni
+              Termini
             </router-link>
           </div>
           <div>
@@ -634,6 +635,24 @@ function goBack() {
             >
               Licenze
             </router-link>
+          </div>
+        </div>
+        <div class="text-caption text-grey-6 text-center row no-wrap justify-center items-center">
+          © {{ new Date().getFullYear() }} Nurse Hub
+
+          <div class="q-ma-xs q-pl-sm">
+            <a
+              class="created-by caption text-grey-6"
+              href="https://uniqueyouagency.com/#/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="text-decoration: none"
+            >
+              Created by
+              <span class="text-weight-bolder text-purple-10">
+                Unique<span class="text-red-8">You</span>Agency</span
+              >
+            </a>
           </div>
         </div>
       </div>
