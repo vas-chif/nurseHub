@@ -116,6 +116,18 @@ function getNoteForDate(d: Date) {
   return currentOperator.value.notes?.[key] || null;
 }
 
+const noteDialog = ref(false);
+const selectedNoteDate = ref('');
+const selectedNoteText = ref('');
+
+function openNoteDialog(d: Date, note: string) {
+  selectedNoteDate.value = quasarDate.formatDate(d, 'DD MMMM YYYY', {
+    months: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
+  });
+  selectedNoteText.value = note;
+  noteDialog.value = true;
+}
+
 
 </script>
 
@@ -132,76 +144,45 @@ function getNoteForDate(d: Date) {
 
     <!-- Day Names -->
     <div class="calendar-grid-header q-mb-xs">
-      <div
-        v-for="day in dayNames"
-        :key="day"
-        class="text-center text-caption text-weight-bold text-grey-6 q-py-xs"
-      >
+      <div v-for="day in dayNames" :key="day" class="text-center text-caption text-weight-bold text-grey-6 q-py-xs">
         {{ day }}
       </div>
     </div>
 
     <!-- Calendar Grid -->
     <div class="calendar-grid">
-      <div
-        v-for="(day, index) in calendarDays"
-        :key="index"
-        class="calendar-cell"
-        :class="{ 'not-current': !day.isCurrentMonth, 'is-today': isToday(day.date) }"
-      >
-        <div
-          class="elite-shift-card full-height relative-position shadow-1"
-          :style="{
+      <div v-for="(day, index) in calendarDays" :key="index" class="calendar-cell"
+        :class="{ 'not-current': !day.isCurrentMonth, 'is-today': isToday(day.date) }">
+        <div class="elite-shift-card full-height relative-position shadow-1"
+          :class="{ 'cursor-pointer': getNoteForDate(day.date) }" :style="{
             '--shift-color': getShiftStyleForCode(getShiftForDate(day.date)).color,
             '--shift-bg': getShiftStyleForCode(getShiftForDate(day.date)).bg,
-          }"
-        >
+          }" @click="getNoteForDate(day.date) && openNoteDialog(day.date, getNoteForDate(day.date)!)">
           <!-- Day Number -->
           <div class="day-num text-weight-bold text-grey-8">{{ day.date.getDate() }}</div>
 
           <!-- Shift Display (Letter + Icon) -->
-          <div
-            class="shift-info column items-center justify-center full-width"
-            v-if="getShiftForDate(day.date)"
-          >
-            <div
-              class="shift-letter text-weight-bolder"
-              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }"
-            >
+          <div class="shift-info column items-center justify-center full-width" v-if="getShiftForDate(day.date)">
+            <div class="shift-letter text-weight-bolder"
+              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }">
               {{ getShiftForDate(day.date) }}
             </div>
-            <q-icon
-              :name="getShiftStyleForCode(getShiftForDate(day.date)).icon"
-              size="12px"
-              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }"
-              class="q-mt-xs"
-            />
-            
+            <q-icon :name="getShiftStyleForCode(getShiftForDate(day.date)).icon" size="12px"
+              :style="{ color: getShiftStyleForCode(getShiftForDate(day.date)).color }" class="q-mt-xs" />
+
             <!-- Visual indicator for note (Excel-style red triangle) -->
             <div v-if="getNoteForDate(day.date)" class="note-indicator"></div>
-
-            <!-- Admin-only Tooltip for Excel Notes (§1.12) -->
-            <q-tooltip v-if="authStore.isAnyAdmin && getNoteForDate(day.date)" 
-              class="glass-tooltip text-white shadow-10" 
-              :offset="[0, 12]"
-              anchor="bottom middle" self="top middle"
-            >
-              <div class="tooltip-content">
-                <div class="row no-wrap items-center q-mb-xs border-bottom-soft q-pb-xs">
-                  <q-icon name="sticky_note_2" size="14px" class="q-mr-sm text-amber" />
-                  <span class="text-weight-bold text-uppercase tracking-wider" style="font-size: 0.7rem">Dettagli Nota Excel</span>
-                </div>
-                <div class="note-text q-mt-sm">{{ getNoteForDate(day.date) }}</div>
-              </div>
-            </q-tooltip>
           </div>
-          <div v-else class="flex-grow"></div>
+          <div v-else class="flex-grow">
+            <!-- Even if there is no shift, there could be a note (e.g. for absences) -->
+            <div v-if="getNoteForDate(day.date)" class="note-indicator"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Legend -->
-    <div class="row justify-center q-mt-md q-gutter-sm">
+    <div class="row justify-center q-mt-xs q-gutter-sm">
       <q-badge rounded color="amber-8" label="M" class="q-px-sm" />
       <q-badge rounded color="orange-8" label="P" class="q-px-sm" />
       <q-badge rounded color="blue-10" label="N" class="q-px-sm" />
@@ -209,6 +190,26 @@ function getNoteForDate(d: Date) {
       <q-badge rounded color="green-6" label="S" class="q-px-sm" />
       <q-badge rounded color="red-6" label="A" class="q-px-sm" />
     </div>
+
+    <!-- Note Dialog (Mobile Friendly) -->
+    <q-dialog v-model="noteDialog">
+      <q-card style="border-radius: 16px; min-width: 320px; max-width: 90vw;">
+        <q-card-section class="bg-primary text-white row items-center q-pb-sm">
+          <q-icon name="sticky_note_2" size="sm" class="q-mr-sm text-amber" />
+          <div class="text-subtitle1 text-weight-bold">Nota Excel</div>
+          <q-space />
+          <q-btn flat round dense icon="close" v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pt-sm bg-grey-1">
+          <div class="text-caption text-primary text-weight-bold text-uppercase q-mb-xs">
+            Data: {{ selectedNoteDate }}
+          </div>
+          <div class="text-body1 text-grey-9 q-mt-sm" style="line-height: 1.5">
+            {{ selectedNoteText }}
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -281,7 +282,7 @@ function getNoteForDate(d: Date) {
 }
 
 /* ── Today highlight (Google/Apple Calendar style) ─────────────────────── */
-.is-today > .elite-shift-card {
+.is-today>.elite-shift-card {
   border: 2px solid #186497;
   box-shadow:
     0 0 0 3px rgba(24, 100, 151, 0.15),
@@ -312,6 +313,7 @@ function getNoteForDate(d: Date) {
     right: 4px;
   }
 }
+
 /* ── end today highlight ────────────────────────────────────────────────── */
 
 .day-num {
@@ -337,6 +339,7 @@ function getNoteForDate(d: Date) {
   .shift-letter {
     font-size: 1.8rem;
   }
+
   .calendar-cell {
     min-height: 80px;
   }
@@ -344,27 +347,35 @@ function getNoteForDate(d: Date) {
 
 @media (max-width: 600px) {
   .calendar-grid {
-    gap: 4px;
+    gap: 3px;
   }
+
   .elite-shift-card {
-    border-radius: 10px;
+    border-radius: 8px;
   }
+
   .shift-letter {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
+    letter-spacing: -0.5px;
   }
+
   .calendar-cell {
     aspect-ratio: 1 / 1.2;
     min-height: unset;
+    min-width: 0;
   }
+
   .day-num {
-    top: 4px;
-    right: 6px;
-    font-size: 0.65rem;
+    top: 5px;
+    right: 4px;
+    font-size: 0.6rem;
   }
+
   .shift-info {
-    padding-top: 4px;
+    padding-top: 10px;
   }
 }
+
 /* ── end today highlight ────────────────────────────────────────────────── */
 
 /* Note Indicator styles (Excel-like corner) */

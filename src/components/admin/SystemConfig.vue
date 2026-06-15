@@ -4,7 +4,15 @@ configurations and scenarios. * @author Nurse Hub Team * @created 2026-03-24 * @
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue';
 import { useQuasar } from 'quasar';
-import { collection, doc, updateDoc, deleteDoc, setDoc, addDoc, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  addDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import { db } from '../../boot/firebase';
 import { useAuthStore } from '../../stores/authStore';
 import { useConfigStore } from '../../stores/configStore';
@@ -163,9 +171,9 @@ async function renameGroup() {
   renaming.value = true;
   try {
     const batch = writeBatch(db);
-    const configsToUpdate = configurations.value.filter(c => c.group === oldGroupName.value);
-    
-    configsToUpdate.forEach(config => {
+    const configsToUpdate = configurations.value.filter((c) => c.group === oldGroupName.value);
+
+    configsToUpdate.forEach((config) => {
       const configRef = doc(db, 'systemConfigurations', config.id);
       batch.update(configRef, { group: newGroupName.value });
     });
@@ -184,7 +192,7 @@ async function renameGroup() {
 
 const uniqueGroups = computed(() => {
   const groups = new Set<string>();
-  configurations.value.forEach(c => {
+  configurations.value.forEach((c) => {
     if (c.group) groups.add(c.group);
   });
   return Array.from(groups).sort();
@@ -220,7 +228,7 @@ async function saveConfig(config: SystemConfiguration) {
  */
 function handleGroupTransfer(config: SystemConfiguration, newGroup: string | null) {
   // 1. Get original group from the store (unmodified)
-  const originalConfig = configStore.allConfigs.find(c => c.id === config.id);
+  const originalConfig = configStore.allConfigs.find((c) => c.id === config.id);
   const oldGroup = originalConfig?.group || '';
   const displayNewGroup = newGroup || 'Altre Configurazioni';
 
@@ -231,17 +239,19 @@ function handleGroupTransfer(config: SystemConfiguration, newGroup: string | nul
     message: `Vuoi spostare "${config.name}" nel reparto "${displayNewGroup}"?`,
     cancel: { label: 'Annulla', flat: true, color: 'grey' },
     ok: { label: 'Sposta e Salva', color: 'primary', unelevated: true },
-    persistent: true
-  }).onOk(() => {
-    void (async () => {
-      // 2. Perform the update and save
-      config.group = newGroup;
-      await saveConfig(config);
-    })();
-  }).onCancel(() => {
-    // 3. Revert local state
-    config.group = oldGroup;
-  });
+    persistent: true,
+  })
+    .onOk(() => {
+      void (async () => {
+        // 2. Perform the update and save
+        config.group = newGroup;
+        await saveConfig(config);
+      })();
+    })
+    .onCancel(() => {
+      // 3. Revert local state
+      config.group = oldGroup;
+    });
 }
 
 function activateConfig(configId: string) {
@@ -419,6 +429,133 @@ function deleteScenario(configId: string, scenarioId: string) {
     })();
   });
 }
+
+// ===== PHASE 50: Custom Shift Definitions =====
+
+import type { CustomShiftDef } from '../../types/models';
+
+const showShiftDialog = ref(false);
+const editingShiftConfigId = ref<string | null>(null);
+const editingShiftCode = ref<string | null>(null); // null = new, string = editing existing
+
+const shiftForm = reactive<CustomShiftDef>({
+  code: '',
+  label: '',
+  color: '#f59e0b',
+  bg: 'rgba(245,158,11,0.1)',
+  icon: 'schedule',
+  startTime: '',
+  endTime: '',
+});
+
+function openAddShiftDialog(configId: string) {
+  editingShiftConfigId.value = configId;
+  editingShiftCode.value = null;
+  Object.assign(shiftForm, {
+    code: '',
+    label: '',
+    color: '#f59e0b',
+    bg: 'rgba(245,158,11,0.1)',
+    icon: 'schedule',
+    startTime: '',
+    endTime: '',
+  });
+  showShiftDialog.value = true;
+} /*end openAddShiftDialog*/
+
+function openEditShiftDialog(configId: string, code: string, def: CustomShiftDef) {
+  editingShiftConfigId.value = configId;
+  editingShiftCode.value = code;
+  Object.assign(shiftForm, { ...def });
+  showShiftDialog.value = true;
+} /*end openEditShiftDialog*/
+
+async function saveShiftDef() {
+  const configId = editingShiftConfigId.value;
+  if (!configId || !shiftForm.code.trim()) return;
+
+  const code = shiftForm.code.trim().toUpperCase();
+  const defToSave: CustomShiftDef = {
+    code,
+    label: shiftForm.label.trim(),
+    color: shiftForm.color,
+    bg: shiftForm.bg,
+    icon: shiftForm.icon,
+    ...(shiftForm.startTime && { startTime: shiftForm.startTime }),
+    ...(shiftForm.endTime && { endTime: shiftForm.endTime }),
+  };
+
+  try {
+    const configRef = doc(db, 'systemConfigurations', configId);
+    const config = configurations.value.find((c) => c.id === configId);
+    const existing = config?.customShiftDefs ?? {};
+    await updateDoc(configRef, {
+      customShiftDefs: { ...existing, [code]: defToSave },
+    });
+    await configStore.loadConfigurations();
+    $q.notify({ type: 'positive', message: `Sigla ${code} salvata!` });
+    showShiftDialog.value = false;
+  } catch (err) {
+    logger.error('saveShiftDef error', err);
+    $q.notify({ type: 'negative', message: 'Errore durante il salvataggio' });
+  }
+} /*end saveShiftDef*/
+
+function deleteShiftDef(configId: string, code: string) {
+  $q.dialog({
+    title: 'Elimina Sigla',
+    message: `Eliminare la sigla "${code}" da questa configurazione?`,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void (async () => {
+      try {
+        const config = configurations.value.find((c) => c.id === configId);
+        const updated = { ...(config?.customShiftDefs ?? {}) };
+        delete updated[code];
+        const configRef = doc(db, 'systemConfigurations', configId);
+        await updateDoc(configRef, { customShiftDefs: updated });
+        await configStore.loadConfigurations();
+        $q.notify({ type: 'info', message: `Sigla ${code} eliminata` });
+      } catch (err) {
+        logger.error('deleteShiftDef error', err);
+        $q.notify({ type: 'negative', message: "Errore durante l'eliminazione" });
+      }
+    })();
+  });
+} /*end deleteShiftDef*/
+
+function seedDefaultShifts(configId: string) {
+  $q.dialog({
+    title: 'Carica Sigle Base',
+    message: 'Vuoi popolare questa configurazione con le 6 sigle base (M, P, N, R, S, A) per poterle modificare liberamente?',
+    cancel: true,
+  }).onOk(() => {
+    void (async () => {
+      try {
+        const defaultDefs: Record<string, CustomShiftDef> = {
+          M: { code: 'M', label: 'Mattina', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', icon: 'light_mode', startTime: '07:00', endTime: '14:00' },
+          P: { code: 'P', label: 'Pomeriggio', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.1)', icon: 'wb_twilight', startTime: '14:00', endTime: '21:00' },
+          N: { code: 'N', label: 'Notte', color: '#1e3a8a', bg: 'rgba(30, 58, 138, 0.1)', icon: 'dark_mode', startTime: '21:00', endTime: '07:00' },
+          R: { code: 'R', label: 'Riposo', color: '#64748b', bg: 'rgba(100, 116, 139, 0.05)', icon: 'hotel', startTime: '', endTime: '' },
+          S: { code: 'S', label: 'Smonto', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.1)', icon: 'logout', startTime: '', endTime: '' },
+          A: { code: 'A', label: 'Assenza', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.1)', icon: 'event_busy', startTime: '', endTime: '' },
+        };
+        const configRef = doc(db, 'systemConfigurations', configId);
+        const config = configurations.value.find((c) => c.id === configId);
+        const existing = config?.customShiftDefs ?? {};
+        await updateDoc(configRef, {
+          customShiftDefs: { ...existing, ...defaultDefs },
+        });
+        await configStore.loadConfigurations();
+        $q.notify({ type: 'positive', message: 'Sigle base caricate con successo!' });
+      } catch (err) {
+        logger.error('Error seeding shifts', err);
+        $q.notify({ type: 'negative', message: 'Errore durante il caricamento' });
+      }
+    })();
+  });
+} /*end seedDefaultShifts*/
 </script>
 
 <template>
@@ -551,15 +688,19 @@ function deleteScenario(configId: string, scenarioId: string) {
                       fill-input
                       hide-selected
                       input-debounce="0"
-                      @update:model-value="val => handleGroupTransfer(config, val)"
-                      @new-value="(val, done) => {
-                        done(val, 'add-unique');
-                        handleGroupTransfer(config, val);
-                      }"
+                      @update:model-value="(val) => handleGroupTransfer(config, val)"
+                      @new-value="
+                        (val, done) => {
+                          done(val, 'add-unique');
+                          handleGroupTransfer(config, val);
+                        }
+                      "
                       hint="Es: Area Medica"
                     >
                       <template v-slot:no-option>
-                        <q-item><q-item-section class="text-grey">Nuova Area</q-item-section></q-item>
+                        <q-item
+                          ><q-item-section class="text-grey">Nuova Area</q-item-section></q-item
+                        >
                       </template>
                     </q-select>
                   </div>
@@ -610,6 +751,79 @@ function deleteScenario(configId: string, scenarioId: string) {
                 </q-input>
               </q-card-section>
 
+              <!-- Phase 50: Custom Shift Definitions panel -->
+              <q-expansion-item
+                icon="schedule"
+                label="Sigle Turni"
+                caption="Codici turno esclusivi di questa configurazione"
+                dense
+                class="q-mx-md q-mb-sm"
+              >
+                <q-card flat bordered class="q-ma-sm">
+                  <q-card-section class="q-pa-sm">
+                    <div
+                      v-if="
+                        config.customShiftDefs && Object.keys(config.customShiftDefs).length > 0
+                      "
+                    >
+                      <q-chip
+                        v-for="(def, code) in config.customShiftDefs"
+                        :key="code"
+                        :style="{ color: def.color, borderColor: def.color, background: def.bg }"
+                        outline
+                        clickable
+                        class="q-ma-xs"
+                        @click="openEditShiftDialog(config.id, String(code), def)"
+                      >
+                        <q-icon :name="def.icon" size="14px" class="q-mr-xs" />
+                        <strong>{{ code }}</strong>
+                        <span class="q-ml-xs text-caption">{{ def.label }}</span>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="close"
+                          size="xs"
+                          color="negative"
+                          class="q-ml-xs"
+                          @click.stop="deleteShiftDef(config.id, String(code))"
+                        >
+                          <q-tooltip>Elimina sigla {{ code }}</q-tooltip>
+                        </q-btn>
+                      </q-chip>
+                    </div>
+                    <div v-else class="text-caption text-grey q-py-xs">
+                      Nessuna sigla personalizzata — verranno usate le sigle base (M, P, N, R, S,
+                      A).
+                    </div>
+                  </q-card-section>
+                  <q-card-actions align="left" class="q-pa-sm">
+                    <q-btn
+                      flat
+                      dense
+                      icon="add"
+                      label="Aggiungi Sigla"
+                      color="primary"
+                      size="sm"
+                      class="q-mr-sm"
+                      @click="openAddShiftDialog(config.id)"
+                    />
+                    <q-btn
+                      v-if="!config.customShiftDefs || Object.keys(config.customShiftDefs).length === 0"
+                      flat
+                      dense
+                      icon="download"
+                      label="Carica Sigle Base"
+                      color="warning"
+                      size="sm"
+                      @click="seedDefaultShifts(config.id)"
+                    >
+                      <q-tooltip>Importa le 6 sigle standard per poterle modificare o completare con gli orari</q-tooltip>
+                    </q-btn>
+                  </q-card-actions>
+                </q-card>
+              </q-expansion-item>
+
               <q-separator />
 
               <q-card-actions class="q-px-lg q-py-md row items-center">
@@ -633,11 +847,7 @@ function deleteScenario(configId: string, scenarioId: string) {
 
                 <!-- Buttons on the right -->
                 <div class="row q-gutter-sm">
-                  <GlobalSyncBtn
-                    :target-config="config"
-                    size="md"
-                    class="q-mr-xs"
-                  />
+                  <GlobalSyncBtn :target-config="config" size="md" class="q-mr-xs" />
 
                   <q-btn
                     label="SALVA"
@@ -854,7 +1064,7 @@ function deleteScenario(configId: string, scenarioId: string) {
           fill-input
           hide-selected
           input-debounce="0"
-          @input-value="val => newConfigGroup = val"
+          @input-value="(val) => (newConfigGroup = val)"
           @new-value="(val, done) => done(val, 'add-unique')"
           hint="Es: Area Medica"
         >
@@ -1097,8 +1307,8 @@ function deleteScenario(configId: string, scenarioId: string) {
 
       <q-card-section class="q-pt-md">
         <div class="text-caption text-grey-8 q-mb-md">
-          Stai rinominando il reparto <strong>{{ oldGroupName }}</strong>.
-          Tutte le configurazioni associate verranno aggiornate automaticamente.
+          Stai rinominando il reparto <strong>{{ oldGroupName }}</strong
+          >. Tutte le configurazioni associate verranno aggiornate automaticamente.
         </div>
         <q-input
           v-model="newGroupName"
@@ -1119,6 +1329,77 @@ function deleteScenario(configId: string, scenarioId: string) {
           @click="renameGroup"
           :loading="renaming"
           :disable="!newGroupName || newGroupName === oldGroupName"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+
+  <!-- Phase 50: Add/Edit Custom Shift Definition Dialog -->
+  <q-dialog v-model="showShiftDialog" persistent>
+    <q-card style="min-width: 340px">
+      <q-card-section class="row items-center">
+        <q-icon name="schedule" color="primary" size="sm" class="q-mr-sm" />
+        <span class="text-h6">{{ editingShiftCode ? `Modifica Sigla ${editingShiftCode}` : 'Nuova Sigla Turno' }}</span>
+      </q-card-section>
+
+      <q-card-section class="q-gutter-sm">
+        <q-input
+          v-model="shiftForm.code"
+          label="Codice Sigla *"
+          outlined dense
+          :disable="!!editingShiftCode"
+          hint="Es: M12, N8, T4 (verrà convertito in maiuscolo)"
+          :rules="[(v) => !!v || 'Campo obbligatorio']"
+        />
+        <q-input
+          v-model="shiftForm.label"
+          label="Nome Esteso *"
+          outlined dense
+          hint="Es: Mattina 12 ore"
+          :rules="[(v) => !!v || 'Campo obbligatorio']"
+        />
+        <div class="row q-gutter-sm">
+          <q-input v-model="shiftForm.startTime" label="Orario Inizio" outlined dense type="time" class="col" />
+          <q-input v-model="shiftForm.endTime" label="Orario Fine" outlined dense type="time" class="col" />
+        </div>
+        <q-input
+          v-model="shiftForm.icon"
+          label="Icona Material"
+          outlined dense
+          hint="Es: light_mode, dark_mode, schedule"
+        >
+          <template v-slot:prepend>
+            <q-icon :name="shiftForm.icon || 'schedule'" :style="{ color: shiftForm.color }" />
+          </template>
+        </q-input>
+        <div class="row q-gutter-sm items-center">
+          <div class="col">
+            <div class="text-caption text-grey q-mb-xs">Colore testo/bordo</div>
+            <input type="color" v-model="shiftForm.color" style="width:100%; height:38px; border-radius:4px; border:1px solid #ccc; cursor:pointer" />
+          </div>
+          <div class="col">
+            <div class="text-caption text-grey q-mb-xs">Anteprima chip</div>
+            <q-chip
+              outline
+              :style="{ color: shiftForm.color, borderColor: shiftForm.color }"
+              class="text-weight-bold"
+            >
+              <q-icon :name="shiftForm.icon || 'schedule'" size="14px" class="q-mr-xs" />
+              {{ shiftForm.code || 'XX' }}
+            </q-chip>
+          </div>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right" class="q-pa-md">
+        <q-btn flat label="Annulla" color="grey" v-close-popup />
+        <q-btn
+          unelevated
+          label="Salva"
+          color="primary"
+          icon="save"
+          :disable="!shiftForm.code || !shiftForm.label"
+          @click="saveShiftDef"
         />
       </q-card-actions>
     </q-card>

@@ -67,13 +67,20 @@ const swapForm = ref({
 const swapSubmitting = ref(false);
 const mySwaps = ref<ShiftSwap[]>([]);
 
-const swapShiftOptions = [
-  { label: 'M - Mattina', value: 'M' },
-  { label: 'P - Pomeriggio', value: 'P' },
-  { label: 'N - Notte', value: 'N' },
-  { label: 'S - Smonto', value: 'S' },
-  { label: 'R - Riposo', value: 'R' },
-];
+// ─── Swap shift options: config-fenced (Phase 50) ───────────────────────────
+const swapShiftOptions = computed(() => {
+  const defs = configStore.activeConfig?.customShiftDefs;
+  if (defs && Object.keys(defs).length > 0) {
+    return Object.values(defs).map((d) => ({ label: `${d.code} - ${d.label}`, value: d.code }));
+  }
+  return [
+    { label: 'M - Mattina', value: 'M' },
+    { label: 'P - Pomeriggio', value: 'P' },
+    { label: 'N - Notte', value: 'N' },
+    { label: 'S - Smonto', value: 'S' },
+    { label: 'R - Riposo', value: 'R' },
+  ];
+}); /*end swapShiftOptions*/
 
 function getSwapStatusColor(swap: ShiftSwap): string {
   if (swap.status === 'OPEN' && isRequestExpired(swap.date, swap.offeredShift)) return 'negative';

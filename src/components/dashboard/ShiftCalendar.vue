@@ -1,13 +1,13 @@
 /**
- * @file ShiftCalendar.vue
- * @description Monthly calendar view with premium, compact design.
- * @author Nurse Hub Team
- * @created 2026-03-12
- * @modified 2026-05-15
- * @notes
- * - Complies with §1.4 by using centralized types.
- * - Phase 39: getShiftStyleForCode imported from useShiftLogic (§1.12 DRY).
- */
+* @file ShiftCalendar.vue
+* @description Monthly calendar view with premium, compact design.
+* @author Nurse Hub Team
+* @created 2026-03-12
+* @modified 2026-05-15
+* @notes
+* - Complies with §1.4 by using centralized types.
+* - Phase 39: getShiftStyleForCode imported from useShiftLogic (§1.12 DRY).
+*/
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, watchEffect } from 'vue';
 import { useAuthStore } from '../../stores/authStore';
@@ -99,7 +99,7 @@ const calendars = computed<OperatorCalendar[]>(() => {
 
 
 
-function onSwipe() {}
+function onSwipe() { }
 </script>
 
 <template>
@@ -111,8 +111,8 @@ function onSwipe() {}
       </div>
       <!-- Admin Mode only: multi-operator search selector -->
       <div style="min-width: 200px" v-if="authStore.effectiveIsAdmin && hasSearchModule">
-        <q-select v-model="selectedOperator" :options="operatorOptions" label="Cerca" dense outlined
-          options-dense rounded bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
+        <q-select v-model="selectedOperator" :options="operatorOptions" label="Cerca" dense outlined options-dense
+          rounded bg-color="white" multiple use-chips use-input option-label="name" @filter="filterOperators">
           <template v-slot:append><q-icon name="search" size="xs" /></template>
         </q-select>
       </div>
@@ -127,19 +127,20 @@ function onSwipe() {}
               {{ calendar.operatorName.charAt(0) }}
             </q-avatar>
             <div class="column">
-              <span class="text-caption text-grey-6 uppercase letter-spacing-1" style="font-size: 0.6rem">Programmazione</span>
-              <span class="text-subtitle2 text-weight-bold text-grey-9" style="line-height: 1">{{ calendar.operatorName }}</span>
+              <span class="text-caption text-grey-6 uppercase letter-spacing-1"
+                style="font-size: 0.6rem">Programmazione</span>
+              <span class="text-subtitle2 text-weight-bold text-grey-9" style="line-height: 1">{{ calendar.operatorName
+              }}</span>
             </div>
           </div>
-          
+
           <div class="scroll-container q-py-xs" v-touch-swipe.horizontal.stop="onSwipe">
             <div v-for="(day, index) in calendar.days" :key="index"
-              class="shift-card column items-center justify-between q-pa-xs"
-              :style="{ 
-                '--shift-color': getShiftStyleForCode(day.shift as ShiftCode).color, 
-                '--shift-bg': getShiftStyleForCode(day.shift as ShiftCode).bg 
+              class="shift-card column items-center justify-between q-pa-xs" :style="{
+                '--shift-color': getShiftStyleForCode(day.shift as ShiftCode).color,
+                '--shift-bg': getShiftStyleForCode(day.shift as ShiftCode).bg
               }">
-              
+
               <div class="column items-center">
                 <span class="day-num text-weight-bolder">{{ day.dateFormatted.split('/')[0] }}</span>
                 <span class="day-name text-caption text-uppercase" style="font-size: 0.55rem">{{ day.dayName }}</span>
@@ -149,7 +150,7 @@ function onSwipe() {}
                 <div class="shift-letter text-weight-bold" :class="day.shift ? 'active' : ''">
                   {{ day.shift || '-' }}
                 </div>
-                <q-icon :name="getShiftStyleForCode(day.shift as ShiftCode).icon" 
+                <q-icon :name="getShiftStyleForCode(day.shift as ShiftCode).icon"
                   :style="{ color: getShiftStyleForCode(day.shift as ShiftCode).color }" size="12px" />
               </div>
 
@@ -186,7 +187,8 @@ function onSwipe() {}
 }
 
 .shift-card {
-  flex: 0 0 62px; /* Fixed width to prevent squashing */
+  flex: 0 0 62px;
+  /* Fixed width to prevent squashing */
   height: 100px;
   background: white;
   border-radius: 12px;
@@ -243,14 +245,50 @@ function onSwipe() {}
 .scroll-container::-webkit-scrollbar {
   height: 6px;
 }
+
 .scroll-container::-webkit-scrollbar-track {
   background: #f8fafc;
 }
+
 .scroll-container::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 10px;
 }
 
-.opacity-2 { opacity: 0.2; }
-.opacity-5 { opacity: 0.5; }
+.opacity-2 {
+  opacity: 0.2;
+}
+
+.opacity-5 {
+  opacity: 0.5;
+}
+
+@media (max-width: 600px) {
+  .scroll-container {
+    gap: 6px;
+    padding: 2px 2px;
+  }
+
+  .shift-card {
+    flex: 0 0 46px;
+    height: auto;
+    border-radius: 8px;
+    padding: 2px 4px !important;
+  }
+
+  .day-num {
+    font-size: 0.65rem;
+    margin-top: 2px;
+  }
+
+  .day-name {
+    font-size: 0.45rem !important;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .shift-letter {
+    font-size: 1rem;
+  }
+}
 </style>

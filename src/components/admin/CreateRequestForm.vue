@@ -5,15 +5,16 @@
 * @created 2026-03-25
 */
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useQuasar } from 'quasar';
 import type { ShiftCode, RequestReason } from '../../types/models';
 import { useSecureLogger } from '../../utils/secureLogger';
+import { useConfigStore } from '../../stores/configStore';
 import AppDateInput from '../common/AppDateInput.vue';
 
 const logger = useSecureLogger();
-
 const $q = useQuasar();
+const configStore = useConfigStore();
 const loading = ref(false);
 
 const form = reactive({
@@ -23,7 +24,12 @@ const form = reactive({
   reason: 'SHORTAGE' as RequestReason,
 });
 
-const shiftOptions: ShiftCode[] = ['M', 'P', 'N', 'N11', 'N12'];
+// Phase 50: Config-fenced shift options (§1.12 DRY)
+const shiftOptions = computed<string[]>(() => {
+  const defs = configStore.activeConfig?.customShiftDefs;
+  if (defs && Object.keys(defs).length > 0) return Object.keys(defs);
+  return ['M', 'P', 'N', 'N11', 'N12'];
+}); /*end shiftOptions*/
 const professionOptions = ['Infermiere', 'OSS'];
 const reasonOptions = [
   { label: 'Carenza Organico', value: 'SHORTAGE' },

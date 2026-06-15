@@ -62,7 +62,14 @@ const startDate = ref(localStorage.getItem(STORAGE_KEY_START_DATE) || quasarDate
 const daysToShow = ref(Number(localStorage.getItem(STORAGE_KEY_DAYS)) || 30);
 const selectedShiftCodes = ref<string[]>(JSON.parse(localStorage.getItem(STORAGE_KEY_SHIFT_CODES) || '[]'));
 const showOnlyWithNotes = ref(localStorage.getItem(STORAGE_KEY_ONLY_NOTES) === 'true');
-const shiftCodeOptions = ['M', 'P', 'N', 'R', 'A', 'S'];
+
+// Phase 50: Config-fenced shift codes — shows only the active config's codes (§1.12 DRY)
+const configStore = useConfigStore();
+const shiftCodeOptions = computed<string[]>(() => {
+  const defs = configStore.activeConfig?.customShiftDefs;
+  if (defs && Object.keys(defs).length > 0) return Object.keys(defs);
+  return ['M', 'P', 'N', 'R', 'A', 'S']; // Safe fallback for configs without custom defs
+});
 const showLegend = ref(false);
 const pagination = ref({ rowsPerPage: 0 }); // Show all rows
 
@@ -186,7 +193,6 @@ const columns = computed<QTableColumn[]>(() => [
 ]);
 
 const logger = useSecureLogger();
-const configStore = useConfigStore();
 
 onMounted(async () => {
   if (configStore.activeConfigId) {

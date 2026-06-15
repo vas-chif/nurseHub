@@ -21,6 +21,22 @@ export type ShiftCode =
 
 export type RequestReason = 'SHORTAGE' | 'ABSENCE';
 
+// --- Phase 50: Config-Fenced Custom Shift Definitions ---
+
+/**
+ * Defines a single custom shift code for a specific department configuration.
+ * Stored in SystemConfiguration.customShiftDefs keyed by the shift code string.
+ */
+export interface CustomShiftDef {
+  code: string;       // Shift code shown in the UI (e.g. 'M12')
+  label: string;      // Human-readable name (e.g. 'Mattina 12 ore')
+  color: string;      // Text/border color hex (e.g. '#f59e0b')
+  bg: string;         // Background color with opacity (e.g. 'rgba(245,158,11,0.1)')
+  icon: string;       // Material Design icon name (e.g. 'light_mode')
+  startTime?: string; // Shift start 'HH:mm' — used by temporal guard
+  endTime?: string;   // Shift end 'HH:mm' — used by temporal guard
+}
+
 export type RequestStatus = 'OPEN' | 'PARTIAL' | 'CLOSED' | 'EXPIRED' | 'APPROVED' | 'REJECTED';
 
 // --- Entities ---
@@ -282,7 +298,10 @@ export interface SystemConfiguration {
   spreadsheetUrl: string; // Google Sheets URL for this config
   gasWebUrl?: string; // Google Apps Script URL for this config
   group?: string | null; // Phase 37: Logical grouping of configurations (e.g., "Area Medica", "Area Chirurgica")
-  shiftStyles?: Record<string, { color: string; icon: string; bg?: string }>; // Phase 31: Unified shift styling
+  /** Phase 50: Config-Fenced shift definitions. Replaces shiftStyles (Phase 31).
+   * When non-empty, the UI shows ONLY these codes (no base defaults merged in).
+   * Key = shift code string (e.g. 'M12'). */
+  customShiftDefs?: Record<string, CustomShiftDef>;
   createdAt: number;
   createdBy: string; // Admin UID
   isActive?: boolean; // Currently selected configuration

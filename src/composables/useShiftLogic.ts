@@ -9,8 +9,10 @@
  * - Maps shift shortages to valid replacement scenarios based on complex hierarchical roles.
  * - Handles shift-specific expiration timestamps (M/P/N).
  * - Phase 39: Added standalone getShiftStyleForCode() — Single Source of Truth for shift visuals (§1.12).
+ * - Phase 50: getShiftStyleForCode accepts optional customDefs; getShiftTimeRange reads config-fenced times.
  */
 import { useScenarioStore } from '../stores/scenarioStore';
+import { useConfigStore } from '../stores/configStore';
 import type {
   ShiftCode,
   ComplianceResult,
@@ -18,6 +20,7 @@ import type {
   ReplacementScenario,
   ReplacementRole,
   Operator,
+  CustomShiftDef,
 } from '../types/models';
 import type { ShiftStyle } from '../types/components';
 
@@ -35,13 +38,30 @@ const SHIFT_STYLE_MAP: Record<string, ShiftStyle> = {
 /**
  * Returns the visual style (color, icon, label, bg) for a shift code.
  * This is the SINGLE SOURCE OF TRUTH for shift visual representation across the app.
- * @param code - A ShiftCode or null/empty string.
+ *
+ * @param code       - A ShiftCode or null/empty string.
+ * @param customDefs - Optional config-fenced definitions (Phase 50).
+ *                     Pass configStore.activeConfig?.customShiftDefs.
+ *                     When provided and the code is found, custom values take priority.
  */
-export function getShiftStyleForCode(code: string | null | undefined): ShiftStyle {
+export function getShiftStyleForCode(
+  code: string | null | undefined,
+  customDefs?: Record<string, CustomShiftDef>,
+): ShiftStyle {
   if (!code) return SHIFT_STYLE_MAP['']!;
-  const char = code.charAt(0).toUpperCase();
-  return (SHIFT_STYLE_MAP[code.toUpperCase()] || SHIFT_STYLE_MAP[char] || SHIFT_STYLE_MAP[''])!;
-}
+  const upper = code.toUpperCase();
+
+  // Phase 50: Config-fenced custom definitions take priority
+  if (customDefs) {
+    const custom = customDefs[upper] ?? customDefs[code];
+    if (custom) {
+      return { color: custom.color, icon: custom.icon, label: custom.label, bg: custom.bg };
+    }
+  }
+
+  const char = upper.charAt(0);
+  return (SHIFT_STYLE_MAP[upper] || SHIFT_STYLE_MAP[char] || SHIFT_STYLE_MAP[''])!;
+} /*end getShiftStyleForCode*/
 
 export function useShiftLogic() {
   /**
@@ -157,11 +177,23 @@ export function useShiftLogic() {
   }
 
   /**
-   * Returns the standard [start, end] time range for a given shift code.
+   * Returns the [start, end] time range for a given shift code.
+   * Phase 50: reads config-fenced startTime/endTime from customShiftDefs when available.
    * Format: "HH:mm"
    */
   function getShiftTimeRange(shiftCode: ShiftCode): [string, string] {
     if (!shiftCode) return ['00:00', '00:00'];
+
+    // Phase 50: check config-fenced custom definition first
+    const configStore = useConfigStore();
+    const customDefs = configStore.activeConfig?.customShiftDefs;
+    if (customDefs) {
+      const upper = shiftCode.toString().toUpperCase();
+      const custom = customDefs[upper] ?? customDefs[shiftCode.toString()];
+      if (custom?.startTime && custom?.endTime) {
+        return [custom.startTime, custom.endTime];
+      }
+    }
 
     const code = shiftCode.toString().toUpperCase();
 
@@ -172,7 +204,7 @@ export function useShiftLogic() {
 
     // Default fallback
     return ['00:00', '00:00'];
-  }
+  } /*end getShiftTimeRange*/
 
   /**
    * Checks if two time intervals overlap by at least 1 hour.

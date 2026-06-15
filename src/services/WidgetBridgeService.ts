@@ -24,7 +24,8 @@
 
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import type { Operator, ShiftCode } from '../types/models';
+import type { Operator, ShiftCode, CustomShiftDef } from '../types/models';
+import { useConfigStore } from '../stores/configStore';
 import { useSecureLogger } from '../utils/secureLogger';
 import { WidgetRefreshPlugin } from '../utils/widgetRefreshPlugin';
 
@@ -68,6 +69,8 @@ export interface WidgetShiftsPayload {
    * The widget uses widget_month_idx (0|1|2) to pick which one to display.
    */
   months: MonthData[];
+  /** Phase 50: Custom shift definitions for the active configuration. */
+  customShifts?: Record<string, CustomShiftDef>;
 }
 
 /**
@@ -166,6 +169,8 @@ export async function syncWidgetData(operator: Operator, displayName: string): P
     const nextM = month === 12 ? 1 : month + 1;
     const nextY = month === 12 ? year + 1 : year;
 
+    const configStore = useConfigStore();
+
     const payload: WidgetShiftsPayload = {
       name: displayName,
       months: [
@@ -173,6 +178,7 @@ export async function syncWidgetData(operator: Operator, displayName: string): P
         buildMonthData(year, month),
         buildMonthData(nextY, nextM),
       ],
+      ...(configStore.activeConfig?.customShiftDefs && { customShifts: configStore.activeConfig.customShiftDefs }),
     };
 
     await Preferences.set({ key: WIDGET_PREF_KEY, value: JSON.stringify(payload) });
