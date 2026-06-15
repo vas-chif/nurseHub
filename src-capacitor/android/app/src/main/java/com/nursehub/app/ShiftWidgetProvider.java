@@ -140,6 +140,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
             JSONObject dayMap     = monthData.optJSONObject("days");
             JSONObject prevDayMap = monthData.optJSONObject("prevDays");
             JSONObject nextDayMap = monthData.optJSONObject("nextDays");
+            JSONObject customShifts = data.optJSONObject("customShifts");
 
             // ── Header ───────────────────────────────────────────────────────
             views.setTextViewText(R.id.widget_user_name, userName.isEmpty() ? "NurseHub" : userName);
@@ -160,7 +161,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                 int year  = Integer.parseInt(parts[0]);
                 int month = Integer.parseInt(parts[1]); // 1-based
 
-                Calendar cal = Calendar.getInstance(new Locale("it", "IT"));
+                Calendar cal = Calendar.getInstance(Locale.ITALY);
                 cal.set(year, month - 1, 1);
 
                 // Italian week starts Monday. Calendar.DAY_OF_WEEK: Sun=1, Mon=2 ... Sat=7
@@ -203,10 +204,10 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
                                 : "";
                             // Show shift if available; always faded (0.55α) to mark adjacent month
                             views.setTextViewText(resId,
-                                Html.fromHtml(buildCellHtml(adjShift, displayDay, false),
+                                Html.fromHtml(buildCellHtml(adjShift, displayDay, false, customShifts),
                                     Html.FROM_HTML_MODE_COMPACT));
                             views.setInt(resId, "setBackgroundResource",
-                                cellBgResource(adjShift, false));
+                                cellBgResource(adjShift, false, customShifts));
                             views.setFloat(resId, "setAlpha", 0.55f);
                         } else {
                             String shift = (dayMap != null)
@@ -215,10 +216,10 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
                             // HTML multi-styled text: small grey day number + large bold colored shift letter
                             views.setTextViewText(resId,
-                                Html.fromHtml(buildCellHtml(shift, dayNum, dayNum == todayDay),
+                                Html.fromHtml(buildCellHtml(shift, dayNum, dayNum == todayDay, customShifts),
                                     Html.FROM_HTML_MODE_COMPACT));
                             views.setInt(resId, "setBackgroundResource",
-                                cellBgResource(shift, dayNum == todayDay));
+                                cellBgResource(shift, dayNum == todayDay, customShifts));
                             views.setFloat(resId, "setAlpha", 1.0f); // reset from any adjacent-month state
                         }
                     }
@@ -287,9 +288,16 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
      * Returns the hex color string for a shift code's text.
      * Mirrors §1.12 SSoT (useShiftLogic.ts → SHIFT_STYLE_MAP).
      *
-     * @param shift ShiftCode string
+     * @param shift        ShiftCode string
+     * @param customShifts JSONObject containing custom definitions
      */
-    private static String getHexForShift(String shift) {
+    private static String getHexForShift(String shift, JSONObject customShifts) {
+        if (customShifts != null && customShifts.has(shift)) {
+            JSONObject custom = customShifts.optJSONObject(shift);
+            if (custom != null && custom.has("color")) {
+                return custom.optString("color");
+            }
+        }
         switch (shift) {
             case "M": case "MP":              return "#F59E0B"; // amber
             case "P":                         return "#EA580C"; // orange
@@ -306,9 +314,25 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
      * Returns a Unicode symbol mirroring the §1.12 SSoT shift icon
      * (useShiftLogic.ts: light_mode / wb_twilight / dark_mode / hotel / logout / event_busy).
      *
-     * @param shift ShiftCode string
+     * @param shift        ShiftCode string
+     * @param customShifts JSONObject containing custom definitions
      */
-    private static String getIconForShift(String shift) {
+    private static String getIconForShift(String shift, JSONObject customShifts) {
+        if (customShifts != null && customShifts.has(shift)) {
+            JSONObject custom = customShifts.optJSONObject(shift);
+            if (custom != null && custom.has("icon")) {
+                String matIcon = custom.optString("icon");
+                switch (matIcon) {
+                    case "light_mode": return "\u2600";
+                    case "wb_twilight": return "\u263C";
+                    case "dark_mode": return "\u263E";
+                    case "hotel": return "\u2302";
+                    case "logout": return "\u2197";
+                    case "event_busy": return "\u2715";
+                    default: return "\u25CF"; // generic dot for unknown icons
+                }
+            }
+        }
         switch (shift) {
             case "M": case "MP":              return "\u2600"; // ☀ sun       (light_mode)
             case "P":                         return "\u263C"; // ☼ sun-rays  (wb_twilight)
@@ -327,18 +351,19 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
      * - Bottom line: shift letter, large (1.25x) bold, shift-specific color.
      *   Absent when no shift is assigned (only day number shown).
      *
-     * @param shift   ShiftCode string (may be empty)
-     * @param dayNum  Calendar day of month
-     * @param isToday Whether this cell represents today
+     * @param shift        ShiftCode string (may be empty)
+     * @param dayNum       Calendar day of month
+     * @param isToday      Whether this cell represents today
+     * @param customShifts JSONObject containing custom definitions
      */
-    private static String buildCellHtml(String shift, int dayNum, boolean isToday) {
+    private static String buildCellHtml(String shift, int dayNum, boolean isToday, JSONObject customShifts) {
         String dayColor = isToday ? "#1565C0" : "#94A3B8";
         String dayPart = "<small><font color='" + dayColor + "'>" + dayNum + "</font></small>";
         if (shift.isEmpty()) {
             return dayPart;
         }
-        String shiftColor = getHexForShift(shift);
-        String icon = getIconForShift(shift);
+        String shiftColor = getHexForShift(shift, customShifts);
+        String icon = getIconForShift(shift, customShifts);
         String iconPart = icon.isEmpty()
             ? ""
             : "<br/><small><font color='" + shiftColor + "'>" + icon + "</font></small>";
@@ -354,11 +379,19 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
      * Today's cell gets a blue-bordered outline regardless of shift type.
      * Empty cells (no assigned shift) get a subtle neutral card.
      *
-     * @param shift   ShiftCode string
-     * @param isToday Whether this day is today
+     * @param shift        ShiftCode string
+     * @param isToday      Whether this day is today
+     * @param customShifts JSONObject containing custom definitions
      */
-    private static int cellBgResource(String shift, boolean isToday) {
+    private static int cellBgResource(String shift, boolean isToday, JSONObject customShifts) {
         if (isToday) return R.drawable.widget_cell_bg_today;
+        
+        if (customShifts != null && customShifts.has(shift)) {
+            // Android Widgets can't dynamically tint XML drawables easily.
+            // We return empty card, but the text/icon will be custom colored in buildCellHtml.
+            return R.drawable.widget_cell_bg_empty;
+        }
+
         switch (shift) {
             case "M": case "MP":              return R.drawable.widget_cell_bg_m;
             case "P":                         return R.drawable.widget_cell_bg_p;
