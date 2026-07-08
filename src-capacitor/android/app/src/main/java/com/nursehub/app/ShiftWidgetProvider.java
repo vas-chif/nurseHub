@@ -386,12 +386,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
     private static int cellBgResource(String shift, boolean isToday, JSONObject customShifts) {
         if (isToday) return R.drawable.widget_cell_bg_today;
         
-        if (customShifts != null && customShifts.has(shift)) {
-            // Android Widgets can't dynamically tint XML drawables easily.
-            // We return empty card, but the text/icon will be custom colored in buildCellHtml.
-            return R.drawable.widget_cell_bg_empty;
-        }
-
+        // Priority 1: Base shifts always retain their native colored card backgrounds
         switch (shift) {
             case "M": case "MP":              return R.drawable.widget_cell_bg_m;
             case "P":                         return R.drawable.widget_cell_bg_p;
@@ -399,8 +394,14 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
             case "R":                         return R.drawable.widget_cell_bg_r;
             case "S":                         return R.drawable.widget_cell_bg_s;
             case "A":                         return R.drawable.widget_cell_bg_a;
-            default:                          return R.drawable.widget_cell_bg_empty;
         }
+
+        // Priority 2: Completely new custom shifts (e.g. "T4") get a neutral empty card
+        if (customShifts != null && customShifts.has(shift)) {
+            return R.drawable.widget_cell_bg_empty;
+        }
+
+        return R.drawable.widget_cell_bg_empty;
     } /*end cellBgResource*/
 
 } /*end ShiftWidgetProvider*/
