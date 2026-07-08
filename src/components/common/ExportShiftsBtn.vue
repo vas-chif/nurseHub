@@ -19,6 +19,10 @@ const $q = useQuasar();
 const authStore = useAuthStore();
 const scheduleStore = useScheduleStore();
 
+const props = defineProps<{
+  targetDate?: Date;
+}>();
+
 const currentOperator = computed(() => {
   const targetId = authStore.currentOperator?.id || authStore.currentUser?.operatorId;
   const userConfigId = authStore.currentUser?.configId;
@@ -31,7 +35,7 @@ const currentOperator = computed(() => {
 function getMonthShifts() {
   if (!currentOperator.value || !currentOperator.value.schedule) return { shifts: [], monthName: '' };
   
-  const now = new Date();
+  const now = props.targetDate || new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
   

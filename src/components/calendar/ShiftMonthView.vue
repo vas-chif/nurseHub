@@ -16,7 +16,19 @@ const configStore = useConfigStore();
 const scheduleStore = useScheduleStore();
 const logger = useSecureLogger();
 
-const currentMonthDate = ref(new Date());
+const props = defineProps<{
+  modelValue?: Date;
+}>();
+const emit = defineEmits(['update:modelValue']);
+
+const internalDate = ref(new Date());
+const currentMonthDate = computed({
+  get: () => props.modelValue || internalDate.value,
+  set: (val) => {
+    internalDate.value = val;
+    emit('update:modelValue', val);
+  }
+});
 
 // Navigation
 function nextMonth() {

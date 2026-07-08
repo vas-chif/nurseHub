@@ -13,9 +13,11 @@ import RotationWidget from '../components/calendar/RotationWidget.vue';
 import GlobalSyncBtn from '../components/common/GlobalSyncBtn.vue';
 import ExportShiftsBtn from '../components/common/ExportShiftsBtn.vue';
 import { useAuthStore } from '../stores/authStore';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const authStore = useAuthStore();
+
+const currentMonthDate = ref(new Date());
 
 /** True while auth initialization is pending — prevents rendering tabelle before user role is known. */
 const isPageLoading = computed(() => !authStore.isInitialized);
@@ -47,13 +49,13 @@ const isPageLoading = computed(() => !authStore.isInitialized);
         <div class="row items-center justify-between q-mb-xs">
           <div class="text-h5 text-weight-bold text-primary">I Tuoi Turni</div>
           <div class="row items-center q-gutter-x-sm">
-            <ExportShiftsBtn />
+            <ExportShiftsBtn :target-date="currentMonthDate" />
             <GlobalSyncBtn />
           </div>
         </div>
         
         <!-- Monthly Grid -->
-        <ShiftMonthView />
+        <ShiftMonthView v-model="currentMonthDate" />
 
         <!-- Daily Roster (Chi c'è di turno) -->
         <DailyRosterCard />
